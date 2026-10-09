@@ -1,6 +1,7 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -95,13 +96,32 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   destroy() {
+    this._destroyed = true;
+    if (this._quickPasteInputTimer) {
+      GLib.Source.remove(this._quickPasteInputTimer);
+      this._quickPasteInputTimer = undefined;
+    }
+    if (this._clipboardKeeper) {
+      this._clipboardKeeper.onStatus = undefined;
+      try { this._clipboardKeeper.output.close(null); } catch {}
+      this._clipboardKeeper = undefined;
+    }
+    if (this._richPaste) {
+      try { this._richPaste.output.close(null); } catch {}
+      this._richPaste = undefined;
+    }
+    if (this._quickPasteTimer) {
+      GLib.Source.remove(this._quickPasteTimer);
+      this._quickPasteTimer = undefined;
+    }
+    this._finishQuickPaste(false);
     this._disconnectSettings();
     this._unbindShortcuts();
     this._disconnectSelectionListener();
 
-    if (this._searchFocusHackCallbackId) {
-      GLib.Source.remove(this._searchFocusHackCallbackId);
-      this._searchFocusHackCallbackId = undefined;
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
     }
     if (this._pasteHackCallbackId) {
       GLib.Source.remove(this._pasteHackCallbackId);
@@ -131,15 +151,26 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.menu.addMenuItem(entryItem);
 
     this.menu.connect('open-state-changed', (self, open) => {
+      if (this._initialFocusCallbackId) {
+        GLib.Source.remove(this._initialFocusCallbackId);
+        this._initialFocusCallbackId = undefined;
+      }
+      if (!open && !this.menu.isOpen)
+        this._quickPasteKeysHeld?.clear();
       if (open) {
         this._setMenuWidth();
         this.searchEntry.set_text('');
-        this._searchFocusHackCallbackId = GLib.timeout_add(
+        this._initialFocusCallbackId = GLib.timeout_add(
           GLib.PRIORITY_DEFAULT,
           1,
           () => {
-            global.stage.set_key_focus(this.searchEntry);
-            this._searchFocusHackCallbackId = undefined;
+            this._initialFocusCallbackId = undefined;
+            if (!this.menu.isOpen)
+              return GLib.SOURCE_REMOVE;
+            const firstCandidate =
+              this.historySection._getMenuItems()[0] ||
+              this.favoritesSection._getMenuItems()[0];
+            global.stage.set_key_focus(firstCandidate || this.searchEntry);
             return false;
           },
         );
@@ -243,6 +274,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (ENABLE_KEYBINDING) {
       this._bindShortcuts();
     }
+    this._quickPasteKeysHeld = new Set();
+    // Track releases before child widgets consume them, and suppress repeats.
+    this.menu.actor.connect('captured-event', (_, event) =>
+      this._captureQuickPasteKey(event));
     this.menu.actor.connect('key-press-event', (_, event) =>
       this._handleGlobalKeyEvent(event),
     );
@@ -312,13 +347,72 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
   }
 
+  _captureQuickPasteKey(event) {
+    const type = event.type();
+    if (type !== Clutter.EventType.KEY_PRESS && type !== Clutter.EventType.KEY_RELEASE)
+      return Clutter.EVENT_PROPAGATE;
+    const code = event.get_key_code();
+    if (type === Clutter.EventType.KEY_RELEASE) {
+      const tracked = this._quickPasteKeysHeld.delete(code);
+      if (tracked && this._quickPasteBusy)
+        console.log(this.extension.uuid, 'Quick paste: tracked key released');
+      return this._quickPasteBusy ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
+    }
+    this._quickPasteKeysHeld.add(code);
+    if (this._quickPasteBusy) {
+      // Ctrl+0 remains available after the brief injection interval.
+      if (event.has_control_modifier() && event.get_key_unicode() === '0')
+        this.menu.close();
+      return Clutter.EVENT_STOP;
+    }
+    return this._handleCtrlSelectKeyEvent(event)
+      ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
+  }
+
+  _quickPasteKeysAreHeld() {
+    return this._quickPasteKeysHeld.size > 0 ||
+      Boolean(global.get_pointer()[2] & Clutter.ModifierType.CONTROL_MASK);
+  }
+
+  _suspendQuickPasteInput() {
+    this._quickPasteInputReleased = true;
+    console.log(this.extension.uuid, 'Quick paste: keys released, injecting paste');
+    this.menu.emit('open-state-changed', false);
+    global.stage.set_key_focus(null);
+  }
+
+  _resumeQuickPasteInput() {
+    if (this._quickPasteInputTimer) {
+      GLib.Source.remove(this._quickPasteInputTimer);
+      this._quickPasteInputTimer = undefined;
+    }
+    if (!this._quickPasteInputReleased)
+      return;
+    this._quickPasteInputReleased = false;
+    if (!this._destroyed && this.menu.isOpen) {
+      this.menu.emit('open-state-changed', true);
+      console.log(this.extension.uuid, 'Quick paste: keyboard capture resumed');
+    }
+  }
+
   _handleCtrlSelectKeyEvent(event) {
-    if (!event.has_control_modifier()) {
+    if (!this.menu.isOpen || !event.has_control_modifier()) {
       return;
     }
 
-    const index = parseInt(event.get_key_unicode()); // Starts at 1
-    if (isNaN(index) || index <= 0) {
+    const digit = event.get_key_unicode();
+    if (!/^[0-9]$/.test(digit)) {
+      return;
+    }
+    const index = Number(digit);
+    if (index === 0) {
+      this.menu.close();
+      return true;
+    }
+    if (this._quickPasteBusy) {
+      return true;
+    }
+    if (index <= 0) {
       return;
     }
 
@@ -330,8 +424,226 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
 
-    this._onMenuItemSelectedAndMenuClose(items[index - 1]);
+    // Preserve the existing Ctrl+Super behavior for favorites.
+    if (event.get_state() === 68) {
+      this._onMenuItemSelectedAndMenuClose(items[index - 1]);
+    } else {
+      this._quickPasteKeysHeld.add(event.get_key_code());
+      console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
+      this._quickPaste(items[index - 1].entry);
+    }
     return true;
+  }
+
+  _quickPaste(entry) {
+    if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
+      console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
+      return;
+    }
+    // This prototype only restores plain text, never discard rich/image data.
+    const mimes = this.selection.get_mimetypes(
+      Meta.SelectionType.SELECTION_CLIPBOARD,
+    );
+    if (!mimes.length || mimes.some(mime =>
+      !['text/plain', 'text/plain;charset=utf-8', 'UTF8_STRING',
+        'STRING', 'TEXT', 'COMPOUND_TEXT'].includes(mime))) {
+      this._quickPasteRich(entry);
+      return;
+    }
+    const target = global.display.focus_window;
+    this._quickPasteBusy = true;
+    Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
+      if (this._destroyed || !this.menu.isOpen || original === null) {
+        this._quickPasteBusy = false;
+        return;
+      }
+      let attempts = 0;
+      // Wait for the physical Ctrl key to be released before injecting paste.
+      this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => {
+        if (this._quickPasteKeysAreHeld()) {
+          if (++attempts < 80)
+            return GLib.SOURCE_CONTINUE;
+          this._quickPasteBusy = false;
+          this._quickPasteTimer = undefined;
+          return GLib.SOURCE_REMOVE;
+        }
+        this._quickPasteTimer = undefined;
+        if (!this.menu.isOpen || global.display.focus_window !== target) {
+          this._quickPasteBusy = false;
+          return GLib.SOURCE_REMOVE;
+        }
+        this._quickPasteState = { original, text: entry.text, changed: false };
+        this._suspendQuickPasteInput();
+        Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
+        this._sendQuickPasteKeys();
+        // Experimental delay: application clipboard reads are asynchronous.
+        this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+          this._quickPasteTimer = undefined;
+          this._finishQuickPaste(true);
+          return GLib.SOURCE_REMOVE;
+        });
+        return GLib.SOURCE_REMOVE;
+      });
+    });
+  }
+
+  _sendQuickPasteKeys() {
+    const keyboard = VirtualKeyboard();
+    const time = GLib.get_monotonic_time();
+    const terminal = /terminal|console|kitty|alacritty|wezterm|ghostty|foot|konsole|xterm|tilix|terminator/i.test(
+      Shell.WindowTracker.get_default().get_focus_app()?.get_id() || '',
+    );
+    keyboard.notify_key(time, 29, Clutter.KeyState.PRESSED);
+    if (terminal)
+      keyboard.notify_key(time, 42, Clutter.KeyState.PRESSED);
+    keyboard.notify_key(time, 47, Clutter.KeyState.PRESSED);
+    keyboard.notify_key(time, 47, Clutter.KeyState.RELEASED);
+    if (terminal)
+      keyboard.notify_key(time, 42, Clutter.KeyState.RELEASED);
+    keyboard.notify_key(time, 29, Clutter.KeyState.RELEASED);
+    // Clipboard transfer does not need the keyboard grab to remain released.
+    this._quickPasteInputTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
+      this._quickPasteInputTimer = undefined;
+      this._resumeQuickPasteInput();
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+
+  _quickPasteRich(entry) {
+    if (!GLib.getenv('DISPLAY')) {
+      this._showNotification(_('Quick paste unavailable'),
+        _('Restoring rich clipboard data currently requires Xwayland.'));
+      return;
+    }
+    const target = global.display.focus_window;
+    this._quickPasteBusy = true;
+    let keeper = this._clipboardKeeper;
+    if (!keeper) {
+      try {
+        const launcher = new Gio.SubprocessLauncher({
+          flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE,
+        });
+        launcher.setenv('GDK_BACKEND', 'x11', true);
+        const process = launcher.spawnv(['gjs', '-m',
+          GLib.build_filenamev([this.extension.path, 'clipboardKeeper.js'])]);
+        keeper = {
+          process,
+          output: new Gio.DataOutputStream({base_stream: process.get_stdin_pipe()}),
+          input: new Gio.DataInputStream({base_stream: process.get_stdout_pipe()}),
+        };
+        this._clipboardKeeper = keeper;
+        const listen = () => keeper.input.read_line_async(GLib.PRIORITY_DEFAULT,
+          null, (obj, result) => {
+            let status;
+            try { [status] = obj.read_line_finish_utf8(result); }
+            catch { status = null; }
+            keeper.onStatus?.(status);
+            if (status === null || status === 'changed' || status === 'error') {
+              if (this._clipboardKeeper === keeper)
+                this._clipboardKeeper = undefined;
+              try { keeper.output.close(null); } catch {}
+              return;
+            }
+            listen();
+          });
+        listen();
+      } catch {
+        this._quickPasteBusy = false;
+        console.error('Quick paste: unable to start clipboard keeper');
+        return;
+      }
+    }
+    const transaction = {output: keeper.output, released: false};
+    this._richPaste = transaction;
+    const finish = () => {
+      if (this._richPaste !== transaction)
+        return;
+      this._richPaste = undefined;
+      this._quickPasteBusy = false;
+      keeper.onStatus = undefined;
+      if (this._quickPasteTimer) {
+        GLib.Source.remove(this._quickPasteTimer);
+        this._quickPasteTimer = undefined;
+      }
+      this._resumeQuickPasteInput();
+    };
+    keeper.onStatus = status => {
+      if (this._richPaste !== transaction)
+        return;
+      if (status === 'ready') {
+        let attempts = 0;
+        this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => {
+          if (this._quickPasteKeysAreHeld()) {
+            if (++attempts < 80)
+              return GLib.SOURCE_CONTINUE;
+            finish();
+            try { keeper.output.close(null); } catch {}
+            this._clipboardKeeper = undefined;
+            return GLib.SOURCE_REMOVE;
+          }
+          this._quickPasteTimer = undefined;
+          if (this._destroyed || !this.menu.isOpen || global.display.focus_window !== target) {
+            finish();
+            try { keeper.output.close(null); } catch {}
+            this._clipboardKeeper = undefined;
+            return GLib.SOURCE_REMOVE;
+          }
+          keeper.output.put_string('paste\n', null);
+          return GLib.SOURCE_REMOVE;
+        });
+      } else if (status === 'prepared') {
+        if (global.display.focus_window === target && this.menu.isOpen &&
+            !this._quickPasteKeysAreHeld()) {
+          transaction.released = true;
+          this._suspendQuickPasteInput();
+          this._sendQuickPasteKeys();
+        } else {
+          // If new keys arrived during preparation, restore without injecting.
+          console.log(this.extension.uuid, 'Quick paste: cancelled during preparation');
+          keeper.output.put_string('restore\n', null);
+        }
+      } else if (status === 'restored' || status === 'changed') {
+        console.log(this.extension.uuid, 'Rich quick paste:', status);
+        finish();
+      } else if (status === 'error' || status === null) {
+        console.log(this.extension.uuid, 'Rich quick paste: snapshot or restore failed');
+        if (!this._destroyed)
+          this._showNotification(_('Quick paste unavailable'),
+            _('Could not preserve all clipboard formats; please check the development log.'));
+        finish();
+      }
+    };
+    const request = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(
+      new TextEncoder().encode(JSON.stringify({
+        text: entry.text,
+        mimes: this.selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD),
+      }) + '\n'),
+    ));
+    keeper.output.splice_async(request, Gio.OutputStreamSpliceFlags.CLOSE_SOURCE,
+      GLib.PRIORITY_DEFAULT, null, (obj, result) => {
+        try { obj.splice_finish(result); }
+        catch {
+          finish();
+          try { keeper.output.close(null); } catch {}
+          if (this._clipboardKeeper === keeper)
+            this._clipboardKeeper = undefined;
+        }
+      });
+  }
+
+  _finishQuickPaste(resume) {
+    const state = this._quickPasteState;
+    if (!state)
+      return;
+    this._quickPasteState = undefined;
+    if (!state.changed) {
+      this._quickPasteRestoring = true;
+      Clipboard.set_text(St.ClipboardType.CLIPBOARD, state.original);
+      this._quickPasteRestoring = false;
+    }
+    this._quickPasteBusy = false;
+    if (resume)
+      this._resumeQuickPasteInput();
   }
 
   _handleSettingsKeyEvent(event) {
@@ -946,6 +1258,8 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _processClipboardContent(text, selectEntry) {
+    if (this._quickPasteBusy || this._quickPasteRestoring)
+      return;
     if (this._debouncing > 0) {
       this._debouncing--;
       return;
@@ -1052,6 +1366,14 @@ class ClipboardIndicator extends PanelMenu.Button {
       'owner-changed',
       (_, selectionType) => {
         if (selectionType === Meta.SelectionType.SELECTION_CLIPBOARD) {
+          if (this._quickPasteRestoring || this._richPaste)
+            return;
+          if (this._quickPasteState) {
+            if (this._quickPasteState.owned)
+              this._quickPasteState.changed = true;
+            this._quickPasteState.owned = true;
+            return;
+          }
           this._queryClipboard();
         } else if (
           PROCESS_PRIMARY_SELECTION &&

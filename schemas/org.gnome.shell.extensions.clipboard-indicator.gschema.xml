@@ -1,7 +1,7 @@
 <schemalist gettext-domain="gnome-shell-extensions">
   <schema
-      id="org.gnome.shell.extensions.clipboard-history"
-      path="/org/gnome/shell/extensions/clipboard-history/">
+      id="org.gnome.shell.extensions.clipboard-history-dev"
+      path="/org/gnome/shell/extensions/clipboard-history-dev/">
 
     <key type="i" name="history-size">
       <default>1000</default>

@@ -201,7 +201,7 @@ function _consumeStream(stream, state, callback) {
         };
 
         addEntry('Your clipboard data has been corrupted and was moved to:');
-        addEntry('~/.cache/clipboard-history@alexsaveau.dev/corrupted.log');
+        addEntry(GLib.build_filenamev([CACHE_DIR, 'corrupted.log']));
         addEntry('Please file a bug report at:');
         addEntry(
           'https://github.com/SUPERCILEX/gnome-clipboard-history/issues/new?assignees=&labels=bug&template=1-bug.md',
@@ -241,6 +241,12 @@ function _consumeStream(stream, state, callback) {
 }
 
 function _readAndConsumeOldFormat(callback) {
+  // Only the upstream extension may consume the legacy extension's history.
+  if (EXTENSION_UUID !== 'clipboard-history@alexsaveau.dev') {
+    callback(new DS.LinkedList(), new DS.LinkedList(), 1);
+    return;
+  }
+
   Gio.File.new_for_path(OLD_REGISTRY_FILE).load_contents_async(
     null,
     (src, res) => {

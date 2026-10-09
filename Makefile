@@ -1,5 +1,5 @@
-MODULES = metadata.json extension.js store.js dataStructures.js confirmDialog.js prefs.js settingsFields.js stylesheet.css LICENSE README.md schemas/
-INSTALLPATH = ~/.local/share/gnome-shell/extensions/clipboard-history@alexsaveau.dev/
+MODULES = metadata.json extension.js clipboardKeeper.js store.js dataStructures.js confirmDialog.js prefs.js settingsFields.js stylesheet.css LICENSE README.md schemas/
+INSTALLPATH = $(HOME)/.local/share/gnome-shell/extensions/clipboard-history-dev@jidaikobo.shibata/
 
 all: compile-locales compile-settings
 
@@ -18,6 +18,10 @@ update-po-files:
 		msgmerge $(file) clipboard-history.pot -o $(file);)
 
 install: all
+	@if [ "$$(pwd -P)" = "$$(readlink -m "$(INSTALLPATH)")" ]; then \
+		echo "Already in the install directory; use make to build in place."; \
+		exit 1; \
+	fi
 	rm -rf $(INSTALLPATH)
 	mkdir -p $(INSTALLPATH)
 	cp -r $(MODULES) $(INSTALLPATH)
