@@ -271,6 +271,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     settingsMenuItem.connect('activate', this._openSettings.bind(this));
     actionsBox.add_child(settingsMenuItem);
 
+    for (const section of [this.historySection, this.favoritesSection]) {
+      section.actor.connect('child-added', () => this._updateCandidateNumbers());
+      section.actor.connect('child-removed', () => this._updateCandidateNumbers());
+    }
     if (ENABLE_KEYBINDING) {
       this._bindShortcuts();
     }
@@ -371,7 +375,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _quickPasteKeysAreHeld() {
     return this._quickPasteKeysHeld.size > 0 ||
-      Boolean(global.get_pointer()[2] & Clutter.ModifierType.CONTROL_MASK);
+      Boolean(global.get_pointer()[2] &
+        (Clutter.ModifierType.CONTROL_MASK | Clutter.ModifierType.SHIFT_MASK));
   }
 
   _suspendQuickPasteInput() {
@@ -400,7 +405,17 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
 
-    const digit = event.get_key_unicode();
+    const modifiers = event.get_state();
+    if (modifiers & (Clutter.ModifierType.MOD1_MASK |
+        Clutter.ModifierType.MOD4_MASK | Clutter.ModifierType.SUPER_MASK))
+      return;
+    const favorite = Boolean(modifiers & Clutter.ModifierType.SHIFT_MASK);
+    let digit = event.get_key_unicode();
+    // Shift changes number-row symbols (differently on US and Japanese layouts).
+    // Mutter supplies XKB hardware keycodes: the number row 1..0 is 10..19.
+    const code = event.get_key_code();
+    if (favorite && !/^[0-9]$/.test(digit) && code >= 10 && code <= 19)
+      digit = String((code - 9) % 10);
     if (!/^[0-9]$/.test(digit)) {
       return;
     }
@@ -417,25 +432,20 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     const items =
-      event.get_state() === 68 // Ctrl + Super
+      favorite
         ? this.favoritesSection._getMenuItems()
         : this.historySection._getMenuItems();
     if (index > items.length) {
       return;
     }
 
-    // Preserve the existing Ctrl+Super behavior for favorites.
-    if (event.get_state() === 68) {
-      this._onMenuItemSelectedAndMenuClose(items[index - 1]);
-    } else {
-      this._quickPasteKeysHeld.add(event.get_key_code());
-      console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
-      this._quickPaste(items[index - 1].entry);
-    }
+    this._quickPasteKeysHeld.add(event.get_key_code());
+    console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
+    this._quickPaste(items[index - 1].entry, favorite);
     return true;
   }
 
-  _quickPaste(entry) {
+  _quickPaste(entry, closeAfterPaste = false) {
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
@@ -447,7 +457,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!mimes.length || mimes.some(mime =>
       !['text/plain', 'text/plain;charset=utf-8', 'UTF8_STRING',
         'STRING', 'TEXT', 'COMPOUND_TEXT'].includes(mime))) {
-      this._quickPasteRich(entry);
+      this._quickPasteRich(entry, closeAfterPaste);
       return;
     }
     const target = global.display.focus_window;
@@ -475,7 +485,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._quickPasteState = { original, text: entry.text, changed: false };
         this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
-        this._sendQuickPasteKeys();
+        this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
         this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
           this._quickPasteTimer = undefined;
@@ -487,7 +497,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
   }
 
-  _sendQuickPasteKeys() {
+  _sendQuickPasteKeys(closeAfterPaste = false) {
     const keyboard = VirtualKeyboard();
     const time = GLib.get_monotonic_time();
     const terminal = /terminal|console|kitty|alacritty|wezterm|ghostty|foot|konsole|xterm|tilix|terminator/i.test(
@@ -501,6 +511,11 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (terminal)
       keyboard.notify_key(time, 42, Clutter.KeyState.RELEASED);
     keyboard.notify_key(time, 29, Clutter.KeyState.RELEASED);
+    if (closeAfterPaste) {
+      this._quickPasteInputReleased = false;
+      this.menu.close();
+      return;
+    }
     // Clipboard transfer does not need the keyboard grab to remain released.
     this._quickPasteInputTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
       this._quickPasteInputTimer = undefined;
@@ -509,7 +524,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
   }
 
-  _quickPasteRich(entry) {
+  _quickPasteRich(entry, closeAfterPaste = false) {
     if (!GLib.getenv('DISPLAY')) {
       this._showNotification(_('Quick paste unavailable'),
         _('Restoring rich clipboard data currently requires Xwayland.'));
@@ -596,7 +611,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             !this._quickPasteKeysAreHeld()) {
           transaction.released = true;
           this._suspendQuickPasteInput();
-          this._sendQuickPasteKeys();
+          this._sendQuickPasteKeys(closeAfterPaste);
         } else {
           // If new keys arrived during preparation, restore without injecting.
           console.log(this.extension.uuid, 'Quick paste: cancelled during preparation');
@@ -738,10 +753,19 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     const menuItem = new PopupMenu.PopupMenuItem('', { hover: false });
-    menuItem.setOrnament(PopupMenu.Ornament.NONE);
+    this._setCandidateSelection(menuItem, false);
 
     menuItem.entry = entry;
     entry.menuItem = menuItem;
+    menuItem.shortcutLabel = new St.Label({
+      text: '',
+      style_class: 'ci-shortcut-number',
+      y_align: Clutter.ActorAlign.CENTER,
+    });
+    menuItem.insert_child_at_index(menuItem.shortcutLabel, 1);
+    menuItem.label.connect('notify::text', () => {
+      this._setCandidateAccessibleName(menuItem);
+    });
 
     menuItem.connect(
       'activate',
@@ -848,6 +872,37 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._buttonText.set_text(this._truncated(entry.text, MAX_TOPBAR_LENGTH));
     } else {
       this._buttonText.set_text('');
+    }
+  }
+
+  _setCandidateSelection(item, selected) {
+    if (!item)
+      return;
+    // DOT and NO_DOT reserve the same space and use the same menu padding.
+    item.setOrnament(selected ? PopupMenu.Ornament.DOT : PopupMenu.Ornament.NO_DOT);
+    item._ornamentIcon.opacity = selected ? 255 : 0;
+  }
+
+  _setCandidateAccessibleName(item) {
+    const shortcut = item.shortcutLabel?.get_text();
+    item.accessible_name = shortcut
+      ? `${shortcut}. ${item.label.get_text()}` : item.label.get_text();
+  }
+
+  _updateCandidateNumbers() {
+    for (const [section, prefix] of [
+      [this.historySection, ''], [this.favoritesSection, '⇧'],
+    ]) {
+      section._getMenuItems().forEach((item, index) => {
+        if (!item.shortcutLabel)
+          return;
+        item.shortcutLabel.set_text(index < 9 ? `${prefix}${index + 1}` : '');
+        if (index < 9)
+          item.shortcutLabel.remove_style_class_name('ci-shortcut-number-unused');
+        else
+          item.shortcutLabel.add_style_class_name('ci-shortcut-number-unused');
+        this._setCandidateAccessibleName(item);
+      });
     }
   }
 
@@ -961,10 +1016,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _selectEntry(entry, updateClipboard, triggerPaste) {
-    this.currentlySelectedEntry?.menuItem?.setOrnament(PopupMenu.Ornament.NONE);
+    this._setCandidateSelection(this.currentlySelectedEntry?.menuItem, false);
     this.currentlySelectedEntry = entry;
 
-    entry.menuItem?.setOrnament(PopupMenu.Ornament.DOT);
+    this._setCandidateSelection(entry.menuItem, true);
     this._updateButtonText(entry);
     if (updateClipboard !== false) {
       if (entry.type === DS.TYPE_TEXT) {
@@ -1116,7 +1171,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _rewriteMenuItem(item, entry) {
     if (item.entry.id === this.currentlySelectedEntry?.id) {
-      item.setOrnament(PopupMenu.Ornament.NONE);
+      this._setCandidateSelection(item, false);
     }
 
     item.entry = entry;
@@ -1124,7 +1179,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this._setEntryLabel(item);
     if (entry.id === this.currentlySelectedEntry?.id) {
-      item.setOrnament(PopupMenu.Ornament.DOT);
+      this._setCandidateSelection(item, true);
     }
   }
 
@@ -1328,6 +1383,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     if (entry.menuItem) {
       menu.moveMenuItem(entry.menuItem, 0);
+      this._updateCandidateNumbers();
     } else {
       this._addEntry(entry, false, false, 0);
     }
