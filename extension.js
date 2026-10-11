@@ -61,7 +61,6 @@ let DISABLE_DOWN_ARROW;
 let STRIP_TEXT;
 let PASTE_ON_SELECTION;
 let PROCESS_PRIMARY_SELECTION;
-let IGNORE_PASSWORD_MIMES;
 let ENABLE_TYPEAHEAD_SEARCH;
 
 class ClipboardIndicator extends PanelMenu.Button {
@@ -97,6 +96,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._clearCopyHighlight();
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
       this._quickPasteInputTimer = undefined;
@@ -473,7 +473,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this._quickPasteKeysHeld.add(event.get_key_code());
     console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
-    this._quickPaste(items[index - 1].entry, favorite);
+    this._quickPaste(items[index - 1].entry);
     return true;
   }
 
@@ -1173,18 +1173,6 @@ class ClipboardIndicator extends PanelMenu.Button {
       return true;
     }
 
-    if (
-      IGNORE_PASSWORD_MIMES &&
-      Clipboard.get_mimetypes(kind).includes(
-        // Note that we should check for the value "secret" but there don't appear to be any other
-        // values so it's not worth the trouble right now.
-        'x-kde-passwordManagerHint',
-      )
-    ) {
-      console.log(this.uuid, 'Ignoring password entry.');
-      return true;
-    }
-
     return false;
   }
 
@@ -1264,14 +1252,57 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     if (NOTIFY_ON_COPY) {
-      this._showNotification(_('Copied to clipboard'), null, (notif) => {
-        notif.addAction(_('Cancel'), () =>
-          this._deleteEntryAndRestoreLatest(this.currentlySelectedEntry),
-        );
-      });
+      this._highlightCopy();
     }
 
     return text;
+  }
+
+  _clearCopyHighlight() {
+    if (this._copyHighlightTimer) {
+      GLib.Source.remove(this._copyHighlightTimer);
+      this._copyHighlightTimer = undefined;
+    }
+    this.icon.remove_style_class_name('copy-highlight');
+    if (this._copyBubble) {
+      this._copyBubble.destroy();
+      this._copyBubble = undefined;
+    }
+  }
+
+  _highlightCopy() {
+    if (this._destroyed || PRIVATE_MODE || this._quickPasteBusy || this._quickPasteRestoring)
+      return;
+    this._clearCopyHighlight();
+    this.icon.add_style_class_name('copy-highlight');
+    const monitor = Main.layoutManager.findMonitorForActor(this);
+    if (monitor && this.mapped) {
+      this._copyBubble = new St.Label({
+        text: 'Copied!',
+        style_class: 'ci-copy-bubble',
+        reactive: false,
+        can_focus: false,
+      });
+      Main.uiGroup.add_child(this._copyBubble);
+      const [, width] = this._copyBubble.get_preferred_width(-1);
+      const [, height] = this._copyBubble.get_preferred_height(width);
+      const [iconX, iconY] = this.icon.get_transformed_position();
+      const [iconWidth, iconHeight] = this.icon.get_transformed_size();
+      const margin = 6;
+      const x = Math.max(monitor.x + margin, Math.min(
+        iconX + iconWidth / 2 - width / 2,
+        monitor.x + monitor.width - width - margin));
+      const y = Math.max(monitor.y + margin, Math.min(
+        iconY + iconHeight + 14,
+        monitor.y + monitor.height - height - margin));
+      this._copyBubble.set_position(Math.round(x), Math.round(y));
+      this._copyBubble.set_size(width, height);
+    }
+    this._copyHighlightTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+      this._copyHighlightTimer = undefined;
+      this._clearCopyHighlight();
+      return GLib.SOURCE_REMOVE;
+    });
   }
 
   _moveEntryFirst(entry) {
@@ -1477,9 +1508,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     PROCESS_PRIMARY_SELECTION = this.settings.get_boolean(
       SettingsFields.PROCESS_PRIMARY_SELECTION,
     );
-    IGNORE_PASSWORD_MIMES = this.settings.get_boolean(
-      SettingsFields.IGNORE_PASSWORD_MIMES,
-    );
     ENABLE_TYPEAHEAD_SEARCH = this.settings.get_boolean(
       SettingsFields.ENABLE_TYPEAHEAD_SEARCH,
     );
@@ -1491,6 +1519,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this._fetchSettings();
     this._updateCandidateNumbers();
+    if (!NOTIFY_ON_COPY || PRIVATE_MODE)
+      this._clearCopyHighlight();
 
     if (
       prevCacheOnlyFavorites !== undefined &&

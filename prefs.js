@@ -44,13 +44,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         step_increment: 5,
       }),
     });
-    const field_cache_size = new Gtk.SpinButton({
-      adjustment: new Gtk.Adjustment({
-        lower: 1,
-        upper: 1024,
-        step_increment: 5,
-      }),
-    });
     const field_topbar_preview_size = new Gtk.SpinButton({
       adjustment: new Gtk.Adjustment({
         lower: 1,
@@ -72,8 +65,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const field_strip_text = new Gtk.Switch();
     const field_paste_on_selection = new Gtk.Switch();
     const field_process_primary_selection = new Gtk.Switch();
-    const field_ignore_password_mimes = new Gtk.Switch();
-    const field_enable_typeahead_search = new Gtk.Switch();
     const field_move_item_first = new Gtk.Switch();
     const field_keybinding = createKeybindingWidget(settings);
     addKeybinding(
@@ -122,18 +113,13 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       hexpand: true,
       halign: Gtk.Align.START,
     });
-    const cacheSizeLabel = new Gtk.Label({
-      label: _('Max clipboard history size (MiB)'),
-      hexpand: true,
-      halign: Gtk.Align.START,
-    });
     const cacheDisableLabel = new Gtk.Label({
       label: _('Only save favorites to disk'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const notificationLabel = new Gtk.Label({
-      label: _('Show notification on copy'),
+      label: 'コピー時にアイコンを強調する',
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -168,7 +154,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const stripTextLabel = new Gtk.Label({
-      label: _('Remove whitespace around text'),
+      label: '前後の空白・改行を削除する',
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -179,16 +165,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     });
     const processPrimarySelection = new Gtk.Label({
       label: _('Save selected text to history'),
-      hexpand: true,
-      halign: Gtk.Align.START,
-    });
-    const ignorePasswordMimes = new Gtk.Label({
-      label: _('Try to avoid copying passwords (known potentially buggy)'),
-      hexpand: true,
-      halign: Gtk.Align.START,
-    });
-    const enableTypeAheadSearch = new Gtk.Label({
-      label: _('Enable type-ahead search in menu'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -218,14 +194,11 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
 
     addRow(windowWidthPercentageLabel, window_width_percentage);
     addRow(sizeLabel, field_size);
-    addRow(cacheSizeLabel, field_cache_size);
     addRow(cacheDisableLabel, field_cache_disable);
     addRow(moveFirstLabel, field_move_item_first);
     addRow(stripTextLabel, field_strip_text);
     addRow(pasteOnSelectionLabel, field_paste_on_selection);
     addRow(processPrimarySelection, field_process_primary_selection);
-    addRow(ignorePasswordMimes, field_ignore_password_mimes);
-    addRow(enableTypeAheadSearch, field_enable_typeahead_search);
     addRow(displayModeLabel, field_display_mode);
     addRow(disableDownArrowLabel, field_disable_down_arrow);
     addRow(topbarPreviewLabel, field_topbar_preview_size);
@@ -245,7 +218,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       [Fields.QUICK_PASTE_MODIFIERS, Fields.FAVORITE_PASTE_MODIFIERS,
         '履歴の貼り付け（パネルを維持）'],
       [Fields.FAVORITE_PASTE_MODIFIERS, Fields.QUICK_PASTE_MODIFIERS,
-        'お気に入りの貼り付け（パネルを閉じる）'],
+        'お気に入りの貼り付け（パネルを維持）'],
     ]) {
       const selector = new Gtk.ComboBoxText();
       for (let value = 1; value <= 15; value++)
@@ -293,12 +266,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     settings.bind(
       Fields.WINDOW_WIDTH_PERCENTAGE,
       window_width_percentage,
-      'value',
-      Gio.SettingsBindFlags.DEFAULT,
-    );
-    settings.bind(
-      Fields.CACHE_FILE_SIZE,
-      field_cache_size,
       'value',
       Gio.SettingsBindFlags.DEFAULT,
     );
@@ -359,18 +326,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     settings.bind(
       Fields.PROCESS_PRIMARY_SELECTION,
       field_process_primary_selection,
-      'active',
-      Gio.SettingsBindFlags.DEFAULT,
-    );
-    settings.bind(
-      Fields.IGNORE_PASSWORD_MIMES,
-      field_ignore_password_mimes,
-      'active',
-      Gio.SettingsBindFlags.DEFAULT,
-    );
-    settings.bind(
-      Fields.ENABLE_TYPEAHEAD_SEARCH,
-      field_enable_typeahead_search,
       'active',
       Gio.SettingsBindFlags.DEFAULT,
     );

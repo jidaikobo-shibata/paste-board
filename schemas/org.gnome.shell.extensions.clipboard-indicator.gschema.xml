@@ -5,12 +5,12 @@
 
     <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
     <key type="i" name="quick-paste-modifiers">
-      <default>1</default>
+      <default>8</default>
       <range min="1" max="15" />
       <summary>Modifiers for history number shortcuts</summary>
     </key>
     <key type="i" name="favorite-paste-modifiers">
-      <default>5</default>
+      <default>12</default>
       <range min="1" max="15" />
       <summary>Modifiers for favorite number shortcuts</summary>
     </key>
@@ -72,9 +72,9 @@
 
     <key name="notify-on-copy" type="b">
       <default>false</default>
-      <summary>Show a notification on copy</summary>
+      <summary>Highlight the panel icon on copy</summary>
       <description>
-        If true, a notification is shown when content is copied to clipboard with an undo button.
+        If true, the panel icon is highlighted briefly when text is captured.
       </description>
     </key>
 
@@ -137,16 +137,12 @@
       <summary>Shortcut to cycle to the next clipboard entry</summary>
     </key>
     <key name="toggle-menu" type="as">
-      <default><![CDATA[['<Super><Shift>V']]]></default>
+      <default><![CDATA[['<Super>F1']]]></default>
       <summary>Shortcut to open the clipboard history</summary>
     </key>
     <key name="toggle-private-mode" type="as">
       <default><![CDATA[['<Super><Shift>P']]]></default>
       <summary>Toggle private mode</summary>
-    </key>
-    <key name="ignore-password-mimes" type="b">
-      <default>true</default>
-      <summary>Ignore selections containing the x-kde-passwordManagerHint mime type.</summary>
     </key>
 
     <key name="enable-typeahead-search" type="b">

@@ -2,6 +2,20 @@
   color: rgba(255, 255, 255, 0.3);
 }
 
+.clipboard-indicator-icon.copy-highlight {
+  color: #f9d86e;
+}
+
+.ci-copy-bubble {
+  color: #ffffff;
+  background-color: rgba(35, 35, 35, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 7px;
+  padding: 5px 9px;
+  font-size: 0.9em;
+  font-weight: bold;
+}
+
 .ci-notification-label {
   font-weight: bold;
   color: #ffffff;

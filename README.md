@@ -5,7 +5,7 @@ previous clipboard **as plain text**. Formatting, images, and application-specif
 clipboard metadata are not preserved. If the previous clipboard cannot be read
 as text, quick paste is cancelled without replacing it.
 
-The history shortcut keeps the panel open; the favorite shortcut closes it.
+Both history and favorite shortcuts keep the panel open.
 Their modifiers are configurable in preferences. This implementation uses the
 GNOME Shell clipboard and virtual keyboard directly, without an Xwayland helper.
 Clipboard restoration currently waits 500 ms; application-level paste completion
@@ -39,19 +39,18 @@ will take place.
 
 ![Tutorial screenshot](tutorial-screenshot.png)
 
-- Open the panel from anywhere with <kbd>Super</kbd> + <kbd>Shift</kbd> + <kbd>V</kbd>.
+- Open the panel from anywhere with <kbd>Super</kbd> + <kbd>F1</kbd>.
 - Modify shortcuts in settings or delete them by hitting backspace while editing a shortcut.
 - Use the `Only save favorites to disk` feature to wipe your non-favorited items on shutdown.
 - Use `Private mode` to temporarily stop processing copied items.
 - Use keyboard shortcuts while the panel is open:
-  - <kbd>Ctrl</kbd> + <kbd>N</kbd> where `N` is a number from 1 to 9 to select the Nth
-    non-favorited entry.
-  - <kbd>Super</kbd> + <kbd>Ctrl</kbd> + <kbd>N</kbd> where `N` is a number from 1 to 9 to select
-    the Nth favorited entry.
-  - <kbd>Ctrl</kbd> + <kbd>p/n</kbd> to navigate to the previous/next page.
-  - <kbd>Ctrl</kbd> + <kbd>Alt</kbd> + <kbd>S</kbd> to open settings.
-  - <kbd>/</kbd> to search.
-  - <kbd>F</kbd> to (un)favorite a highlighted item.
+  - <kbd>Super</kbd> + a number from 1 to 9 pastes a history item.
+  - <kbd>Shift</kbd> + <kbd>Super</kbd> + a number from 1 to 9 pastes a favorite.
+  - Both paste shortcuts keep the panel open and restore the previous plain text.
+  - Their modifiers can be changed independently in preferences.
+  - <kbd>Ctrl</kbd> + <kbd>0</kbd> closes the panel.
+  - <kbd>/</kbd> focuses search. Other keys outside search close the panel,
+    except modifier keys and configured number shortcuts.
 - Search uses case-insensitive [regex](https://regex101.com/?flavor=javascript).
 
 ## Install from source
