@@ -20,6 +20,7 @@ import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc
 import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
+import { FavoriteNameDialog } from './favoriteNameDialog.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel, modifierBadge, pasteTarget } from './shortcutModifiers.js';
 
@@ -371,6 +372,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._handleCtrlSelectKeyEvent(event))
       return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
+    if ([Clutter.KEY_Up, Clutter.KEY_Down,
+      Clutter.KEY_KP_Up, Clutter.KEY_KP_Down].includes(symbol) &&
+        modifierBits(event.get_state(), Clutter.ModifierType) === 0)
+      return Clutter.EVENT_PROPAGATE;
     if ([Clutter.KEY_Control_L, Clutter.KEY_Control_R,
       Clutter.KEY_Shift_L, Clutter.KEY_Shift_R,
       Clutter.KEY_Alt_L, Clutter.KEY_Alt_R,
@@ -380,6 +385,21 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_PROPAGATE;
     if (this._isSearchActor(global.stage.get_key_focus()))
       return Clutter.EVENT_PROPAGATE;
+    if ([Clutter.KEY_Return, Clutter.KEY_KP_Enter].includes(symbol) &&
+        modifierBits(event.get_state(), Clutter.ModifierType) === 0) {
+      const focused = global.stage.get_key_focus();
+      const candidates = [
+        ...this.historySection._getMenuItems(),
+        ...this.favoritesSection._getMenuItems(),
+      ];
+      const candidate = candidates.find(item => item === focused);
+      if (candidate) {
+        this._quickPaste(candidate.entry, true);
+        return Clutter.EVENT_STOP;
+      }
+      // Preserve Enter activation for action buttons, rather than closing.
+      return Clutter.EVENT_PROPAGATE;
+    }
     // Keep an explicit route into search while other typing exits paste mode.
     if (event.get_key_unicode() === '/' &&
         modifierBits(event.get_state(), Clutter.ModifierType) === 0) {
@@ -703,6 +723,28 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._favoriteToggle(menuItem);
     });
 
+    if (entry.favorite) {
+      const renameButton = new St.Button({
+        style_class: 'ci-action-btn', can_focus: true,
+        accessible_name: 'お気に入りの名前を編集',
+        child: new St.Icon({icon_name: 'document-edit-symbolic',
+          style_class: 'system-status-icon'}),
+      });
+      menuItem.actor.add_child(renameButton);
+      renameButton.connect('clicked', () => {
+        const target = menuItem.entry;
+        this.menu.close();
+        const dialog = new FavoriteNameDialog(Store.getFavoriteName(target.text), name => {
+          if (this._destroyed || !target.list)
+            return;
+          Store.setFavoriteName(target.text, name);
+          if (target.menuItem)
+            this._setEntryLabel(target.menuItem);
+        });
+        dialog.open();
+      });
+    }
+
     // Delete button
     const icon = new St.Icon({
       icon_name: 'edit-delete-symbolic',
@@ -817,7 +859,8 @@ class ClipboardIndicator extends PanelMenu.Button {
   _setEntryLabel(menuItem) {
     const entry = menuItem.entry;
     if (entry.type === DS.TYPE_TEXT) {
-      menuItem.label.set_text(this._truncated(entry.text, MAX_VISIBLE_CHARS));
+      menuItem.label.set_text(this._truncated(
+        (entry.favorite && Store.getFavoriteName(entry.text)) || entry.text, MAX_VISIBLE_CHARS));
     } else {
       throw new TypeError('Unknown type: ' + entry.type);
     }
@@ -892,6 +935,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _removeEntry(entry, fullyDelete, humanGenerated) {
     if (fullyDelete) {
+      if (Store.getFavoriteName(entry.text))
+        Store.setFavoriteName(entry.text, '');
       entry.detach();
 
       if (entry.diskId) {
@@ -1109,10 +1154,6 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   populateSearchResults(query, forward) {
-    if (!this.searchEntryFront) {
-      return;
-    }
-
     this.historySection.removeAll();
     this.favoritesSection.removeAll();
 
@@ -1125,6 +1166,15 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       searchExp = new RegExp(query, 'i');
     } catch {}
+    for (const favorite of this.favoriteEntries.toArray().reverse()) {
+      const name = Store.getFavoriteName(favorite.text);
+      const matches = [name, favorite.text].some(text =>
+        text.toLowerCase().includes(query) || (searchExp && searchExp.test(text)));
+      if (matches)
+        this._addEntry(favorite, favorite === this.currentlySelectedEntry, false);
+    }
+    if (!this.searchEntryFront)
+      return;
     const start = forward ? this.searchEntryFront : this.searchEntryBack;
     let entry = start;
 

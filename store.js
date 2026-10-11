@@ -4,6 +4,8 @@ import * as DS from './dataStructures.js';
 
 let EXTENSION_UUID;
 let CACHE_DIR;
+let favoriteNames = {};
+let favoriteNamesFile;
 const OLD_REGISTRY_FILE = GLib.build_filenamev([
   GLib.get_user_cache_dir(),
   'clipboard-indicator@tudmotu.com',
@@ -40,6 +42,21 @@ export function init(uuid) {
   EXTENSION_UUID = uuid;
   CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), EXTENSION_UUID]);
   DATABASE_FILE = GLib.build_filenamev([CACHE_DIR, 'database.log']);
+  favoriteNamesFile = GLib.build_filenamev([CACHE_DIR, 'favorite-names.json']);
+  favoriteNames = {};
+  if (GLib.file_test(favoriteNamesFile, GLib.FileTest.EXISTS)) {
+    const [ok, bytes] = GLib.file_get_contents(favoriteNamesFile);
+    if (!ok)
+      throw new Error('Could not read favorite names');
+    const names = JSON.parse(new TextDecoder().decode(bytes));
+    if (!names || typeof names !== 'object' || Array.isArray(names))
+      throw new Error('Invalid favorite names file');
+    for (const [key, value] of Object.entries(names)) {
+      if (/^[a-f0-9]{64}$/.test(key) && typeof value === 'string')
+        favoriteNames[key] = value;
+    }
+  }
+
 
   if (GLib.mkdir_with_parents(CACHE_DIR, 0o775) !== 0) {
     console.log(
@@ -515,4 +532,25 @@ function _pushToOpQueue(op) {
   } else {
     consumeOp();
   }
+}
+
+// Keep labels separate so existing binary history logs remain readable.
+function favoriteNameKey(text) {
+  return GLib.compute_checksum_for_string(GLib.ChecksumType.SHA256, text, -1);
+}
+
+export function getFavoriteName(text) {
+  return favoriteNames[favoriteNameKey(text)] || '';
+}
+
+export function setFavoriteName(text, name) {
+  const key = favoriteNameKey(text);
+  const next = {...favoriteNames};
+  if (name)
+    next[key] = name;
+  else
+    delete next[key];
+  if (!GLib.file_set_contents(favoriteNamesFile, JSON.stringify(next)))
+    throw new Error('Could not save favorite name');
+  favoriteNames = next;
 }

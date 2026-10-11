@@ -119,7 +119,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const notificationLabel = new Gtk.Label({
-      label: 'コピー時にアイコンを強調する',
+      label: 'コピーしたことを表示する',
       hexpand: true,
       halign: Gtk.Align.START,
     });

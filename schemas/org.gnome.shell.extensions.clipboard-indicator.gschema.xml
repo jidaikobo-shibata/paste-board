@@ -71,7 +71,7 @@
     </key>
 
     <key name="notify-on-copy" type="b">
-      <default>false</default>
+      <default>true</default>
       <summary>Highlight the panel icon on copy</summary>
       <description>
         If true, the panel icon is highlighted briefly when text is captured.
