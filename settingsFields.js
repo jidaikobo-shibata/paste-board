@@ -1,4 +1,6 @@
 const SettingsFields = {
+  QUICK_PASTE_MODIFIERS: 'quick-paste-modifiers',
+  FAVORITE_PASTE_MODIFIERS: 'favorite-paste-modifiers',
   HISTORY_SIZE: 'history-size',
   WINDOW_WIDTH_PERCENTAGE: 'window-width-percentage',
   CACHE_FILE_SIZE: 'cache-size',

@@ -1,7 +1,6 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
-import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -22,6 +21,7 @@ import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
 import SettingsFields from './settingsFields.js';
+import { modifierBits, modifierLabel, modifierBadge, pasteTarget } from './shortcutModifiers.js';
 
 const Clipboard = St.Clipboard.get_default();
 const VirtualKeyboard = (() => {
@@ -100,15 +100,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
       this._quickPasteInputTimer = undefined;
-    }
-    if (this._clipboardKeeper) {
-      this._clipboardKeeper.onStatus = undefined;
-      try { this._clipboardKeeper.output.close(null); } catch {}
-      this._clipboardKeeper = undefined;
-    }
-    if (this._richPaste) {
-      try { this._richPaste.output.close(null); } catch {}
-      this._richPaste = undefined;
     }
     if (this._quickPasteTimer) {
       GLib.Source.remove(this._quickPasteTimer);
@@ -353,6 +344,13 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _captureQuickPasteKey(event) {
     const type = event.type();
+    if (!this.menu.isOpen)
+      return Clutter.EVENT_PROPAGATE;
+    if (type === Clutter.EventType.SCROLL) {
+      if (!this._quickPasteBusy && !this._isSearchActor(event.get_source()))
+        this.menu.close();
+      return Clutter.EVENT_PROPAGATE;
+    }
     if (type !== Clutter.EventType.KEY_PRESS && type !== Clutter.EventType.KEY_RELEASE)
       return Clutter.EVENT_PROPAGATE;
     const code = event.get_key_code();
@@ -365,18 +363,55 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._quickPasteKeysHeld.add(code);
     if (this._quickPasteBusy) {
       // Ctrl+0 remains available after the brief injection interval.
-      if (event.has_control_modifier() && event.get_key_unicode() === '0')
+      if (modifierBits(event.get_state(), Clutter.ModifierType) === 1 &&
+          event.get_key_unicode() === '0')
         this.menu.close();
       return Clutter.EVENT_STOP;
     }
-    return this._handleCtrlSelectKeyEvent(event)
-      ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
+    if (this._handleCtrlSelectKeyEvent(event))
+      return Clutter.EVENT_STOP;
+    const symbol = event.get_key_symbol();
+    if ([Clutter.KEY_Control_L, Clutter.KEY_Control_R,
+      Clutter.KEY_Shift_L, Clutter.KEY_Shift_R,
+      Clutter.KEY_Alt_L, Clutter.KEY_Alt_R,
+      Clutter.KEY_Super_L, Clutter.KEY_Super_R,
+      Clutter.KEY_Meta_L, Clutter.KEY_Meta_R,
+      Clutter.KEY_ISO_Level3_Shift].includes(symbol))
+      return Clutter.EVENT_PROPAGATE;
+    if (this._isSearchActor(global.stage.get_key_focus()))
+      return Clutter.EVENT_PROPAGATE;
+    // Keep an explicit route into search while other typing exits paste mode.
+    if (event.get_key_unicode() === '/' &&
+        modifierBits(event.get_state(), Clutter.ModifierType) === 0) {
+      global.stage.set_key_focus(this.searchEntry);
+      return Clutter.EVENT_STOP;
+    }
+    const bits = modifierBits(event.get_state(), Clutter.ModifierType);
+    const target = pasteTarget(bits, this._historyPasteModifiers, this._favoritePasteModifiers);
+    const digit = event.get_key_unicode();
+    if (target && (/^[1-9]$/.test(digit) ||
+        ((bits & 4) && code >= 10 && code <= 18)))
+      return Clutter.EVENT_STOP;
+    this.menu.close();
+    // Propagation inside Shell does not forward this already captured key to
+    // the Wayland client. Consume it rather than synthesize arbitrary input.
+    return Clutter.EVENT_STOP;
+  }
+
+  _isSearchActor(actor) {
+    for (let current = actor; current; current = current.get_parent()) {
+      if (current === this.searchEntry)
+        return true;
+    }
+    return false;
   }
 
   _quickPasteKeysAreHeld() {
     return this._quickPasteKeysHeld.size > 0 ||
       Boolean(global.get_pointer()[2] &
-        (Clutter.ModifierType.CONTROL_MASK | Clutter.ModifierType.SHIFT_MASK));
+        (Clutter.ModifierType.CONTROL_MASK | Clutter.ModifierType.SHIFT_MASK |
+          Clutter.ModifierType.MOD1_MASK | Clutter.ModifierType.MOD4_MASK |
+          Clutter.ModifierType.SUPER_MASK));
   }
 
   _suspendQuickPasteInput() {
@@ -401,29 +436,26 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _handleCtrlSelectKeyEvent(event) {
-    if (!this.menu.isOpen || !event.has_control_modifier()) {
+    if (!this.menu.isOpen)
       return;
-    }
-
-    const modifiers = event.get_state();
-    if (modifiers & (Clutter.ModifierType.MOD1_MASK |
-        Clutter.ModifierType.MOD4_MASK | Clutter.ModifierType.SUPER_MASK))
-      return;
-    const favorite = Boolean(modifiers & Clutter.ModifierType.SHIFT_MASK);
+    const bits = modifierBits(event.get_state(), Clutter.ModifierType);
+    const target = pasteTarget(bits, this._historyPasteModifiers, this._favoritePasteModifiers);
     let digit = event.get_key_unicode();
-    // Shift changes number-row symbols (differently on US and Japanese layouts).
-    // Mutter supplies XKB hardware keycodes: the number row 1..0 is 10..19.
+    // Shift changes number-row symbols; Mutter uses XKB codes 10..19.
     const code = event.get_key_code();
-    if (favorite && !/^[0-9]$/.test(digit) && code >= 10 && code <= 19)
+    if ((bits & 4) && !/^[0-9]$/.test(digit) && code >= 10 && code <= 19)
       digit = String((code - 9) % 10);
-    if (!/^[0-9]$/.test(digit)) {
+    if (!/^[0-9]$/.test(digit))
       return;
-    }
     const index = Number(digit);
-    if (index === 0) {
+    // Ctrl+0 remains a fixed close shortcut; configured modifiers+0 also close.
+    if (index === 0 && (bits === 1 || target)) {
       this.menu.close();
       return true;
     }
+    if (!target)
+      return;
+    const favorite = target === 'favorites';
     if (this._quickPasteBusy) {
       return true;
     }
@@ -450,25 +482,17 @@ class ClipboardIndicator extends PanelMenu.Button {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
     }
-    // This prototype only restores plain text, never discard rich/image data.
-    const mimes = this.selection.get_mimetypes(
-      Meta.SelectionType.SELECTION_CLIPBOARD,
-    );
-    if (!mimes.length || mimes.some(mime =>
-      !['text/plain', 'text/plain;charset=utf-8', 'UTF8_STRING',
-        'STRING', 'TEXT', 'COMPOUND_TEXT'].includes(mime))) {
-      this._quickPasteRich(entry, closeAfterPaste);
-      return;
-    }
     const target = global.display.focus_window;
+    const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
-      if (this._destroyed || !this.menu.isOpen || original === null) {
+      if (this._destroyed || !this.menu.isOpen ||
+          generation !== (this._clipboardGeneration || 0) || typeof original !== 'string') {
         this._quickPasteBusy = false;
         return;
       }
       let attempts = 0;
-      // Wait for the physical Ctrl key to be released before injecting paste.
+      // Wait for the physical shortcut keys to be released before injecting paste.
       this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => {
         if (this._quickPasteKeysAreHeld()) {
           if (++attempts < 80)
@@ -478,7 +502,8 @@ class ClipboardIndicator extends PanelMenu.Button {
           return GLib.SOURCE_REMOVE;
         }
         this._quickPasteTimer = undefined;
-        if (!this.menu.isOpen || global.display.focus_window !== target) {
+        if (!this.menu.isOpen || global.display.focus_window !== target ||
+            generation !== (this._clipboardGeneration || 0)) {
           this._quickPasteBusy = false;
           return GLib.SOURCE_REMOVE;
         }
@@ -522,128 +547,6 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._resumeQuickPasteInput();
       return GLib.SOURCE_REMOVE;
     });
-  }
-
-  _quickPasteRich(entry, closeAfterPaste = false) {
-    if (!GLib.getenv('DISPLAY')) {
-      this._showNotification(_('Quick paste unavailable'),
-        _('Restoring rich clipboard data currently requires Xwayland.'));
-      return;
-    }
-    const target = global.display.focus_window;
-    this._quickPasteBusy = true;
-    let keeper = this._clipboardKeeper;
-    if (!keeper) {
-      try {
-        const launcher = new Gio.SubprocessLauncher({
-          flags: Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE,
-        });
-        launcher.setenv('GDK_BACKEND', 'x11', true);
-        const process = launcher.spawnv(['gjs', '-m',
-          GLib.build_filenamev([this.extension.path, 'clipboardKeeper.js'])]);
-        keeper = {
-          process,
-          output: new Gio.DataOutputStream({base_stream: process.get_stdin_pipe()}),
-          input: new Gio.DataInputStream({base_stream: process.get_stdout_pipe()}),
-        };
-        this._clipboardKeeper = keeper;
-        const listen = () => keeper.input.read_line_async(GLib.PRIORITY_DEFAULT,
-          null, (obj, result) => {
-            let status;
-            try { [status] = obj.read_line_finish_utf8(result); }
-            catch { status = null; }
-            keeper.onStatus?.(status);
-            if (status === null || status === 'changed' || status === 'error') {
-              if (this._clipboardKeeper === keeper)
-                this._clipboardKeeper = undefined;
-              try { keeper.output.close(null); } catch {}
-              return;
-            }
-            listen();
-          });
-        listen();
-      } catch {
-        this._quickPasteBusy = false;
-        console.error('Quick paste: unable to start clipboard keeper');
-        return;
-      }
-    }
-    const transaction = {output: keeper.output, released: false};
-    this._richPaste = transaction;
-    const finish = () => {
-      if (this._richPaste !== transaction)
-        return;
-      this._richPaste = undefined;
-      this._quickPasteBusy = false;
-      keeper.onStatus = undefined;
-      if (this._quickPasteTimer) {
-        GLib.Source.remove(this._quickPasteTimer);
-        this._quickPasteTimer = undefined;
-      }
-      this._resumeQuickPasteInput();
-    };
-    keeper.onStatus = status => {
-      if (this._richPaste !== transaction)
-        return;
-      if (status === 'ready') {
-        let attempts = 0;
-        this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => {
-          if (this._quickPasteKeysAreHeld()) {
-            if (++attempts < 80)
-              return GLib.SOURCE_CONTINUE;
-            finish();
-            try { keeper.output.close(null); } catch {}
-            this._clipboardKeeper = undefined;
-            return GLib.SOURCE_REMOVE;
-          }
-          this._quickPasteTimer = undefined;
-          if (this._destroyed || !this.menu.isOpen || global.display.focus_window !== target) {
-            finish();
-            try { keeper.output.close(null); } catch {}
-            this._clipboardKeeper = undefined;
-            return GLib.SOURCE_REMOVE;
-          }
-          keeper.output.put_string('paste\n', null);
-          return GLib.SOURCE_REMOVE;
-        });
-      } else if (status === 'prepared') {
-        if (global.display.focus_window === target && this.menu.isOpen &&
-            !this._quickPasteKeysAreHeld()) {
-          transaction.released = true;
-          this._suspendQuickPasteInput();
-          this._sendQuickPasteKeys(closeAfterPaste);
-        } else {
-          // If new keys arrived during preparation, restore without injecting.
-          console.log(this.extension.uuid, 'Quick paste: cancelled during preparation');
-          keeper.output.put_string('restore\n', null);
-        }
-      } else if (status === 'restored' || status === 'changed') {
-        console.log(this.extension.uuid, 'Rich quick paste:', status);
-        finish();
-      } else if (status === 'error' || status === null) {
-        console.log(this.extension.uuid, 'Rich quick paste: snapshot or restore failed');
-        if (!this._destroyed)
-          this._showNotification(_('Quick paste unavailable'),
-            _('Could not preserve all clipboard formats; please check the development log.'));
-        finish();
-      }
-    };
-    const request = Gio.MemoryInputStream.new_from_bytes(new GLib.Bytes(
-      new TextEncoder().encode(JSON.stringify({
-        text: entry.text,
-        mimes: this.selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD),
-      }) + '\n'),
-    ));
-    keeper.output.splice_async(request, Gio.OutputStreamSpliceFlags.CLOSE_SOURCE,
-      GLib.PRIORITY_DEFAULT, null, (obj, result) => {
-        try { obj.splice_finish(result); }
-        catch {
-          finish();
-          try { keeper.output.close(null); } catch {}
-          if (this._clipboardKeeper === keeper)
-            this._clipboardKeeper = undefined;
-        }
-      });
   }
 
   _finishQuickPaste(resume) {
@@ -886,16 +789,21 @@ class ClipboardIndicator extends PanelMenu.Button {
   _setCandidateAccessibleName(item) {
     const shortcut = item.shortcutLabel?.get_text();
     item.accessible_name = shortcut
-      ? `${shortcut}. ${item.label.get_text()}` : item.label.get_text();
+      ? `${item.shortcutLabel.shortcutName || shortcut}. ${item.label.get_text()}` : item.label.get_text();
   }
 
   _updateCandidateNumbers() {
     for (const [section, prefix] of [
-      [this.historySection, ''], [this.favoritesSection, '⇧'],
+      [this.historySection, modifierBadge(this._historyPasteModifiers)],
+      [this.favoritesSection, modifierBadge(this._favoritePasteModifiers)],
     ]) {
       section._getMenuItems().forEach((item, index) => {
         if (!item.shortcutLabel)
           return;
+        const modifiers = section === this.historySection
+          ? this._historyPasteModifiers : this._favoritePasteModifiers;
+        item.shortcutLabel.shortcutName = index < 9
+          ? `${modifierLabel(modifiers)}+${index + 1}` : '';
         item.shortcutLabel.set_text(index < 9 ? `${prefix}${index + 1}` : '');
         if (index < 9)
           item.shortcutLabel.remove_style_class_name('ci-shortcut-number-unused');
@@ -1422,7 +1330,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       'owner-changed',
       (_, selectionType) => {
         if (selectionType === Meta.SelectionType.SELECTION_CLIPBOARD) {
-          if (this._quickPasteRestoring || this._richPaste)
+          this._clipboardGeneration = (this._clipboardGeneration || 0) + 1;
+          if (this._quickPasteRestoring)
             return;
           if (this._quickPasteState) {
             if (this._quickPasteState.owned)
@@ -1532,6 +1441,8 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _fetchSettings() {
+    this._historyPasteModifiers = this.settings.get_int(SettingsFields.QUICK_PASTE_MODIFIERS);
+    this._favoritePasteModifiers = this.settings.get_int(SettingsFields.FAVORITE_PASTE_MODIFIERS);
     MAX_REGISTRY_LENGTH = this.settings.get_int(SettingsFields.HISTORY_SIZE);
     MAX_BYTES =
       (1 << 20) * this.settings.get_int(SettingsFields.CACHE_FILE_SIZE);
@@ -1579,6 +1490,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const prevPrivateMode = PRIVATE_MODE;
 
     this._fetchSettings();
+    this._updateCandidateNumbers();
 
     if (
       prevCacheOnlyFavorites !== undefined &&

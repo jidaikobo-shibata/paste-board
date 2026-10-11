@@ -3,6 +3,18 @@
       id="org.gnome.shell.extensions.clipboard-history-dev"
       path="/org/gnome/shell/extensions/clipboard-history-dev/">
 
+    <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
+    <key type="i" name="quick-paste-modifiers">
+      <default>1</default>
+      <range min="1" max="15" />
+      <summary>Modifiers for history number shortcuts</summary>
+    </key>
+    <key type="i" name="favorite-paste-modifiers">
+      <default>5</default>
+      <range min="1" max="15" />
+      <summary>Modifiers for favorite number shortcuts</summary>
+    </key>
+
     <key type="i" name="history-size">
       <default>1000</default>
       <summary>The maximum number of items to remember</summary>

@@ -1,3 +1,16 @@
+## Development quick paste: plain text only
+
+Number shortcuts in the open panel paste history or favorites and restore the
+previous clipboard **as plain text**. Formatting, images, and application-specific
+clipboard metadata are not preserved. If the previous clipboard cannot be read
+as text, quick paste is cancelled without replacing it.
+
+The history shortcut keeps the panel open; the favorite shortcut closes it.
+Their modifiers are configurable in preferences. This implementation uses the
+GNOME Shell clipboard and virtual keyboard directly, without an Xwayland helper.
+Clipboard restoration currently waits 500 ms; application-level paste completion
+is not acknowledged, so unusually slow applications require manual verification.
+
 # Gnome Clipboard History
 
 [Gnome Clipboard History](https://extensions.gnome.org/extension/4839/clipboard-history/) is a

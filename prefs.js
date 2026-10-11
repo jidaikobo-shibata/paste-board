@@ -9,6 +9,7 @@ import {
 } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import Fields from './settingsFields.js';
+import { modifierLabel } from './shortcutModifiers.js';
 
 export default class ClipboardHistoryPrefs extends ExtensionPreferences {
   // fillPreferencesWindow() is passed a Adw.PreferencesWindow,
@@ -232,6 +233,56 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addRow(confirmClearLabel, field_confirm_clear_toggle);
     addRow(keybindingLabel, field_keybinding_activation);
     addRow(null, field_keybinding);
+
+    const shortcutHelp = new Gtk.Label({
+      label: 'パネル内の数字キー：⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0で閉じます。',
+      wrap: true,
+      xalign: 0,
+    });
+    const modifierSelectors = [];
+    let updatingModifiers = false;
+    for (const [key, otherKey, title] of [
+      [Fields.QUICK_PASTE_MODIFIERS, Fields.FAVORITE_PASTE_MODIFIERS,
+        '履歴の貼り付け（パネルを維持）'],
+      [Fields.FAVORITE_PASTE_MODIFIERS, Fields.QUICK_PASTE_MODIFIERS,
+        'お気に入りの貼り付け（パネルを閉じる）'],
+    ]) {
+      const selector = new Gtk.ComboBoxText();
+      for (let value = 1; value <= 15; value++)
+        selector.append(String(value), modifierLabel(value) + '+数字');
+      const label = new Gtk.Label({label: title, xalign: 0, hexpand: true});
+      label.set_mnemonic_widget(selector);
+      addRow(label, selector);
+      modifierSelectors.push([key, selector]);
+      selector.connect('changed', () => {
+        if (updatingModifiers)
+          return;
+        const value = Number(selector.get_active_id());
+        if (value === settings.get_int(otherKey)) {
+          updatingModifiers = true;
+          selector.set_active_id(String(settings.get_int(key)));
+          updatingModifiers = false;
+          shortcutHelp.set_label('履歴とお気に入りには異なる修飾キーを選んでください。');
+          return;
+        }
+        shortcutHelp.set_label('⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0で閉じます。');
+        settings.set_int(key, value);
+      });
+    }
+    addRow(null, shortcutHelp);
+    const syncModifiers = () => {
+      updatingModifiers = true;
+      for (const [key, selector] of modifierSelectors)
+        selector.set_active_id(String(settings.get_int(key)));
+      updatingModifiers = false;
+    };
+    syncModifiers();
+    const modifierSignals = modifierSelectors.map(([key]) =>
+      settings.connect(`changed::${key}`, syncModifiers));
+    window.connect('close-request', () => {
+      modifierSignals.forEach(id => settings.disconnect(id));
+      return false;
+    });
 
     settings.bind(
       Fields.HISTORY_SIZE,
