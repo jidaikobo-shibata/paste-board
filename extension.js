@@ -22,7 +22,7 @@ import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
 import { FavoriteNameDialog } from './favoriteNameDialog.js';
 import SettingsFields from './settingsFields.js';
-import { modifierBits, modifierLabel, modifierBadge, pasteTarget } from './shortcutModifiers.js';
+import { modifierBits, modifierLabel, pasteTarget } from './shortcutModifiers.js';
 
 const Clipboard = St.Clipboard.get_default();
 const VirtualKeyboard = (() => {
@@ -174,6 +174,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.favoritesSection = new PopupMenu.PopupMenuSection();
 
     this.scrollViewFavoritesMenuSection = new PopupMenu.PopupMenuSection();
+    this._favoriteShortcutHeading = new St.Label({
+      style_class: 'ci-shortcut-heading', reactive: false, can_focus: false,
+    });
+    this.scrollViewFavoritesMenuSection.actor.add_child(this._favoriteShortcutHeading);
     const favoritesScrollView = new St.ScrollView({
       style_class: 'ci-history-menu-section',
       overlay_scrollbars: true,
@@ -188,6 +192,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.historySection = new PopupMenu.PopupMenuSection();
 
     this.scrollViewMenuSection = new PopupMenu.PopupMenuSection();
+    this._historyShortcutHeading = new St.Label({
+      style_class: 'ci-shortcut-heading', reactive: false, can_focus: false,
+    });
+    this.scrollViewMenuSection.actor.add_child(this._historyShortcutHeading);
     this.historyScrollView = new St.ScrollView({
       style_class: 'ci-history-menu-section',
       overlay_scrollbars: true,
@@ -835,22 +843,19 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _updateCandidateNumbers() {
-    for (const [section, prefix] of [
-      [this.historySection, modifierBadge(this._historyPasteModifiers)],
-      [this.favoritesSection, modifierBadge(this._favoritePasteModifiers)],
+    for (const [section, heading, modifiers] of [
+      [this.historySection, this._historyShortcutHeading, this._historyPasteModifiers],
+      [this.favoritesSection, this._favoriteShortcutHeading, this._favoritePasteModifiers],
     ]) {
-      section._getMenuItems().forEach((item, index) => {
+      const items = section._getMenuItems();
+      heading.set_text(`${modifierLabel(modifiers)}+数字`);
+      heading.visible = items.length > 0;
+      items.forEach((item, index) => {
         if (!item.shortcutLabel)
           return;
-        const modifiers = section === this.historySection
-          ? this._historyPasteModifiers : this._favoritePasteModifiers;
         item.shortcutLabel.shortcutName = index < 9
           ? `${modifierLabel(modifiers)}+${index + 1}` : '';
-        item.shortcutLabel.set_text(index < 9 ? `${prefix}${index + 1}` : '');
-        if (index < 9)
-          item.shortcutLabel.remove_style_class_name('ci-shortcut-number-unused');
-        else
-          item.shortcutLabel.add_style_class_name('ci-shortcut-number-unused');
+        item.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
         this._setCandidateAccessibleName(item);
       });
     }
