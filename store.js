@@ -554,3 +554,15 @@ export function setFavoriteName(text, name) {
     throw new Error('Could not save favorite name');
   favoriteNames = next;
 }
+
+export function reorderFavorites(ids) {
+  if (ids.some(id => !Number.isInteger(id) || id <= 0))
+    throw new Error('Favorite order contains an unsaved entry');
+  // Existing move operations preserve compatibility with the history format.
+  _appendBytesToLog(stream => {
+    for (const id of ids)
+      _moveToEndOp(id)(stream);
+    return true;
+  });
+  uselessOpCount += ids.length;
+}

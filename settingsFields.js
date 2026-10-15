@@ -1,4 +1,5 @@
 const SettingsFields = {
+  KEEP_MENU_OPEN: 'keep-menu-open',
   QUICK_PASTE_MODIFIERS: 'quick-paste-modifiers',
   FAVORITE_PASTE_MODIFIERS: 'favorite-paste-modifiers',
   HISTORY_SIZE: 'history-size',

@@ -208,7 +208,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addRow(null, field_keybinding);
 
     const shortcutHelp = new Gtk.Label({
-      label: 'パネル内の数字キー：⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0で閉じます。',
+      label: 'メニュー内の数字キー：⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0でまとめて貼り付け、Escで閉じます。',
       wrap: true,
       xalign: 0,
     });
@@ -216,9 +216,9 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     let updatingModifiers = false;
     for (const [key, otherKey, title] of [
       [Fields.QUICK_PASTE_MODIFIERS, Fields.FAVORITE_PASTE_MODIFIERS,
-        '履歴の貼り付け（パネルを維持）'],
+        '履歴の貼り付け'],
       [Fields.FAVORITE_PASTE_MODIFIERS, Fields.QUICK_PASTE_MODIFIERS,
-        'お気に入りの貼り付け（パネルを維持）'],
+        'お気に入りの貼り付け'],
     ]) {
       const selector = new Gtk.ComboBoxText();
       for (let value = 1; value <= 15; value++)
@@ -238,7 +238,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
           shortcutHelp.set_label('履歴とお気に入りには異なる修飾キーを選んでください。');
           return;
         }
-        shortcutHelp.set_label('⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0で閉じます。');
+        shortcutHelp.set_label('⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。Ctrl+0でまとめて貼り付け、Escで閉じます。');
         settings.set_int(key, value);
       });
     }

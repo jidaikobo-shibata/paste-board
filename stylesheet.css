@@ -45,6 +45,9 @@
 
 .ci-history-search-entry {
   width: 5em;
+  margin: 0;
+  padding: 3px 8px;
+  min-height: 0;
 }
 
 .ci-shortcut-number {
@@ -59,4 +62,76 @@
   font-size: 0.85em;
   color: #999999;
   padding: 4px 16px 6px;
+}
+
+.ci-mode-button {
+  padding: 7px;
+  margin: 0 2px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+
+.ci-mode-button:hover,
+.ci-mode-button:focus {
+  background-color: rgba(128, 128, 128, 0.2);
+  border-color: rgba(128, 128, 128, 0.65);
+}
+
+.ci-mode-button:checked {
+  background-color: rgba(90, 160, 230, 0.35);
+  border-color: rgba(90, 160, 230, 0.85);
+}
+
+.ci-batch-choice {
+  margin: 0;
+  padding: 3px 7px;
+  color: inherit;
+  background-color: rgba(128, 128, 128, 0.12);
+  border: 1px solid rgba(128, 128, 128, 0.65);
+  border-radius: 6px;
+}
+
+.ci-batch-choice:focus,
+.ci-batch-choice:hover {
+  background-color: rgba(128, 128, 128, 0.2);
+}
+
+.ci-batch-preview {
+  width: 440px;
+  padding-top: 10px;
+  font-size: 0.9em;
+}
+
+.ci-batch-row {
+  spacing: 5px;
+  margin: 0 5px;
+}
+
+.ci-batch-numbers {
+  margin: 0;
+  width: 4em;
+  padding: 5px 6px;
+  color: inherit;
+}
+
+.ci-batch-error {
+  font-size: 0.85em;
+  padding: 4px 16px;
+}
+
+.ci-page-button {
+  padding: 5px;
+}
+
+.ci-search-batch-header {
+  padding: 6px 12px;
+  spacing: 6px;
+}
+
+.ci-search-batch-line {
+  spacing: 6px;
+}
+
+.ci-batch-fallback {
+  spacing: 5px;
 }

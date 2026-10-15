@@ -4,6 +4,7 @@ import GLib from 'gi://GLib';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
+import Atk from 'gi://Atk';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
@@ -21,6 +22,7 @@ import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
 import { FavoriteNameDialog } from './favoriteNameDialog.js';
+import { combineCandidates } from './batchPaste.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel, pasteTarget } from './shortcutModifiers.js';
 
@@ -97,6 +99,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._hideModeHint();
+    this._batchSeparatorMenu?.destroy();
     this._clearCopyHighlight();
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
@@ -128,28 +132,39 @@ class ClipboardIndicator extends PanelMenu.Button {
       name: 'searchEntry',
       style_class: 'search-entry ci-history-search-entry',
       can_focus: true,
-      hint_text: _('Search clipboard history…'),
+      hint_text: '履歴を検索…',
+      accessible_name: 'クリップボード履歴を検索',
       track_hover: true,
       x_expand: true,
-      y_expand: true,
+      y_expand: false,
+      y_align: Clutter.ActorAlign.CENTER,
     });
 
-    const entryItem = new PopupMenu.PopupBaseMenuItem({
-      style_class: 'ci-history-search-section',
-      reactive: false,
-      can_focus: false,
-    });
-    entryItem.add_child(this.searchEntry);
-    this.menu.addMenuItem(entryItem);
+    const header = new St.BoxLayout({style_class: 'ci-search-batch-header'});
+    header.set_vertical(true);
+    this._searchBatchLine = new St.BoxLayout({style_class: 'ci-search-batch-line'});
+    this._searchBatchLine.add_child(this.searchEntry);
+    header.add_child(this._searchBatchLine);
+    this._batchFallbackLine = new St.BoxLayout({style_class: 'ci-batch-fallback'});
+    header.add_child(this._batchFallbackLine);
+    this._batchFallbackLine.hide();
+    this.menu.box.add_child(header);
+    this._buildBatchPasteRow(this._searchBatchLine);
+    this._searchBatchLine.connect('notify::allocation', () => this._updateBatchLayout());
+    this._batchRow.connect('notify::allocation', () => this._updateBatchLayout());
 
     this.menu.connect('open-state-changed', (self, open) => {
       if (this._initialFocusCallbackId) {
         GLib.Source.remove(this._initialFocusCallbackId);
         this._initialFocusCallbackId = undefined;
       }
-      if (!open && !this.menu.isOpen)
+      if (!open && !this.menu.isOpen) {
         this._quickPasteKeysHeld?.clear();
+        this._hideModeHint();
+        this._batchSeparatorMenu?.close();
+      }
       if (open) {
+        this._updateCandidateNumbers();
         this._setMenuWidth();
         this.searchEntry.set_text('');
         this._initialFocusCallbackId = GLib.timeout_add(
@@ -215,7 +230,6 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     actionsSection.actor.add_child(actionsBox);
     this.menu.addMenuItem(actionsSection);
-
     const prevPage = new PopupMenu.PopupBaseMenuItem();
     prevPage.add_child(
       new St.Icon({
@@ -223,6 +237,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         style_class: 'popup-menu-icon',
       }),
     );
+    prevPage.add_style_class_name('ci-page-button');
     prevPage.connect('activate', this._navigatePrevPage.bind(this));
     actionsBox.add_child(prevPage);
 
@@ -233,23 +248,22 @@ class ClipboardIndicator extends PanelMenu.Button {
         style_class: 'popup-menu-icon',
       }),
     );
+    nextPage.add_style_class_name('ci-page-button');
     nextPage.connect('activate', this._navigateNextPage.bind(this));
     actionsBox.add_child(nextPage);
 
     actionsBox.add_child(new St.BoxLayout({ x_expand: true }));
 
-    this.privateModeMenuItem = new PopupMenu.PopupSwitchMenuItem(
-      _('Private mode'),
-      PRIVATE_MODE,
-      { reactive: true },
+    this.privateModeMenuItem = this._createModeButton(
+      'view-private-symbolic', 'プライベートモード：履歴の記録を停止',
+      SettingsFields.PRIVATE_MODE,
     );
-    this.privateModeMenuItem.connect('toggled', () => {
-      this.settings.set_boolean(
-        SettingsFields.PRIVATE_MODE,
-        this.privateModeMenuItem.state,
-      );
-    });
+    this.keepMenuOpenItem = this._createModeButton(
+      'view-pin-symbolic', 'メニューを維持', SettingsFields.KEEP_MENU_OPEN,
+    );
     actionsBox.add_child(this.privateModeMenuItem);
+    actionsBox.add_child(this.keepMenuOpenItem);
+    this._syncModeButtons();
     this._updatePrivateModeState();
 
     const clearMenuItem = new PopupMenu.PopupBaseMenuItem();
@@ -351,12 +365,75 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
   }
 
+  _createModeButton(icon, description, key) {
+    const button = new St.Button({
+      style_class: 'ci-mode-button', can_focus: true,
+      accessible_role: Atk.Role.TOGGLE_BUTTON,
+      child: new St.Icon({icon_name: icon, style_class: 'popup-menu-icon'}),
+    });
+    button.modeDescription = description;
+    button.connect('clicked', () => {
+      this.settings.set_boolean(key, !this.settings.get_boolean(key));
+    });
+    button.connect('notify::hover', () => {
+      if (button.hover)
+        this._showModeHint(button);
+      else
+        this._hideModeHint();
+    });
+    button.connect('key-focus-in', () => this._showModeHint(button));
+    button.connect('key-focus-out', () => this._hideModeHint());
+    return button;
+  }
+
+  _syncModeButtons() {
+    for (const [button, active] of [
+      [this.privateModeMenuItem, PRIVATE_MODE], [this.keepMenuOpenItem, this._keepMenuOpen],
+    ]) {
+      button.accessible_name = `${button.modeDescription}：${active ? 'オン' : 'オフ'}`;
+      if (active) {
+        button.add_style_pseudo_class('checked');
+        button.add_accessible_state(Atk.StateType.CHECKED);
+      } else {
+        button.remove_style_pseudo_class('checked');
+        button.remove_accessible_state(Atk.StateType.CHECKED);
+      }
+    }
+    this._hideModeHint();
+  }
+
+  _hideModeHint() {
+    this._modeHint?.destroy();
+    this._modeHint = undefined;
+  }
+
+  _showModeHint(button) {
+    this._hideModeHint();
+    if (!this.menu.isOpen || this._destroyed)
+      return;
+    const monitor = Main.layoutManager.findMonitorForActor(button);
+    if (!monitor)
+      return;
+    const hint = new St.Label({text: button.accessible_name,
+      style_class: 'ci-copy-bubble', reactive: false, can_focus: false});
+    this._modeHint = hint;
+    Main.uiGroup.add_child(hint);
+    const [, width] = hint.get_preferred_width(-1);
+    const [, height] = hint.get_preferred_height(width);
+    const [x, y] = button.get_transformed_position();
+    hint.set_size(width, height);
+    hint.set_position(Math.max(monitor.x + 6,
+      Math.min(x, monitor.x + monitor.width - width - 6)),
+      Math.max(monitor.y + 6, y - height - 6));
+  }
+
   _captureQuickPasteKey(event) {
     const type = event.type();
     if (!this.menu.isOpen)
       return Clutter.EVENT_PROPAGATE;
     if (type === Clutter.EventType.SCROLL) {
-      if (!this._quickPasteBusy && !this._isSearchActor(event.get_source()))
+      if (!this._quickPasteBusy && !this._isSearchActor(event.get_source()) &&
+          !this._isBatchActor(event.get_source()))
         this.menu.close();
       return Clutter.EVENT_PROPAGATE;
     }
@@ -377,9 +454,17 @@ class ClipboardIndicator extends PanelMenu.Button {
         this.menu.close();
       return Clutter.EVENT_STOP;
     }
+    if (this._isBatchActor(global.stage.get_key_focus()) &&
+        !(modifierBits(event.get_state(), Clutter.ModifierType) === 1 &&
+          event.get_key_unicode() === '0') &&
+        event.get_key_symbol() !== Clutter.KEY_Escape)
+      return Clutter.EVENT_PROPAGATE;
     if (this._handleCtrlSelectKeyEvent(event))
       return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
+    if (global.stage.get_key_focus() instanceof St.Button &&
+        [Clutter.KEY_space, Clutter.KEY_Return, Clutter.KEY_KP_Enter].includes(symbol))
+      return Clutter.EVENT_PROPAGATE;
     if ([Clutter.KEY_Up, Clutter.KEY_Down,
       Clutter.KEY_KP_Up, Clutter.KEY_KP_Down].includes(symbol) &&
         modifierBits(event.get_state(), Clutter.ModifierType) === 0)
@@ -476,8 +561,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!/^[0-9]$/.test(digit))
       return;
     const index = Number(digit);
-    // Ctrl+0 remains a fixed close shortcut; configured modifiers+0 also close.
-    if (index === 0 && (bits === 1 || target)) {
+    if (index === 0 && bits === 1) {
+      if (!this._quickPasteBusy)
+        this._openBatchPaste();
+      return true;
+    }
+    // Configured modifiers+0 still close, unless they are Ctrl+0.
+    if (index === 0 && target) {
       this.menu.close();
       return true;
     }
@@ -501,11 +591,105 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this._quickPasteKeysHeld.add(event.get_key_code());
     console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
-    this._quickPaste(items[index - 1].entry);
+    this._quickPaste(items[index - 1].entry, !this._keepMenuOpen);
     return true;
   }
 
-  _quickPaste(entry, closeAfterPaste = false) {
+  _updateBatchLayout() {
+    const width = this._searchBatchLine.width;
+    if (width <= 0)
+      return;
+    const [, batchWidth] = this._batchRow.get_preferred_width(-1);
+    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
+    const wrap = width < batchWidth + 120 * scale;
+    const destination = wrap ? this._batchFallbackLine : this._searchBatchLine;
+    if (this._batchRow.get_parent() !== destination) {
+      this._batchRow.get_parent().remove_child(this._batchRow);
+      destination.add_child(this._batchRow);
+    }
+    this._batchFallbackLine.visible = wrap;
+  }
+
+  _buildBatchPasteRow(actionsBox) {
+    const container = new St.BoxLayout({
+      style_class: 'ci-batch-row', y_align: Clutter.ActorAlign.CENTER,
+    });
+    this._batchRow = container;
+    this._batchNumbers = new St.Entry({text: '1-9', can_focus: true,
+      accessible_name: '一括貼付けの履歴番号', style_class: 'ci-batch-numbers'});
+    this._batchNumbers.clutter_text.set_max_length(300);
+    this._batchSeparator = '\n';
+    const separatorButton = new St.Button({label: '改行 ▾', can_focus: true,
+      accessible_name: '区切り文字：改行', style_class: 'ci-batch-choice'});
+    const pasteButton = new St.Button({label: '一括貼付け', can_focus: true,
+      accessible_name: '指定した履歴を一括貼付け', style_class: 'ci-batch-choice'});
+    for (const control of [this._batchNumbers, separatorButton, pasteButton]) {
+      control.y_expand = false;
+      control.y_align = Clutter.ActorAlign.CENTER;
+    }
+    container.add_child(this._batchNumbers);
+    container.add_child(separatorButton);
+    container.add_child(pasteButton);
+    actionsBox.add_child(container);
+    this._batchError = new St.Label({text: '', style_class: 'ci-batch-error', visible: false});
+    this.menu.box.add_child(this._batchError);
+    const dropdown = new PopupMenu.PopupMenu(separatorButton, 0.5, St.Side.TOP);
+    this._batchSeparatorMenu = dropdown;
+    Main.uiGroup.add_child(dropdown.actor);
+    dropdown.actor.hide();
+    this._batchSeparatorManager = new PopupMenu.PopupMenuManager(this);
+    this._batchSeparatorManager.addMenu(dropdown);
+    for (const [label, value] of [['改行', '\n'], ['なし', ''], ['半角スペース', ' '],
+      [',', ','], [',＋半角スペース', ', '], ['タブ', '\t'],
+      ['.', '.'], ['/', '/'], ['|', '|'], [':', ':'], ['&', '&']]) {
+      const item = new PopupMenu.PopupMenuItem(label);
+      item.connect('activate', () => {
+        this._batchSeparator = value;
+        separatorButton.set_label(label + ' ▾');
+        separatorButton.accessible_name = '区切り文字：' + label;
+        dropdown.close();
+        global.stage.set_key_focus(separatorButton);
+      });
+      dropdown.addMenuItem(item);
+    }
+    separatorButton.connect('clicked', () => dropdown.toggle());
+    pasteButton.connect('clicked', () => this._pasteBatch());
+    this._batchNumbers.clutter_text.connect('activate', () => this._pasteBatch());
+    this._batchNumbers.clutter_text.connect('text-changed', () => {
+      this._batchError.hide();
+    });
+  }
+
+  _isBatchActor(actor) {
+    for (let current = actor; current; current = current.get_parent()) {
+      if (current === this._batchRow)
+        return true;
+    }
+    return false;
+  }
+
+  _openBatchPaste() {
+    if (!this._quickPasteBusy) {
+      global.stage.set_key_focus(this._batchNumbers);
+      this._batchNumbers.clutter_text.set_selection(0, -1);
+    }
+  }
+
+  _pasteBatch() {
+    if (this._quickPasteBusy)
+      return;
+    try {
+      const candidates = this.historySection._getMenuItems().map(item => ({text: item.entry.text}));
+      const result = combineCandidates(candidates, this._batchNumbers.get_text(), this._batchSeparator);
+      this._batchError.hide();
+      this._quickPaste({type: DS.TYPE_TEXT, text: result.text}, true);
+    } catch (error) {
+      this._batchError.set_text(error.message);
+      this._batchError.show();
+    }
+  }
+
+  _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false) {
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
@@ -514,7 +698,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
-      if (this._destroyed || !this.menu.isOpen ||
+      if (this._destroyed || (!allowClosedMenu && !this.menu.isOpen) ||
           generation !== (this._clipboardGeneration || 0) || typeof original !== 'string') {
         this._quickPasteBusy = false;
         return;
@@ -530,13 +714,14 @@ class ClipboardIndicator extends PanelMenu.Button {
           return GLib.SOURCE_REMOVE;
         }
         this._quickPasteTimer = undefined;
-        if (!this.menu.isOpen || global.display.focus_window !== target ||
+        if ((!allowClosedMenu && !this.menu.isOpen) || global.display.focus_window !== target ||
             generation !== (this._clipboardGeneration || 0)) {
           this._quickPasteBusy = false;
           return GLib.SOURCE_REMOVE;
         }
         this._quickPasteState = { original, text: entry.text, changed: false };
-        this._suspendQuickPasteInput();
+        if (this.menu.isOpen)
+          this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
         this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
@@ -676,6 +861,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       const item = items[items.length - 1];
       this._rewriteMenuItem(item, entry);
       this.historySection.moveMenuItem(item, 0);
+      this._updateCandidateNumbers();
 
       if (selectEntry) {
         this._selectEntry(entry, updateClipboard);
@@ -732,6 +918,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
 
     if (entry.favorite) {
+      menuItem.favoriteMoveButtons = [];
+      for (const [direction, icon, label] of [
+        [-1, 'go-up-symbolic', 'お気に入りを上へ移動'],
+        [1, 'go-down-symbolic', 'お気に入りを下へ移動'],
+      ]) {
+        const button = new St.Button({style_class: 'ci-action-btn',
+          can_focus: true, accessible_name: label,
+          child: new St.Icon({icon_name: icon, style_class: 'system-status-icon'})});
+        menuItem.actor.add_child(button);
+        menuItem.favoriteMoveButtons.push([direction, button]);
+        button.connect('clicked', () => this._moveFavorite(menuItem, direction));
+      }
       const renameButton = new St.Button({
         style_class: 'ci-action-btn', can_focus: true,
         accessible_name: 'お気に入りの名前を編集',
@@ -793,6 +991,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this.activeHistoryMenuItems++;
     }
 
+    this._updateCandidateNumbers();
     if (selectEntry) {
       this._selectEntry(entry, updateClipboard);
     }
@@ -857,6 +1056,12 @@ class ClipboardIndicator extends PanelMenu.Button {
           ? `${modifierLabel(modifiers)}+${index + 1}` : '';
         item.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
         this._setCandidateAccessibleName(item);
+        for (const [direction, button] of item.favoriteMoveButtons || []) {
+          const enabled = Boolean(direction < 0 ? item.entry.next : item.entry.prev);
+          button.reactive = enabled;
+          button.can_focus = enabled;
+          button.opacity = enabled ? 255 : 80;
+        }
       });
     }
   }
@@ -869,6 +1074,28 @@ class ClipboardIndicator extends PanelMenu.Button {
     } else {
       throw new TypeError('Unknown type: ' + entry.type);
     }
+  }
+
+  _moveFavorite(menuItem, direction) {
+    if (this._quickPasteBusy)
+      return;
+    const entry = menuItem.entry;
+    const neighbor = direction < 0 ? entry.next : entry.prev;
+    if (!entry.favorite || !neighbor)
+      return;
+    // The displayed order is the reverse of the linked list's order.
+    if (direction < 0)
+      neighbor.append(entry);
+    else
+      neighbor.prepend(entry);
+    Store.reorderFavorites(this.favoriteEntries.toArray().map(item => item.diskId));
+    const visible = this.favoritesSection._getMenuItems();
+    const order = this.favoriteEntries.toArray().reverse();
+    order.filter(item => visible.includes(item.menuItem)).forEach((item, index) => {
+      this.favoritesSection.moveMenuItem(item.menuItem, index);
+    });
+    this._updateCandidateNumbers();
+    global.stage.set_key_focus(menuItem);
   }
 
   _favoriteToggle(menuItem) {
@@ -1361,7 +1588,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _moveEntryFirst(entry) {
-    if (!MOVE_ITEM_FIRST) {
+    if (!MOVE_ITEM_FIRST || entry.favorite) {
       return;
     }
 
@@ -1527,6 +1754,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _fetchSettings() {
+    this._keepMenuOpen = this.settings.get_boolean(SettingsFields.KEEP_MENU_OPEN);
     this._historyPasteModifiers = this.settings.get_int(SettingsFields.QUICK_PASTE_MODIFIERS);
     this._favoritePasteModifiers = this.settings.get_int(SettingsFields.FAVORITE_PASTE_MODIFIERS);
     MAX_REGISTRY_LENGTH = this.settings.get_int(SettingsFields.HISTORY_SIZE);
@@ -1574,6 +1802,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this._fetchSettings();
     this._updateCandidateNumbers();
+    this._syncModeButtons();
     if (!NOTIFY_ON_COPY || PRIVATE_MODE)
       this._clearCopyHighlight();
 
@@ -1635,7 +1864,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
     this._bindShortcut(SETTING_KEY_TOGGLE_MENU, () => this.menu.toggle());
     this._bindShortcut(SETTING_KEY_PRIVATE_MODE, () =>
-      this.privateModeMenuItem.toggle(),
+      this.settings.set_boolean(SettingsFields.PRIVATE_MODE, !PRIVATE_MODE),
     );
   }
 

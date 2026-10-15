@@ -4,6 +4,10 @@
       path="/org/gnome/shell/extensions/clipboard-history-dev/">
 
     <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
+    <key type="b" name="keep-menu-open">
+      <default>false</default>
+      <summary>Keep the history menu open after number shortcut paste</summary>
+    </key>
     <key type="i" name="quick-paste-modifiers">
       <default>8</default>
       <range min="1" max="15" />
