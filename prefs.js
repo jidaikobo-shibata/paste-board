@@ -129,7 +129,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const moveFirstLabel = new Gtk.Label({
-      label: _('Move previously copied items to the top'),
+      label: 'エンター・クリックした履歴を一番上に表示\n（お気に入り/数字による選択を除く）',
       hexpand: true,
       halign: Gtk.Align.START,
     });

@@ -111,7 +111,7 @@
 
     <key name="move-item-first" type="b">
       <default>true</default>
-      <summary>Move previously copied items to the top of the list</summary>
+      <summary>Move history selected by Enter or click to the top, excluding favorites and number shortcuts</summary>
     </key>
 
     <key name="private-mode" type="b">

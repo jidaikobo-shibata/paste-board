@@ -431,12 +431,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     const type = event.type();
     if (!this.menu.isOpen)
       return Clutter.EVENT_PROPAGATE;
-    if (type === Clutter.EventType.SCROLL) {
-      if (!this._quickPasteBusy && !this._isSearchActor(event.get_source()) &&
-          !this._isBatchActor(event.get_source()))
-        this.menu.close();
-      return Clutter.EVENT_PROPAGATE;
-    }
     if (type !== Clutter.EventType.KEY_PRESS && type !== Clutter.EventType.KEY_RELEASE)
       return Clutter.EVENT_PROPAGATE;
     const code = event.get_key_code();
@@ -487,7 +481,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       ];
       const candidate = candidates.find(item => item === focused);
       if (candidate) {
-        this._quickPaste(candidate.entry, true);
+        this._quickPaste(candidate.entry, true, false, true);
         return Clutter.EVENT_STOP;
       }
       // Preserve Enter activation for action buttons, rather than closing.
@@ -689,7 +683,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
-  _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false) {
+  _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false, commitSelection = false) {
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
@@ -700,7 +694,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
       if (this._destroyed || (!allowClosedMenu && !this.menu.isOpen) ||
           generation !== (this._clipboardGeneration || 0) || typeof original !== 'string') {
-        this._quickPasteBusy = false;
+        this._endQuickPasteTracking();
         return;
       }
       let attempts = 0;
@@ -709,20 +703,26 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (this._quickPasteKeysAreHeld()) {
           if (++attempts < 80)
             return GLib.SOURCE_CONTINUE;
-          this._quickPasteBusy = false;
+          this._endQuickPasteTracking();
           this._quickPasteTimer = undefined;
           return GLib.SOURCE_REMOVE;
         }
         this._quickPasteTimer = undefined;
         if ((!allowClosedMenu && !this.menu.isOpen) || global.display.focus_window !== target ||
             generation !== (this._clipboardGeneration || 0)) {
-          this._quickPasteBusy = false;
+          this._endQuickPasteTracking();
           return GLib.SOURCE_REMOVE;
         }
-        this._quickPasteState = { original, text: entry.text, changed: false };
+        this._quickPasteState = {
+          original, text: entry.text, changed: false, keepClipboard: commitSelection,
+        };
         if (this.menu.isOpen)
           this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
+        if (commitSelection) {
+          this._moveEntryFirst(entry);
+          this._selectEntry(entry, false);
+        }
         this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
         this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -767,14 +767,23 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!state)
       return;
     this._quickPasteState = undefined;
-    if (!state.changed) {
+    if (!state.changed && !state.keepClipboard) {
       this._quickPasteRestoring = true;
       Clipboard.set_text(St.ClipboardType.CLIPBOARD, state.original);
       this._quickPasteRestoring = false;
     }
-    this._quickPasteBusy = false;
+    this._endQuickPasteTracking();
     if (resume)
       this._resumeQuickPasteInput();
+  }
+
+  _endQuickPasteTracking() {
+    this._quickPasteBusy = false;
+    if (this._pendingClipboardCopy) {
+      this._pendingClipboardCopy = false;
+      if (!this._destroyed)
+        this._queryClipboard(true);
+    }
   }
 
   _handleSettingsKeyEvent(event) {
@@ -1265,6 +1274,12 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onMenuItemSelectedAndMenuClose(menuItem) {
+    if (this._quickPasteBusy)
+      return;
+    if (PASTE_ON_SELECTION) {
+      this._quickPaste(menuItem.entry, true, false, true);
+      return;
+    }
     this._moveEntryFirst(menuItem.entry);
     this._selectEntry(menuItem.entry, true, true);
     this.menu.close();
@@ -1458,13 +1473,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     return false;
   }
 
-  _queryClipboard() {
+  _queryClipboard(externalCopy = false) {
     if (this._shouldAbortClipboardQuery(St.Clipboard.CLIPBOARD)) {
       return;
     }
 
+    const generation = this._clipboardGeneration || 0;
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, text) => {
-      this._processClipboardContent(text, true);
+      if (this._destroyed || generation !== (this._clipboardGeneration || 0))
+        return;
+      this._processClipboardContent(text, true, externalCopy);
     });
   }
 
@@ -1490,10 +1508,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
   }
 
-  _processClipboardContent(text, selectEntry) {
-    if (this._quickPasteBusy || this._quickPasteRestoring)
+  _processClipboardContent(text, selectEntry, externalCopy = false) {
+    if (this._quickPasteBusy || this._quickPasteRestoring) {
+      if (externalCopy)
+        this._pendingClipboardCopy = true;
       return;
-    if (this._debouncing > 0) {
+    }
+    if (!externalCopy && this._debouncing > 0) {
       this._debouncing--;
       return;
     }
@@ -1512,7 +1533,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       const isFirst =
         entry === this.entries.last() || entry === this.favoriteEntries.last();
       if (!isFirst) {
-        this._moveEntryFirst(entry);
+        this._moveEntryFirst(entry, true);
       }
       if (selectEntry && (!isFirst || entry !== this.currentlySelectedEntry)) {
         this._selectEntry(entry, false);
@@ -1587,8 +1608,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
   }
 
-  _moveEntryFirst(entry) {
-    if (!MOVE_ITEM_FIRST || entry.favorite) {
+  _moveEntryFirst(entry, copiedAgain = false) {
+    if ((!MOVE_ITEM_FIRST && !copiedAgain) || entry.favorite) {
       return;
     }
 
@@ -1647,9 +1668,15 @@ class ClipboardIndicator extends PanelMenu.Button {
           if (this._quickPasteRestoring)
             return;
           if (this._quickPasteState) {
-            if (this._quickPasteState.owned)
+            if (this._quickPasteState.owned) {
               this._quickPasteState.changed = true;
+              this._pendingClipboardCopy = true;
+            }
             this._quickPasteState.owned = true;
+            return;
+          }
+          if (this._quickPasteBusy) {
+            this._pendingClipboardCopy = true;
             return;
           }
           this._queryClipboard();
