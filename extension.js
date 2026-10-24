@@ -689,7 +689,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         }
         this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
-        this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
           this._quickPasteTimer = undefined;
           const changed = this._quickPasteState?.changed;
           this._finishQuickPaste(true);

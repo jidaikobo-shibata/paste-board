@@ -10,7 +10,7 @@ Number shortcuts close the history menu after paste by default. Enable the
 Enter and clicks also honor this switch; Esc closes the menu.
 Their modifiers are configurable in preferences. This implementation uses the
 GNOME Shell clipboard and virtual keyboard directly, without an Xwayland helper.
-Clipboard restoration currently waits 500 ms; application-level paste completion
+Clipboard restoration currently waits 100 ms; application-level paste completion
 is not acknowledged, so unusually slow applications require manual verification.
 
 # Gnome Clipboard History
