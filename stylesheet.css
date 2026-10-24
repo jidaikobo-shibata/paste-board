@@ -82,7 +82,7 @@
   border-color: rgba(90, 160, 230, 0.85);
 }
 
-.ci-batch-choice {
+.ci-paste-action-choice {
   margin: 0;
   padding: 3px 7px;
   color: inherit;
@@ -91,47 +91,32 @@
   border-radius: 6px;
 }
 
-.ci-batch-choice:focus,
-.ci-batch-choice:hover {
+.ci-paste-action-choice:focus,
+.ci-paste-action-choice:hover {
   background-color: rgba(128, 128, 128, 0.2);
 }
 
-.ci-batch-preview {
-  width: 440px;
-  padding-top: 10px;
-  font-size: 0.9em;
-}
 
-.ci-batch-row {
-  spacing: 5px;
-  margin: 0 5px;
-}
 
-.ci-batch-numbers {
-  margin: 0;
-  width: 4em;
-  padding: 5px 6px;
-  color: inherit;
-}
 
-.ci-batch-error {
-  font-size: 0.85em;
-  padding: 4px 16px;
-}
 
 .ci-page-button {
   padding: 5px;
 }
 
-.ci-search-batch-header {
+
+
+
+.ci-paste-action-row {
+  spacing: 6px;
+  padding: 4px 12px;
+}
+
+.ci-paste-action-row StButton:checked {
+  background-color: rgba(90, 160, 230, 0.35);
+  border-color: rgba(90, 160, 230, 0.85);
+}
+
+.ci-search-header {
   padding: 6px 12px;
-  spacing: 6px;
-}
-
-.ci-search-batch-line {
-  spacing: 6px;
-}
-
-.ci-batch-fallback {
-  spacing: 5px;
 }

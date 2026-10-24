@@ -7,7 +7,7 @@ as text, quick paste is cancelled without replacing it.
 
 Number shortcuts close the history menu after paste by default. Enable the
 “メニューを維持” switch at the bottom to keep it open for repeated pastes.
-Enter always closes it after paste.
+Enter and clicks also honor this switch; Esc closes the menu.
 Their modifiers are configurable in preferences. This implementation uses the
 GNOME Shell clipboard and virtual keyboard directly, without an Xwayland helper.
 Clipboard restoration currently waits 500 ms; application-level paste completion
@@ -50,10 +50,9 @@ will take place.
   - <kbd>Shift</kbd> + <kbd>Super</kbd> + a number from 1 to 9 pastes a favorite.
   - Both paste shortcuts restore the previous plain text; the bottom switch controls whether the menu stays open.
   - Their modifiers can be changed independently in preferences.
-  - <kbd>Ctrl</kbd> + <kbd>0</kbd> focuses the batch number input below search.
-    Specify visible history numbers such as `2-6` or `1,3-5`, choose a separator,
-    and press Enter or the batch paste button. Favorites are excluded.
-    Batch paste closes the menu. <kbd>Esc</kbd> closes without pasting.
+  - <kbd>Esc</kbd> or <kbd>Ctrl</kbd> + <kbd>0</kbd> closes the menu.
+  - Pin the menu and choose no extra key, Enter, or Tab after each paste.
+    The choice is temporary and resets when unpinned.
   - <kbd>/</kbd> focuses search. Other keys outside search close the panel,
     except modifier keys and configured number shortcuts.
 - Search uses case-insensitive [regex](https://regex101.com/?flavor=javascript).

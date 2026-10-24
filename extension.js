@@ -22,7 +22,6 @@ import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
 import { FavoriteNameDialog } from './favoriteNameDialog.js';
-import { combineCandidates } from './batchPaste.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel, pasteTarget } from './shortcutModifiers.js';
 
@@ -100,7 +99,6 @@ class ClipboardIndicator extends PanelMenu.Button {
   destroy() {
     this._destroyed = true;
     this._hideModeHint();
-    this._batchSeparatorMenu?.destroy();
     this._clearCopyHighlight();
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
@@ -140,18 +138,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       y_align: Clutter.ActorAlign.CENTER,
     });
 
-    const header = new St.BoxLayout({style_class: 'ci-search-batch-header'});
-    header.set_vertical(true);
-    this._searchBatchLine = new St.BoxLayout({style_class: 'ci-search-batch-line'});
-    this._searchBatchLine.add_child(this.searchEntry);
-    header.add_child(this._searchBatchLine);
-    this._batchFallbackLine = new St.BoxLayout({style_class: 'ci-batch-fallback'});
-    header.add_child(this._batchFallbackLine);
-    this._batchFallbackLine.hide();
+    const header = new St.BoxLayout({style_class: 'ci-search-header'});
+    header.add_child(this.searchEntry);
     this.menu.box.add_child(header);
-    this._buildBatchPasteRow(this._searchBatchLine);
-    this._searchBatchLine.connect('notify::allocation', () => this._updateBatchLayout());
-    this._batchRow.connect('notify::allocation', () => this._updateBatchLayout());
 
     this.menu.connect('open-state-changed', (self, open) => {
       if (this._initialFocusCallbackId) {
@@ -159,9 +148,11 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        this._choosingPasteAction = false;
+        this._updatePasteActionChooser();
+        this._flushDeferredHistoryMoves();
         this._quickPasteKeysHeld?.clear();
         this._hideModeHint();
-        this._batchSeparatorMenu?.close();
       }
       if (open) {
         this._updateCandidateNumbers();
@@ -263,6 +254,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
+    this._buildPasteActionChooser(actionsSection);
     this._syncModeButtons();
     this._updatePrivateModeState();
 
@@ -373,7 +365,19 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
     button.modeDescription = description;
     button.connect('clicked', () => {
-      this.settings.set_boolean(key, !this.settings.get_boolean(key));
+      if (key === SettingsFields.KEEP_MENU_OPEN) {
+        if (this._quickPasteBusy)
+          return;
+        if (this._keepMenuOpen) {
+          this._choosingPasteAction = false;
+          this.settings.set_boolean(key, false);
+        } else {
+          this._choosingPasteAction = !this._choosingPasteAction;
+          this._updatePasteActionChooser();
+        }
+      } else {
+        this.settings.set_boolean(key, !this.settings.get_boolean(key));
+      }
     });
     button.connect('notify::hover', () => {
       if (button.hover)
@@ -386,7 +390,50 @@ class ClipboardIndicator extends PanelMenu.Button {
     return button;
   }
 
+  _buildPasteActionChooser(section) {
+    this._pasteAfterAction = 'none';
+    this._pasteActionRow = new St.BoxLayout({style_class: 'ci-paste-action-row'});
+    this._pasteActionRow.add_child(new St.Label({text: '貼付後',
+      y_align: Clutter.ActorAlign.CENTER}));
+    this._pasteActionButtons = [];
+    for (const [value, label] of [['none', 'そのまま'], ['enter', 'Enter'], ['tab', 'Tab']]) {
+      const button = new St.Button({label, can_focus: true,
+        style_class: 'ci-paste-action-choice', accessible_role: Atk.Role.TOGGLE_BUTTON,
+        accessible_name: value === 'none' ? '貼付後の操作なし' : `貼付後に${label}キーを送る`});
+      button.connect('clicked', () => {
+        if (this._quickPasteBusy)
+          return;
+        this._pasteAfterAction = value;
+        this._choosingPasteAction = false;
+        if (!this._keepMenuOpen)
+          this.settings.set_boolean(SettingsFields.KEEP_MENU_OPEN, true);
+        this._updatePasteActionChooser();
+      });
+      this._pasteActionButtons.push([value, button]);
+      this._pasteActionRow.add_child(button);
+    }
+    section.actor.add_child(this._pasteActionRow);
+  }
+
+  _updatePasteActionChooser() {
+    if (!this._pasteActionRow)
+      return;
+    if (!this._keepMenuOpen && !this._choosingPasteAction)
+      this._pasteAfterAction = 'none';
+    this._pasteActionRow.visible = Boolean(this._keepMenuOpen || this._choosingPasteAction);
+    for (const [value, button] of this._pasteActionButtons) {
+      if (value === this._pasteAfterAction) {
+        button.add_style_pseudo_class('checked');
+        button.add_accessible_state(Atk.StateType.CHECKED);
+      } else {
+        button.remove_style_pseudo_class('checked');
+        button.remove_accessible_state(Atk.StateType.CHECKED);
+      }
+    }
+  }
+
   _syncModeButtons() {
+    this._updatePasteActionChooser();
     for (const [button, active] of [
       [this.privateModeMenuItem, PRIVATE_MODE], [this.keepMenuOpenItem, this._keepMenuOpen],
     ]) {
@@ -448,11 +495,6 @@ class ClipboardIndicator extends PanelMenu.Button {
         this.menu.close();
       return Clutter.EVENT_STOP;
     }
-    if (this._isBatchActor(global.stage.get_key_focus()) &&
-        !(modifierBits(event.get_state(), Clutter.ModifierType) === 1 &&
-          event.get_key_unicode() === '0') &&
-        event.get_key_symbol() !== Clutter.KEY_Escape)
-      return Clutter.EVENT_PROPAGATE;
     if (this._handleCtrlSelectKeyEvent(event))
       return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
@@ -481,7 +523,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       ];
       const candidate = candidates.find(item => item === focused);
       if (candidate) {
-        this._quickPaste(candidate.entry, true, false, true);
+        this._quickPaste(candidate.entry, !this._keepMenuOpen, false, true, this._keepMenuOpen);
         return Clutter.EVENT_STOP;
       }
       // Preserve Enter activation for action buttons, rather than closing.
@@ -522,6 +564,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _suspendQuickPasteInput() {
+    this._quickPasteFocusedCandidate = this._focusedHistoryCandidate();
     this._quickPasteInputReleased = true;
     console.log(this.extension.uuid, 'Quick paste: keys released, injecting paste');
     this.menu.emit('open-state-changed', false);
@@ -538,8 +581,22 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._quickPasteInputReleased = false;
     if (!this._destroyed && this.menu.isOpen) {
       this.menu.emit('open-state-changed', true);
+      const previous = this._quickPasteFocusedCandidate;
+      if (previous && this._focusedHistoryCandidate(previous)) {
+        if (this._initialFocusCallbackId) {
+          GLib.Source.remove(this._initialFocusCallbackId);
+          this._initialFocusCallbackId = undefined;
+        }
+        global.stage.set_key_focus(previous);
+      }
       console.log(this.extension.uuid, 'Quick paste: keyboard capture resumed');
     }
+    this._quickPasteFocusedCandidate = undefined;
+  }
+
+  _focusedHistoryCandidate(actor = global.stage.get_key_focus()) {
+    return [...this.historySection._getMenuItems(),
+      ...this.favoritesSection._getMenuItems()].find(item => item === actor);
   }
 
   _handleCtrlSelectKeyEvent(event) {
@@ -555,13 +612,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!/^[0-9]$/.test(digit))
       return;
     const index = Number(digit);
-    if (index === 0 && bits === 1) {
-      if (!this._quickPasteBusy)
-        this._openBatchPaste();
-      return true;
-    }
-    // Configured modifiers+0 still close, unless they are Ctrl+0.
-    if (index === 0 && target) {
+    if (index === 0 && (bits === 1 || target)) {
       this.menu.close();
       return true;
     }
@@ -589,106 +640,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     return true;
   }
 
-  _updateBatchLayout() {
-    const width = this._searchBatchLine.width;
-    if (width <= 0)
-      return;
-    const [, batchWidth] = this._batchRow.get_preferred_width(-1);
-    const scale = St.ThemeContext.get_for_stage(global.stage).scale_factor;
-    const wrap = width < batchWidth + 120 * scale;
-    const destination = wrap ? this._batchFallbackLine : this._searchBatchLine;
-    if (this._batchRow.get_parent() !== destination) {
-      this._batchRow.get_parent().remove_child(this._batchRow);
-      destination.add_child(this._batchRow);
-    }
-    this._batchFallbackLine.visible = wrap;
-  }
-
-  _buildBatchPasteRow(actionsBox) {
-    const container = new St.BoxLayout({
-      style_class: 'ci-batch-row', y_align: Clutter.ActorAlign.CENTER,
-    });
-    this._batchRow = container;
-    this._batchNumbers = new St.Entry({text: '1-9', can_focus: true,
-      accessible_name: '一括貼付けの履歴番号', style_class: 'ci-batch-numbers'});
-    this._batchNumbers.clutter_text.set_max_length(300);
-    this._batchSeparator = '\n';
-    const separatorButton = new St.Button({label: '改行 ▾', can_focus: true,
-      accessible_name: '区切り文字：改行', style_class: 'ci-batch-choice'});
-    const pasteButton = new St.Button({label: '一括貼付け', can_focus: true,
-      accessible_name: '指定した履歴を一括貼付け', style_class: 'ci-batch-choice'});
-    for (const control of [this._batchNumbers, separatorButton, pasteButton]) {
-      control.y_expand = false;
-      control.y_align = Clutter.ActorAlign.CENTER;
-    }
-    container.add_child(this._batchNumbers);
-    container.add_child(separatorButton);
-    container.add_child(pasteButton);
-    actionsBox.add_child(container);
-    this._batchError = new St.Label({text: '', style_class: 'ci-batch-error', visible: false});
-    this.menu.box.add_child(this._batchError);
-    const dropdown = new PopupMenu.PopupMenu(separatorButton, 0.5, St.Side.TOP);
-    this._batchSeparatorMenu = dropdown;
-    Main.uiGroup.add_child(dropdown.actor);
-    dropdown.actor.hide();
-    this._batchSeparatorManager = new PopupMenu.PopupMenuManager(this);
-    this._batchSeparatorManager.addMenu(dropdown);
-    for (const [label, value] of [['改行', '\n'], ['なし', ''], ['半角スペース', ' '],
-      [',', ','], [',＋半角スペース', ', '], ['タブ', '\t'],
-      ['.', '.'], ['/', '/'], ['|', '|'], [':', ':'], ['&', '&']]) {
-      const item = new PopupMenu.PopupMenuItem(label);
-      item.connect('activate', () => {
-        this._batchSeparator = value;
-        separatorButton.set_label(label + ' ▾');
-        separatorButton.accessible_name = '区切り文字：' + label;
-        dropdown.close();
-        global.stage.set_key_focus(separatorButton);
-      });
-      dropdown.addMenuItem(item);
-    }
-    separatorButton.connect('clicked', () => dropdown.toggle());
-    pasteButton.connect('clicked', () => this._pasteBatch());
-    this._batchNumbers.clutter_text.connect('activate', () => this._pasteBatch());
-    this._batchNumbers.clutter_text.connect('text-changed', () => {
-      this._batchError.hide();
-    });
-  }
-
-  _isBatchActor(actor) {
-    for (let current = actor; current; current = current.get_parent()) {
-      if (current === this._batchRow)
-        return true;
-    }
-    return false;
-  }
-
-  _openBatchPaste() {
-    if (!this._quickPasteBusy) {
-      global.stage.set_key_focus(this._batchNumbers);
-      this._batchNumbers.clutter_text.set_selection(0, -1);
-    }
-  }
-
-  _pasteBatch() {
-    if (this._quickPasteBusy)
-      return;
-    try {
-      const candidates = this.historySection._getMenuItems().map(item => ({text: item.entry.text}));
-      const result = combineCandidates(candidates, this._batchNumbers.get_text(), this._batchSeparator);
-      this._batchError.hide();
-      this._quickPaste({type: DS.TYPE_TEXT, text: result.text}, true);
-    } catch (error) {
-      this._batchError.set_text(error.message);
-      this._batchError.show();
-    }
-  }
-
-  _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false, commitSelection = false) {
+  _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false, commitSelection = false,
+    deferHistoryMove = false) {
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
     }
     const target = global.display.focus_window;
+    const afterAction = !closeAfterPaste && this._keepMenuOpen ? this._pasteAfterAction : 'none';
     const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
@@ -720,18 +679,46 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
         if (commitSelection) {
-          this._moveEntryFirst(entry);
+          if (deferHistoryMove)
+            this._deferHistoryMove(entry);
+          else {
+            this._flushDeferredHistoryMoves();
+            this._moveEntryFirst(entry);
+          }
           this._selectEntry(entry, false);
         }
         this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
         this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
           this._quickPasteTimer = undefined;
+          const changed = this._quickPasteState?.changed;
           this._finishQuickPaste(true);
+          if (!changed && !this._destroyed && this.menu.isOpen &&
+              global.display.focus_window === target && this._keepMenuOpen &&
+              !this._quickPasteKeysAreHeld())
+            this._sendPostPasteAction(afterAction);
           return GLib.SOURCE_REMOVE;
         });
         return GLib.SOURCE_REMOVE;
       });
+    });
+  }
+
+  _sendPostPasteAction(action) {
+    const code = action === 'enter' ? 28 : action === 'tab' ? 15 : null;
+    if (code === null)
+      return;
+    this._quickPasteBusy = true;
+    this._suspendQuickPasteInput();
+    const keyboard = VirtualKeyboard();
+    const time = GLib.get_monotonic_time();
+    keyboard.notify_key(time, code, Clutter.KeyState.PRESSED);
+    keyboard.notify_key(time, code, Clutter.KeyState.RELEASED);
+    this._quickPasteInputTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 40, () => {
+      this._quickPasteInputTimer = undefined;
+      this._endQuickPasteTracking();
+      this._resumeQuickPasteInput();
+      return GLib.SOURCE_REMOVE;
     });
   }
 
@@ -1111,11 +1098,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     const entry = menuItem.entry;
     const wasSelected = this.currentlySelectedEntry?.id === entry.id;
 
-    // Move to front (end of list)
-    (entry.favorite ? this.entries : this.favoriteEntries).append(entry);
+    // Favorites display the linked list in reverse: prepend adds at the bottom.
+    if (entry.favorite)
+      this.entries.append(entry);
+    else
+      this.favoriteEntries.prepend(entry);
     this._removeEntry(entry);
     entry.favorite = !entry.favorite;
-    this._addEntry(entry, wasSelected, false, 0);
+    this._addEntry(entry, wasSelected, false, entry.favorite ? undefined : 0);
     this._maybeRestoreMenuPages();
     global.stage.set_key_focus(entry.menuItem);
 
@@ -1135,6 +1125,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       Store.storeTextEntry(entry.text);
       Store.updateFavoriteStatus(entry.diskId, true);
     }
+    if (entry.favorite)
+      Store.reorderFavorites(this.favoriteEntries.toArray().map(item => item.diskId));
   }
 
   _removeAll() {
@@ -1274,15 +1266,40 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onMenuItemSelectedAndMenuClose(menuItem) {
+    if (this._keepMenuOpen)
+      GObject.signal_stop_emission_by_name(menuItem, 'activate');
     if (this._quickPasteBusy)
       return;
     if (PASTE_ON_SELECTION) {
-      this._quickPaste(menuItem.entry, true, false, true);
+      this._quickPaste(menuItem.entry, !this._keepMenuOpen, false, true, this._keepMenuOpen);
       return;
     }
-    this._moveEntryFirst(menuItem.entry);
+    if (this._keepMenuOpen)
+      this._deferHistoryMove(menuItem.entry);
+    else {
+      this._flushDeferredHistoryMoves();
+      this._moveEntryFirst(menuItem.entry);
+    }
     this._selectEntry(menuItem.entry, true, true);
-    this.menu.close();
+    if (!this._keepMenuOpen)
+      this.menu.close();
+  }
+
+  _deferHistoryMove(entry) {
+    if (!MOVE_ITEM_FIRST || entry.favorite)
+      return;
+    this._deferredHistoryMoves ??= new Set();
+    this._deferredHistoryMoves.delete(entry);
+    this._deferredHistoryMoves.add(entry);
+  }
+
+  _flushDeferredHistoryMoves() {
+    const pending = this._deferredHistoryMoves;
+    this._deferredHistoryMoves = undefined;
+    for (const entry of pending || []) {
+      if (entry.list === this.entries && !entry.favorite)
+        this._moveEntryFirst(entry);
+    }
   }
 
   _resetSelectedMenuItem(resetClipboard) {
