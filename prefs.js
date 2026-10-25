@@ -73,30 +73,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       'toggle-menu',
       _('Toggle the menu'),
     );
-    addKeybinding(
-      field_keybinding.model,
-      settings,
-      'clear-history',
-      _('Clear history'),
-    );
-    addKeybinding(
-      field_keybinding.model,
-      settings,
-      'prev-entry',
-      _('Previous entry'),
-    );
-    addKeybinding(
-      field_keybinding.model,
-      settings,
-      'next-entry',
-      _('Next entry'),
-    );
-    addKeybinding(
-      field_keybinding.model,
-      settings,
-      'toggle-private-mode',
-      _('Toggle private mode'),
-    );
 
     const field_keybinding_activation = new Gtk.Switch();
     field_keybinding_activation.connect('notify::active', (widget) => {
@@ -114,7 +90,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const cacheDisableLabel = new Gtk.Label({
-      label: _('Only save favorites to disk'),
+      label: '履歴をディスクに保存しない（セットは保存）',
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -129,7 +105,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const moveFirstLabel = new Gtk.Label({
-      label: 'エンター・クリックした履歴を一番上に表示\n（お気に入り/数字による選択を除く）',
+      label: 'エンター・クリックした履歴を一番上に表示\n（ペーストセット/数字による選択を除く）',
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -175,8 +151,11 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         let inputWidget = input;
 
         if (input instanceof Gtk.Switch) {
+          input.valign = Gtk.Align.CENTER;
+          input.vexpand = false;
           inputWidget = new Gtk.Box({
             orientation: Gtk.Orientation.HORIZONTAL,
+            valign: Gtk.Align.CENTER,
           });
           inputWidget.append(input);
         }
@@ -207,18 +186,10 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addRow(keybindingLabel, field_keybinding_activation);
     addRow(null, field_keybinding);
 
-    const shortcutHelp = new Gtk.Label({
-      label: 'メニュー内の数字キー：⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。EscまたはCtrl+0で閉じます。',
-      wrap: true,
-      xalign: 0,
-    });
     const modifierSelectors = [];
     let updatingModifiers = false;
-    for (const [key, otherKey, title] of [
-      [Fields.QUICK_PASTE_MODIFIERS, Fields.FAVORITE_PASTE_MODIFIERS,
-        '履歴の貼り付け'],
-      [Fields.FAVORITE_PASTE_MODIFIERS, Fields.QUICK_PASTE_MODIFIERS,
-        'お気に入りの貼り付け'],
+    for (const [key, title] of [
+      [Fields.QUICK_PASTE_MODIFIERS, '表示中のタブの貼り付け'],
     ]) {
       const selector = new Gtk.ComboBoxText();
       for (let value = 1; value <= 15; value++)
@@ -231,18 +202,9 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         if (updatingModifiers)
           return;
         const value = Number(selector.get_active_id());
-        if (value === settings.get_int(otherKey)) {
-          updatingModifiers = true;
-          selector.set_active_id(String(settings.get_int(key)));
-          updatingModifiers = false;
-          shortcutHelp.set_label('履歴とお気に入りには異なる修飾キーを選んでください。');
-          return;
-        }
-        shortcutHelp.set_label('⌃ Ctrl・⌥ Alt・⇧ Shift・◆ Super。EscまたはCtrl+0で閉じます。');
         settings.set_int(key, value);
       });
     }
-    addRow(null, shortcutHelp);
     const syncModifiers = () => {
       updatingModifiers = true;
       for (const [key, selector] of modifierSelectors)

@@ -10,6 +10,7 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
+import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
 
 import {
   Extension,
@@ -22,8 +23,10 @@ import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog } from './confirmDialog.js';
 import { FavoriteNameDialog } from './favoriteNameDialog.js';
+import { PasteSets } from './pasteSets.js';
+import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import SettingsFields from './settingsFields.js';
-import { modifierBits, modifierLabel, pasteTarget } from './shortcutModifiers.js';
+import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
 const Clipboard = St.Clipboard.get_default();
 const VirtualKeyboard = (() => {
@@ -38,11 +41,7 @@ const VirtualKeyboard = (() => {
   };
 })();
 
-const SETTING_KEY_CLEAR_HISTORY = 'clear-history';
-const SETTING_KEY_PREV_ENTRY = 'prev-entry';
-const SETTING_KEY_NEXT_ENTRY = 'next-entry';
 const SETTING_KEY_TOGGLE_MENU = 'toggle-menu';
-const SETTING_KEY_PRIVATE_MODE = 'toggle-private-mode';
 const INDICATOR_ICON = 'edit-paste-symbolic';
 
 const PAGE_SIZE = 50;
@@ -99,6 +98,11 @@ class ClipboardIndicator extends PanelMenu.Button {
   destroy() {
     this._destroyed = true;
     this._hideModeHint();
+    this._pasteSetDialog?.destroy();
+    if (this._pasteDragEndTimer) {
+      GLib.Source.remove(this._pasteDragEndTimer);
+      this._pasteDragEndTimer = undefined;
+    }
     this._clearCopyHighlight();
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
@@ -141,7 +145,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     const header = new St.BoxLayout({style_class: 'ci-search-header'});
     header.add_child(this.searchEntry);
     this.menu.box.add_child(header);
-
+    this._activePasteTab = 'history';
+    const tabsScroll = new St.ScrollView({style_class: 'ci-paste-tabs'});
+    this._tabsScroll = tabsScroll;
+    tabsScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.NEVER);
+    tabsScroll.connect('notify::allocation', () => this._updatePasteTabScroll());
+    this._tabsBox = new St.BoxLayout({style_class: 'ci-paste-tabs-box'});
+    tabsScroll.add_child(this._tabsBox);
+    this.menu.box.add_child(tabsScroll);
     this.menu.connect('open-state-changed', (self, open) => {
       if (this._initialFocusCallbackId) {
         GLib.Source.remove(this._initialFocusCallbackId);
@@ -165,9 +176,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._initialFocusCallbackId = undefined;
             if (!this.menu.isOpen)
               return GLib.SOURCE_REMOVE;
-            const firstCandidate =
-              this.historySection._getMenuItems()[0] ||
-              this.favoritesSection._getMenuItems()[0];
+            const firstCandidate = this._visiblePasteCandidates()[0];
             global.stage.set_key_focus(firstCandidate || this.searchEntry);
             return false;
           },
@@ -180,10 +189,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.favoritesSection = new PopupMenu.PopupMenuSection();
 
     this.scrollViewFavoritesMenuSection = new PopupMenu.PopupMenuSection();
-    this._favoriteShortcutHeading = new St.Label({
-      style_class: 'ci-shortcut-heading', reactive: false, can_focus: false,
-    });
-    this.scrollViewFavoritesMenuSection.actor.add_child(this._favoriteShortcutHeading);
     const favoritesScrollView = new St.ScrollView({
       style_class: 'ci-history-menu-section',
       overlay_scrollbars: true,
@@ -192,16 +197,13 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this.scrollViewFavoritesMenuSection.actor.add_child(favoritesScrollView);
     this.menu.addMenuItem(this.scrollViewFavoritesMenuSection);
-    this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+    this._legacyFavoriteSeparator = new PopupMenu.PopupSeparatorMenuItem();
+    this.menu.addMenuItem(this._legacyFavoriteSeparator);
 
     // History
     this.historySection = new PopupMenu.PopupMenuSection();
 
     this.scrollViewMenuSection = new PopupMenu.PopupMenuSection();
-    this._historyShortcutHeading = new St.Label({
-      style_class: 'ci-shortcut-heading', reactive: false, can_focus: false,
-    });
-    this.scrollViewMenuSection.actor.add_child(this._historyShortcutHeading);
     this.historyScrollView = new St.ScrollView({
       style_class: 'ci-history-menu-section',
       overlay_scrollbars: true,
@@ -211,6 +213,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.scrollViewMenuSection.actor.add_child(this.historyScrollView);
 
     this.menu.addMenuItem(this.scrollViewMenuSection);
+    this._pasteSetContainer = new PopupMenu.PopupMenuSection();
+    this._pasteSetSection = new PopupMenu.PopupMenuSection();
+    this._pasteSetScroll = new St.ScrollView({style_class: 'ci-history-menu-section'});
+    this._pasteSetScroll.add_child(this._pasteSetSection.actor);
+    this._pasteSetContainer.actor.add_child(this._pasteSetScroll);
+    this.menu.addMenuItem(this._pasteSetContainer);
+    this._pasteSetContainer.actor.hide();
+
 
     this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -254,6 +264,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
+    actionsBox.add_child(this._setActionButton('tab-new-symbolic', 'ペーストセットを追加', () => this._editPasteSetName()));
+    actionsBox.add_child(this._setActionButton('document-edit-symbolic', '表示中のタブを編集', () => this._editCurrentPasteTab()));
     this._buildPasteActionChooser(actionsSection);
     this._syncModeButtons();
     this._updatePrivateModeState();
@@ -277,10 +289,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     settingsMenuItem.connect('activate', this._openSettings.bind(this));
     actionsBox.add_child(settingsMenuItem);
 
-    for (const section of [this.historySection, this.favoritesSection]) {
-      section.actor.connect('child-added', () => this._updateCandidateNumbers());
-      section.actor.connect('child-removed', () => this._updateCandidateNumbers());
-    }
     if (ENABLE_KEYBINDING) {
       this._bindShortcuts();
     }
@@ -322,6 +330,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this.currentlySelectedEntry = entries.last();
         this._restoreFavoritedEntries();
         this._maybeRestoreMenuPages();
+        this._setupPasteSets();
 
         this._settingsChangedId = this.settings.connect(
           'changed',
@@ -336,6 +345,316 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._setupSelectionChangeListener();
       },
     );
+  }
+
+  _setupPasteSets() {
+    try {
+      this._pasteSets = new PasteSets(
+        GLib.build_filenamev([GLib.get_user_config_dir(), this.extension.uuid]),
+        this.favoriteEntries.toArray().reverse().map(entry => ({
+          name: Store.getFavoriteName(entry.text), text: entry.text,
+        })),
+      );
+      this._renderPasteSets();
+    } catch (error) {
+      // Leave original favorites available if migration or loading fails.
+      this._showNotification('ペーストセットを読み込めません', error.message);
+      this._tabsBox.hide();
+    }
+  }
+
+  _visiblePasteCandidates() {
+    return (this._pasteSets && this._activePasteTab !== 'history'
+      ? this._pasteSetSection : this.historySection)._getMenuItems().filter(item => item.entry);
+  }
+
+  _applyPasteSetVisibility() {
+    if (!this._pasteSets)
+      return;
+    const history = this._activePasteTab === 'history';
+    this.scrollViewFavoritesMenuSection.actor.hide();
+    this._legacyFavoriteSeparator.actor.hide();
+    this.scrollViewMenuSection.actor.visible = history && !PRIVATE_MODE;
+    this._pasteSetContainer.actor.visible = !history && !PRIVATE_MODE;
+
+  }
+
+  _switchPasteTab(id) {
+    if (this._quickPasteBusy)
+      return;
+    this._activePasteTab = id;
+    this.searchEntry.set_text('');
+    this._renderPasteSets();
+    if (id === 'history') {
+      this.historySection.removeAll();
+      this.searchEntryFront = this.searchEntryBack = undefined;
+      this._maybeRestoreMenuPages();
+    }
+    if (this._initialFocusCallbackId)
+      GLib.Source.remove(this._initialFocusCallbackId);
+    this._initialFocusCallbackId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
+      this._initialFocusCallbackId = undefined;
+      if (this.menu.isOpen && !this._destroyed) {
+        const first = this._visiblePasteCandidates()[0];
+        global.stage.set_key_focus(first || this.searchEntry);
+      }
+      return GLib.SOURCE_REMOVE;
+    });
+  }
+
+  _updatePasteTabScroll() {
+    if (!this._tabsScroll || this._tabsScroll.width <= 0)
+      return;
+    const [, natural] = this._tabsBox.get_preferred_width(-1);
+    const policy = natural > this._tabsScroll.width + 1
+      ? St.PolicyType.AUTOMATIC : St.PolicyType.NEVER;
+    if (this._tabsScroll.hscrollbar_policy !== policy)
+      this._tabsScroll.set_policy(policy, St.PolicyType.NEVER);
+  }
+
+  _cyclePasteTab(direction) {
+    if (!this._pasteSets || this._quickPasteBusy)
+      return;
+    const ids = ['history', ...this._pasteSets.data.sets.map(set => set.id)];
+    const current = Math.max(0, ids.indexOf(this._activePasteTab));
+    this._switchPasteTab(ids[(current + direction + ids.length) % ids.length]);
+  }
+
+  _makePasteItemDraggable(row) {
+    row.pasteDragOwner = this;
+    row.getPasteDragContent = () => ({text: row.entry.text,
+      name: row.entry.name || '', sourceSetId: row.entry.sourceSetId});
+    row.getDragActor = () => new St.Label({
+      text: this._truncated(row.label.get_text(), 60), style_class: 'ci-paste-drag-label',
+    });
+    row.getDragActorSource = () => row.label;
+    const draggable = DND.makeDraggable(row, {dragActorOpacity: 220});
+    draggable.connect('drag-begin', () => {
+      this._hideModeHint();
+      this._draggingPasteItem = true;
+    });
+    draggable.connect('drag-end', () => {
+      if (this._pasteDragEndTimer) GLib.Source.remove(this._pasteDragEndTimer);
+      this._pasteDragEndTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
+        this._pasteDragEndTimer = undefined;
+        this._draggingPasteItem = false;
+        if (!this._destroyed) {
+          this._clearPasteDropHighlight();
+          if (this._pasteDropChanged) {
+            this._pasteDropChanged = false;
+            this._renderPasteSets();
+          }
+        }
+        return GLib.SOURCE_REMOVE;
+      });
+    });
+  }
+
+  _clearPasteDropHighlight() {
+    this._tabsBox.get_children().forEach(tab => tab.remove_style_pseudo_class('drop'));
+  }
+
+  _canDropPasteItem(source, setId) {
+    return !this._quickPasteBusy && source?.pasteDragOwner === this &&
+      typeof source.getPasteDragContent === 'function' && setId !== 'history' &&
+      source.getPasteDragContent().sourceSetId !== setId &&
+      Boolean(this._pasteSets?.data.sets.some(set => set.id === setId));
+  }
+
+  _makePasteTabDropTarget(button, setId) {
+    button._delegate = {
+      handleDragOver: source => {
+        this._clearPasteDropHighlight();
+        if (!this._canDropPasteItem(source, setId))
+          return DND.DragMotionResult.NO_DROP;
+        button.add_style_pseudo_class('drop');
+        return DND.DragMotionResult.COPY_DROP;
+      },
+      acceptDrop: source => {
+        if (!this._canDropPasteItem(source, setId))
+          return false;
+        const item = source.getPasteDragContent();
+        try {
+          this._pasteSets.put(setId, {name: item.name, text: item.text});
+          this._pasteDropChanged = true;
+          return true;
+        } catch (error) {
+          this._showNotification('セットへ追加できません', error.message);
+          return false;
+        }
+      },
+    };
+  }
+
+  _setActionButton(icon, name, action) {
+    const button = new St.Button({can_focus: true, accessible_name: name,
+      style_class: 'ci-mode-button',
+      child: new St.Icon({icon_name: icon, style_class: 'popup-menu-icon'})});
+    button.connect('clicked', action);
+    button.connect('notify::hover', () => button.hover ? this._showModeHint(button) : this._hideModeHint());
+    button.connect('key-focus-in', () => this._showModeHint(button));
+    button.connect('key-focus-out', () => this._hideModeHint());
+    return button;
+  }
+
+  _renderPasteSets() {
+    if (!this._pasteSets)
+      return;
+    const sets = this._pasteSets.data.sets;
+    if (this._activePasteTab !== 'history' && !sets.some(set => set.id === this._activePasteTab))
+      this._activePasteTab = 'history';
+    this._tabsBox.get_children().forEach(actor => actor.destroy());
+    for (const [id, name] of [['history', this._pasteSets.data.historyName || '履歴'], ...sets.map(set => [set.id, set.name])]) {
+      const button = new St.Button({can_focus: true,
+        accessible_role: Atk.Role.PAGE_TAB, accessible_name: name,
+        style_class: 'ci-paste-tab'});
+      const tabContent = new St.BoxLayout({style_class: 'ci-paste-tab-content'});
+      tabContent.set_vertical(true);
+      tabContent.add_child(new St.Label({text: name}));
+      tabContent.add_child(new St.Widget({style_class: 'ci-tab-underline', x_expand: true}));
+      button.set_child(tabContent);
+      if (id === this._activePasteTab) {
+        button.add_style_pseudo_class('checked');
+        button.add_accessible_state(Atk.StateType.SELECTED);
+      }
+      this._makePasteTabDropTarget(button, id);
+      button.connect('clicked', () => this._switchPasteTab(id));
+      this._tabsBox.add_child(button);
+    }
+    this._pasteSetSection.removeAll();
+    const set = sets.find(item => item.id === this._activePasteTab);
+    const query = this.searchEntry.get_text().toLowerCase();
+    if (set) {
+      const items = set.items.filter(item => !query ||
+        item.name.toLowerCase().includes(query) || item.text.toLowerCase().includes(query));
+      items.forEach((item, index) => {
+        const row = new PopupMenu.PopupMenuItem(item.name || this._truncated(item.text, MAX_VISIBLE_CHARS), {hover: false});
+        row.add_style_class_name('ci-clipboard-row');
+        row.label.x_expand = true;
+        this._setCandidateSelection(row, false);
+        row.entry = {id: item.id, type: DS.TYPE_TEXT, text: item.text, name: item.name, sourceSetId: set.id, pasteSetItem: true};
+        this._makePasteItemDraggable(row);
+        row.connect('key-focus-in', () => ensureActorVisibleInScrollView(this._pasteSetScroll, row));
+        row.shortcutLabel = new St.Label({style_class: 'ci-shortcut-number', y_align: Clutter.ActorAlign.CENTER});
+        row.insert_child_at_index(row.shortcutLabel, 1);
+        row.connect('activate', () => {
+          if (this._keepMenuOpen) GObject.signal_stop_emission_by_name(row, 'activate');
+          if (!this._quickPasteBusy && !this._draggingPasteItem)
+            this._quickPaste(row.entry, !this._keepMenuOpen);
+        });
+        for (const [icon, label, action, enabled] of [
+          ['go-up-symbolic', '上へ移動', () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, -1)), set.items.indexOf(item) > 0],
+          ['go-down-symbolic', '下へ移動', () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, 1)), set.items.indexOf(item) < set.items.length - 1],
+          ['document-edit-symbolic', '名前と本文を編集', () => this._editPasteSetItem(set.id, item), true],
+          ['edit-delete-symbolic', '項目を削除', () => this._confirmPasteSetDelete(set.id, item), true],
+        ]) {
+          const button = this._setActionButton(icon, label, action);
+          button.set_style_class_name('ci-action-btn');
+          button.reactive = button.can_focus = enabled;
+          button.opacity = enabled ? 255 : 80;
+          row.add_child(button);
+        }
+        this._pasteSetSection.addMenuItem(row);
+      });
+      if (!items.length) {
+        const empty = new PopupMenu.PopupMenuItem(query ? '一致する項目がありません' : '履歴の項目をこのタブへドラッグして追加できます', {reactive: false, can_focus: false});
+        this._pasteSetSection.addMenuItem(empty);
+      }
+    }
+    this._applyPasteSetVisibility();
+    this._updateCandidateNumbers();
+    this._updatePasteTabScroll();
+  }
+
+  _changePasteSet(change) {
+    if (this._quickPasteBusy || this._destroyed)
+      return;
+    try {change(); this._renderPasteSets();}
+    catch (error) {this._showNotification('ペーストセットを保存できません', error.message);}
+  }
+
+  _openPasteSetDialog(dialog) {
+    if (this._quickPasteBusy || this._destroyed) {
+      dialog.destroy();
+      return;
+    }
+    this.menu.close();
+    this._pasteSetDialog?.destroy();
+    this._pasteSetDialog = dialog;
+    dialog.connect('closed', () => {
+      if (this._pasteSetDialog === dialog) this._pasteSetDialog = undefined;
+    });
+    dialog.open();
+  }
+
+  _editCurrentPasteTab() {
+    if (!this._pasteSets || this._quickPasteBusy)
+      return;
+    const id = this._activePasteTab;
+    const set = this._pasteSets.data.sets.find(item => item.id === id);
+    const name = id === 'history' ? this._pasteSets.data.historyName || '履歴' : set?.name;
+    if (!name) return;
+    this._openPasteSetDialog(new PasteSetDialog('タブを編集', name, null, nextName => {
+      if (this._destroyed) return;
+      if (id === 'history') this._pasteSets.renameHistory(nextName);
+      else this._pasteSets.rename(id, nextName);
+      this._renderPasteSets();
+    }, id === 'history' ? null : () => this._confirmPasteSetDelete(id)));
+  }
+
+  _editPasteSetName(id = null, initialText = null) {
+    if (!this._pasteSets)
+      return;
+    const set = this._pasteSets.data.sets.find(item => item.id === id);
+    this._openPasteSetDialog(new PasteSetDialog(id ? 'セット名を変更' : 'ペーストセットを作成', set?.name || '', null, name => {
+      if (this._destroyed) return;
+      if (id) this._pasteSets.rename(id, name);
+      else {
+        // Create and add atomically when capturing a history item.
+        const newId = GLib.uuid_string_random();
+        this._pasteSets.change(sets => sets.push({id: newId, name, items: initialText === null ? [] : [{
+          id: GLib.uuid_string_random(), name: '', text: initialText,
+        }]}));
+        this._activePasteTab = newId;
+      }
+      this._renderPasteSets();
+    }));
+  }
+
+  _editPasteSetItem(setId, item = null) {
+    this._openPasteSetDialog(new PasteSetDialog(item ? 'ペースト項目を編集' : 'ペースト項目を追加', item?.name || '', item?.text || '', (name, text) => {
+      if (this._destroyed) return;
+      this._pasteSets.put(setId, {id: item?.id, name, text});
+      this._renderPasteSets();
+    }));
+  }
+
+  _addToPasteSet(text) {
+    if (!this._pasteSets || this._quickPasteBusy)
+      return;
+    if (!this._pasteSets.data.sets.length) {
+      this._editPasteSetName(null, text);
+      return;
+    }
+    this._openPasteSetDialog(new PasteSetTargetDialog(this._pasteSets.data.sets, id => {
+      if (this._destroyed) return;
+      this._pasteSets.put(id, {name: '', text});
+      this._renderPasteSets();
+    }));
+  }
+
+  _confirmPasteSetDelete(setId, item = null) {
+    const set = this._pasteSets.data.sets.find(entry => entry.id === setId);
+    if (!set) return;
+    this.menu.close();
+    openConfirmDialog(item ? '項目を削除しますか？' : 'セットを削除しますか？',
+      item ? (item.name || '選択した項目') : set.name,
+      item ? 'この項目をセットから削除します。' : 'セット内のすべての項目も削除します。',
+      '削除', 'キャンセル', () => {
+        if (this._destroyed) return;
+        this._changePasteSet(() => item
+          ? this._pasteSets.removeItem(setId, item.id) : this._pasteSets.remove(setId));
+      });
   }
 
   _setMenuWidth() {
@@ -498,6 +817,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._handleCtrlSelectKeyEvent(event))
       return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
+    if (this._pasteSets && [Clutter.KEY_Left, Clutter.KEY_Right,
+        Clutter.KEY_KP_Left, Clutter.KEY_KP_Right].includes(symbol) &&
+        modifierBits(event.get_state(), Clutter.ModifierType) === 0 &&
+        !this._isSearchActor(global.stage.get_key_focus())) {
+      this._cyclePasteTab([Clutter.KEY_Left, Clutter.KEY_KP_Left].includes(symbol) ? -1 : 1);
+      return Clutter.EVENT_STOP;
+    }
+    if ([Clutter.KEY_Tab, Clutter.KEY_ISO_Left_Tab].includes(symbol) &&
+        (modifierBits(event.get_state(), Clutter.ModifierType) & ~4) === 0)
+      return Clutter.EVENT_PROPAGATE;
     if (global.stage.get_key_focus() instanceof St.Button &&
         [Clutter.KEY_space, Clutter.KEY_Return, Clutter.KEY_KP_Enter].includes(symbol))
       return Clutter.EVENT_PROPAGATE;
@@ -517,10 +846,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if ([Clutter.KEY_Return, Clutter.KEY_KP_Enter].includes(symbol) &&
         modifierBits(event.get_state(), Clutter.ModifierType) === 0) {
       const focused = global.stage.get_key_focus();
-      const candidates = [
-        ...this.historySection._getMenuItems(),
-        ...this.favoritesSection._getMenuItems(),
-      ];
+      const candidates = this._visiblePasteCandidates();
       const candidate = candidates.find(item => item === focused);
       if (candidate) {
         this._quickPaste(candidate.entry, !this._keepMenuOpen, false, true, this._keepMenuOpen);
@@ -536,7 +862,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_STOP;
     }
     const bits = modifierBits(event.get_state(), Clutter.ModifierType);
-    const target = pasteTarget(bits, this._historyPasteModifiers, this._favoritePasteModifiers);
+    const target = bits === this._historyPasteModifiers ? 'history' : null;
     const digit = event.get_key_unicode();
     if (target && (/^[1-9]$/.test(digit) ||
         ((bits & 4) && code >= 10 && code <= 18)))
@@ -595,15 +921,14 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _focusedHistoryCandidate(actor = global.stage.get_key_focus()) {
-    return [...this.historySection._getMenuItems(),
-      ...this.favoritesSection._getMenuItems()].find(item => item === actor);
+    return this._visiblePasteCandidates().find(item => item === actor);
   }
 
   _handleCtrlSelectKeyEvent(event) {
     if (!this.menu.isOpen)
       return;
     const bits = modifierBits(event.get_state(), Clutter.ModifierType);
-    const target = pasteTarget(bits, this._historyPasteModifiers, this._favoritePasteModifiers);
+    const target = bits === this._historyPasteModifiers ? 'history' : null;
     let digit = event.get_key_unicode();
     // Shift changes number-row symbols; Mutter uses XKB codes 10..19.
     const code = event.get_key_code();
@@ -618,7 +943,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     if (!target)
       return;
-    const favorite = target === 'favorites';
     if (this._quickPasteBusy) {
       return true;
     }
@@ -626,10 +950,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
 
-    const items =
-      favorite
-        ? this.favoritesSection._getMenuItems()
-        : this.historySection._getMenuItems();
+    const items = this._visiblePasteCandidates();
     if (index > items.length) {
       return;
     }
@@ -678,7 +999,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (this.menu.isOpen)
           this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
-        if (commitSelection) {
+        if (commitSelection && !entry.pasteSetItem) {
           if (deferHistoryMove)
             this._deferHistoryMove(entry);
           else {
@@ -866,9 +1187,11 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     const menuItem = new PopupMenu.PopupMenuItem('', { hover: false });
+    menuItem.add_style_class_name('ci-clipboard-row');
     this._setCandidateSelection(menuItem, false);
 
     menuItem.entry = entry;
+    this._makePasteItemDraggable(menuItem);
     entry.menuItem = menuItem;
     menuItem.shortcutLabel = new St.Label({
       text: '',
@@ -891,9 +1214,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._setEntryLabel(menuItem);
 
     // Favorite button
-    const icon_name = entry.favorite
-      ? 'starred-symbolic'
-      : 'non-starred-symbolic';
+    const icon_name = entry.favorite ? 'starred-symbolic' : 'list-add-symbolic';
     const iconfav = new St.Icon({
       icon_name: icon_name,
       style_class: 'system-status-icon',
@@ -902,6 +1223,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const icofavBtn = new St.Button({
       style_class: 'ci-action-btn',
       can_focus: true,
+      accessible_name: 'ペーストセットへ追加',
       child: iconfav,
       x_align: Clutter.ActorAlign.END,
       x_expand: true,
@@ -910,7 +1232,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     menuItem.actor.add_child(icofavBtn);
     icofavBtn.connect('clicked', () => {
-      this._favoriteToggle(menuItem);
+      this._addToPasteSet(menuItem.entry.text);
     });
 
     if (entry.favorite) {
@@ -1038,13 +1360,14 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _updateCandidateNumbers() {
-    for (const [section, heading, modifiers] of [
-      [this.historySection, this._historyShortcutHeading, this._historyPasteModifiers],
-      [this.favoritesSection, this._favoriteShortcutHeading, this._favoritePasteModifiers],
+    if (this._destroyed) return;
+    for (const [section, modifiers] of [
+      [this.historySection, this._historyPasteModifiers],
+      [this.favoritesSection, this._historyPasteModifiers],
+      [this._pasteSetSection, this._historyPasteModifiers],
     ]) {
+      if (!section) continue;
       const items = section._getMenuItems();
-      heading.set_text(`${modifierLabel(modifiers)}+数字`);
-      heading.visible = items.length > 0;
       items.forEach((item, index) => {
         if (!item.shortcutLabel)
           return;
@@ -1181,6 +1504,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._resetSelectedMenuItem(humanGenerated);
     }
     entry.menuItem?.destroy();
+    this._updateCandidateNumbers();
     if (fullyDelete) {
       this._maybeRestoreMenuPages();
     }
@@ -1266,7 +1590,11 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onMenuItemSelectedAndMenuClose(menuItem) {
-    if (this._keepMenuOpen)
+    if (this._draggingPasteItem) {
+      GObject.signal_stop_emission_by_name(menuItem, 'activate');
+      return;
+    }
+    if (this._keepMenuOpen || this._draggingPasteItem)
       GObject.signal_stop_emission_by_name(menuItem, 'activate');
     if (this._quickPasteBusy)
       return;
@@ -1401,6 +1729,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSearchTextChanged() {
+    if (this._pasteSets && this._activePasteTab !== 'history') {
+      this._renderPasteSets();
+      return;
+    }
     const query = this.searchEntry.get_text();
 
     if (!query) {
@@ -1430,7 +1762,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       searchExp = new RegExp(query, 'i');
     } catch {}
-    for (const favorite of this.favoriteEntries.toArray().reverse()) {
+    for (const favorite of (this._pasteSets ? [] : this.favoriteEntries.toArray().reverse())) {
       const name = Store.getFavoriteName(favorite.text);
       const matches = [name, favorite.text].some(text =>
         text.toLowerCase().includes(query) || (searchExp && searchExp.test(text)));
@@ -1545,7 +1877,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     let entry =
       this.entries.findTextItem(text) ||
-      this.favoriteEntries.findTextItem(text);
+      (!this._pasteSets && this.favoriteEntries.findTextItem(text));
     if (entry) {
       const isFirst =
         entry === this.entries.last() || entry === this.favoriteEntries.last();
@@ -1783,6 +2115,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     // (selected item will not reflect clipboard)
     this.scrollViewMenuSection.actor.visible = !PRIVATE_MODE;
     this.scrollViewFavoritesMenuSection.actor.visible = !PRIVATE_MODE;
+    this._applyPasteSetVisibility();
 
     if (PRIVATE_MODE) {
       this.icon.add_style_class_name('private-mode');
@@ -1891,25 +2224,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _bindShortcuts() {
     this._unbindShortcuts();
-    this._bindShortcut(SETTING_KEY_CLEAR_HISTORY, () => {
-      if (this.entries) {
-        this._removeAll();
-      }
-    });
-    this._bindShortcut(SETTING_KEY_PREV_ENTRY, () => {
-      if (this.entries) {
-        this._previousEntry();
-      }
-    });
-    this._bindShortcut(SETTING_KEY_NEXT_ENTRY, () => {
-      if (this.entries) {
-        this._nextEntry();
-      }
-    });
     this._bindShortcut(SETTING_KEY_TOGGLE_MENU, () => this.menu.toggle());
-    this._bindShortcut(SETTING_KEY_PRIVATE_MODE, () =>
-      this.settings.set_boolean(SettingsFields.PRIVATE_MODE, !PRIVATE_MODE),
-    );
   }
 
   _unbindShortcuts() {
@@ -1972,29 +2287,6 @@ class ClipboardIndicator extends PanelMenu.Button {
   _openSettings() {
     this.extension.openPreferences();
     this.menu.close();
-  }
-
-  _previousEntry() {
-    this._selectNextPrevEntry(
-      this.currentlySelectedEntry.nextCyclic() || this.entries.head,
-    );
-  }
-
-  _nextEntry() {
-    this._selectNextPrevEntry(
-      this.currentlySelectedEntry.prevCyclic() || this.entries.last(),
-    );
-  }
-
-  _selectNextPrevEntry(entry) {
-    if (!entry) {
-      return;
-    }
-
-    this._selectEntry(entry, true);
-    if (entry.type === DS.TYPE_TEXT) {
-      this._showNotification(_('Copied'), entry.text);
-    }
   }
 
   _truncated(s, start, end) {

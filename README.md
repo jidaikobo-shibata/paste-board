@@ -1,6 +1,23 @@
+## Paste sets (experimental)
+
+Tabs separate automatic clipboard history from independent, manually ordered paste sets.
+Use the new-tab icon in the bottom toolbar to create a set. Drag a history item onto a set tab to copy it there; dragging between sets also copies.
+The source item is preserved. Row controls edit names and text, reorder, or delete items.
+The history row's add button is an alternative way to copy into a chosen set. Editing a copy does not affect history or other sets.
+Set and item deletion require confirmation. The bottom toolbar's edit button renames the current tab and offers confirmed deletion
+for sets. The history tab can be renamed but cannot be deleted.
+
+Existing favorites are copied once, in their original visible order, into a set named
+「お気に入り」. Original favorites and the history log remain intact for rollback.
+Sets are stored separately in `paste-sets.json` under the extension UUID's directory
+in the XDG configuration home. They persist independently of the history cache.
+The active tab resets to History on extension restart; within a session, reopening
+keeps the selected tab. Left/Right outside search switches tabs and focuses the first item.
+Number shortcuts always refer to the visible tab; only the item numbers are shown.
+
 ## Development quick paste: plain text only
 
-Number shortcuts in the open panel paste history or favorites and restore the
+Number shortcuts in the open menu paste from the active history or paste-set tab and restore the
 previous clipboard **as plain text**. Formatting, images, and application-specific
 clipboard metadata are not preserved. If the previous clipboard cannot be read
 as text, quick paste is cancelled without replacing it.
@@ -43,19 +60,18 @@ will take place.
 
 - Open the panel from anywhere with <kbd>Super</kbd> + <kbd>F1</kbd>.
 - Modify shortcuts in settings or delete them by hitting backspace while editing a shortcut.
-- Use the `Only save favorites to disk` feature to wipe your non-favorited items on shutdown.
+- History can be kept in memory only; paste sets are saved independently.
 - Use `Private mode` to temporarily stop processing copied items.
 - Use keyboard shortcuts while the panel is open:
-  - <kbd>Super</kbd> + a number from 1 to 9 pastes a history item.
-  - <kbd>Shift</kbd> + <kbd>Super</kbd> + a number from 1 to 9 pastes a favorite.
-  - Both paste shortcuts restore the previous plain text; the bottom switch controls whether the menu stays open.
-  - Their modifiers can be changed independently in preferences.
+  - <kbd>Super</kbd> + a number from 1 to 9 pastes from the visible tab.
+  - Number shortcuts restore the previous plain text; the bottom switch controls whether the menu stays open.
+  - The modifier combination can be changed in preferences.
   - <kbd>Esc</kbd> or <kbd>Ctrl</kbd> + <kbd>0</kbd> closes the menu.
   - Pin the menu and choose no extra key, Enter, or Tab after each paste.
     The choice is temporary and resets when unpinned.
   - <kbd>/</kbd> focuses search. Other keys outside search close the panel,
     except modifier keys and configured number shortcuts.
-- Search uses case-insensitive [regex](https://regex101.com/?flavor=javascript).
+- History search supports case-insensitive regular expressions. Paste-set search matches names and text literally, without case sensitivity.
 
 ## Install from source
 
