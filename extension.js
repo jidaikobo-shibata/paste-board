@@ -230,6 +230,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
 
     actionsSection.actor.add_child(actionsBox);
+    this._footerActions = actionsBox;
     this.menu.addMenuItem(actionsSection);
     const prevPage = new PopupMenu.PopupBaseMenuItem();
     prevPage.add_child(
@@ -825,8 +826,12 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_STOP;
     }
     if ([Clutter.KEY_Tab, Clutter.KEY_ISO_Left_Tab].includes(symbol) &&
-        (modifierBits(event.get_state(), Clutter.ModifierType) & ~4) === 0)
-      return Clutter.EVENT_PROPAGATE;
+        (modifierBits(event.get_state(), Clutter.ModifierType) & ~4) === 0) {
+      const backward = symbol === Clutter.KEY_ISO_Left_Tab ||
+        Boolean(modifierBits(event.get_state(), Clutter.ModifierType) & 4);
+      return this._focusNextMenuControl(backward)
+        ? Clutter.EVENT_STOP : Clutter.EVENT_PROPAGATE;
+    }
     if (global.stage.get_key_focus() instanceof St.Button &&
         [Clutter.KEY_space, Clutter.KEY_Return, Clutter.KEY_KP_Enter].includes(symbol))
       return Clutter.EVENT_PROPAGATE;
@@ -871,6 +876,43 @@ class ClipboardIndicator extends PanelMenu.Button {
     // Propagation inside Shell does not forward this already captured key to
     // the Wayland client. Consume it rather than synthesize arbitrary input.
     return Clutter.EVENT_STOP;
+  }
+
+  _focusNextMenuControl(backward) {
+    const order = [];
+    const collect = actor => {
+      if (!actor?.visible)
+        return;
+      if (actor.can_focus && actor.reactive) {
+        order.push(actor);
+        return;
+      }
+      for (const child of actor.get_children()) collect(child);
+    };
+    collect(this.searchEntry);
+    collect(this._tabsBox);
+    const rows = this._visiblePasteCandidates();
+    for (const row of rows) {
+      if (row.visible && row.can_focus && row.reactive) order.push(row);
+      for (const child of row.get_children()) collect(child);
+    }
+    collect(this._footerActions);
+    collect(this._pasteActionRow);
+    if (!order.length)
+      return false;
+    let focused = global.stage.get_key_focus();
+    let index = -1;
+    while (focused && index < 0) {
+      index = order.indexOf(focused);
+      focused = focused.get_parent();
+    }
+    const next = index < 0 ? (backward ? order[order.length - 1] : order[0])
+      : order[(index + (backward ? -1 : 1) + order.length) % order.length];
+    global.stage.set_key_focus(next);
+    const row = rows.find(item => item === next || item.contains(next));
+    if (row) ensureActorVisibleInScrollView(
+      row.entry.pasteSetItem ? this._pasteSetScroll : this.historyScrollView, row);
+    return true;
   }
 
   _isSearchActor(actor) {
@@ -1188,6 +1230,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     const menuItem = new PopupMenu.PopupMenuItem('', { hover: false });
     menuItem.add_style_class_name('ci-clipboard-row');
+    menuItem.label.x_expand = true;
     this._setCandidateSelection(menuItem, false);
 
     menuItem.entry = entry;
@@ -1226,7 +1269,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       accessible_name: 'ペーストセットへ追加',
       child: iconfav,
       x_align: Clutter.ActorAlign.END,
-      x_expand: true,
+      x_expand: false,
       y_expand: true,
     });
 
@@ -1278,6 +1321,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const icoBtn = new St.Button({
       style_class: 'ci-action-btn',
       can_focus: true,
+      accessible_name: '履歴から削除',
       child: icon,
       x_align: Clutter.ActorAlign.END,
       x_expand: false,
