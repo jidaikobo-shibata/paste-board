@@ -43,10 +43,9 @@ export class PasteSets {
         if (item.kind === 'command' &&
             (typeof item.command !== 'string' || !item.command.trim() ||
              item.command.length > 8192 || item.command.includes('\0') ||
+             !['direct', 'bash'].includes(item.executionMode ?? 'direct') ||
              typeof item.trimTrailingNewlines !== 'boolean'))
           throw new Error('コマンド項目の形式が不正です。');
-        if (item.kind === 'command')
-          GLib.shell_parse_argv(item.command);
         ids.add(item.id);
       }
     }
@@ -101,6 +100,7 @@ export class PasteSets {
         kind, text: kind === 'command' ? '' : item.text};
       if (kind === 'command') {
         next.command = item.command;
+        next.executionMode = item.executionMode ?? previous?.executionMode ?? 'direct';
         next.trimTrailingNewlines = item.trimTrailingNewlines !== false;
       }
       if (previous)

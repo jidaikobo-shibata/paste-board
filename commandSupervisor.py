@@ -1,0 +1,65 @@
+#!/usr/bin/python3
+"""Own a session until the command and its output pipes finish.
+
+Only JSON results are written to our stdout. Command output has separate pipes.
+SIGTERM cancels this owned process group, including normal pipeline children.
+"""
+import json
+import os
+import selectors
+import signal
+import subprocess
+import sys
+
+
+def main():
+    os.setsid()
+    owned_group = os.getpid()
+
+    def stop_group(*_):
+        os.killpg(owned_group, signal.SIGKILL)
+
+    signal.signal(signal.SIGTERM, stop_group)
+
+    def fail(message):
+        print(json.dumps({"error": message}), flush=True)
+        stop_group()
+
+    try:
+        limit = int(sys.argv[1])
+        if limit <= 0 or not sys.argv[2:]:
+            raise ValueError("Invalid command supervisor arguments")
+        child = subprocess.Popen(
+            sys.argv[2:], stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        )
+        output = {"stdout": bytearray(), "stderr": bytearray()}
+        total = 0
+        with selectors.DefaultSelector() as selector:
+            for name, stream in (("stdout", child.stdout), ("stderr", child.stderr)):
+                os.set_blocking(stream.fileno(), False)
+                selector.register(stream, selectors.EVENT_READ, name)
+            while selector.get_map() or child.poll() is None:
+                for key, _ in selector.select(timeout=0.05):
+                    data = os.read(key.fd, 4096)
+                    if not data:
+                        selector.unregister(key.fileobj)
+                        key.fileobj.close()
+                        continue
+                    total += len(data)
+                    if total > limit:
+                        fail("コマンドの出力量が上限を超えました。")
+                    output[key.data].extend(data)
+        if child.wait() != 0:
+            detail = output["stderr"].decode("utf-8", errors="replace")[:300]
+            fail("コマンドが正常に終了しませんでした。" + ("\n" + detail if detail else ""))
+        text = output["stdout"].decode("utf-8", errors="strict")
+        if "\0" in text:
+            fail("出力にNUL文字が含まれています。")
+        print(json.dumps({"text": text}, ensure_ascii=False), flush=True)
+    except Exception as error:
+        fail(str(error))
+
+
+if __name__ == "__main__":
+    main()

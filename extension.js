@@ -438,6 +438,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     row.getPasteDragContent = () => ({text: row.entry.text,
       name: row.entry.name || '', sourceSetId: row.entry.sourceSetId, id: row.entry.id,
       kind: row.entry.kind || 'text', command: row.entry.command,
+      executionMode: row.entry.executionMode || 'direct',
       trimTrailingNewlines: row.entry.trimTrailingNewlines});
     row.getDragActor = () => new St.Label({
       text: this._truncated(row.label.get_text(), 60), style_class: 'ci-paste-drag-label',
@@ -681,7 +682,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         text: options.kind === 'command' ? '' : text,
         command: options.kind === 'command' ? text : undefined});
       this._renderPasteSets();
-    }, null, {kind: item?.kind || 'text', trimTrailingNewlines: item?.trimTrailingNewlines !== false}));
+    }, null, {kind: item?.kind || 'text', executionMode: item?.executionMode || 'direct',
+      trimTrailingNewlines: item?.trimTrailingNewlines !== false}));
   }
 
   _addToPasteSet(text) {
@@ -1156,7 +1158,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     const generation = this._clipboardGeneration || 0;
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
-    const running = runCommand(entry.command, {trimTrailingNewlines: entry.trimTrailingNewlines});
+    const running = runCommand(entry.command, {trimTrailingNewlines: entry.trimTrailingNewlines,
+      executionMode: entry.executionMode || 'direct'});
     this._pasteCommandRun = running;
     running.promise.then(text => {
       if (this._pasteCommandRun !== running) return;

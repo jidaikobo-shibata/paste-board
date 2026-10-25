@@ -280,13 +280,25 @@ function commandFixture() {
   const running = {promise: new Promise((yes, no) => {resolve = yes; reject = no;}), cancel() {cancelled++;}};
   const target = {};
   const paste = [], errors = [];
+  const launches = [];
   const [owner, context] = instance(['_quickPasteCommand', '_cancelPasteCommand', '_endQuickPasteTracking'], {
-    PRIVATE_MODE: false, global: {display: {focus_window: target}}, runCommand: () => running,
+    PRIVATE_MODE: false, global: {display: {focus_window: target}},
+    runCommand: (...args) => {launches.push(args); return running;},
   });
   Object.assign(owner, {menu: {isOpen: true},
     _quickPaste: (...args) => paste.push(args), _showNotification: (...args) => errors.push(args)});
-  return {owner, context, resolve, reject, paste, errors, cancelled: () => cancelled};
+  return {owner, context, resolve, reject, paste, errors, launches, cancelled: () => cancelled};
 }
+
+test('legacy commands retain direct execution and explicit Bash items retain Bash', async () => {
+  for (const mode of [undefined, 'direct', 'bash']) {
+    const {owner, resolve, launches} = commandFixture();
+    owner._quickPasteCommand({command: 'date', executionMode: mode}, false, false);
+    assert.equal(launches[0][1].executionMode, mode || 'direct');
+    resolve('date output');
+    await new Promise(resolve => setImmediate(resolve));
+  }
+});
 
 test('command output enters temporary plain-text paste and keeps the set item unchanged', async () => {
   const {owner, resolve, paste} = commandFixture();

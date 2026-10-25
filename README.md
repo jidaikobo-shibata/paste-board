@@ -23,17 +23,38 @@ Click, Enter, and number shortcuts run it afresh and paste its standard output.
 Opening, searching, editing, dragging, or saving an item never runs it.
 The output is temporary: the original clipboard is restored and output is not added to history.
 
-Commands run directly with arguments, using GNOME Shell's environment and PATH.
-Quoting is supported; pipes, redirection, variable/tilde expansion, aliases, and shell functions
-are not interpreted. There is no implicit shell. Commands run with the user's permissions.
-Only configure commands you intend to execute; this is not a sandbox.
-The default stdin is empty. Execution is asynchronous, limited to 3 seconds and 64 KiB of
+The editor offers 「直接実行」 and 「Bash（ワンライナー）」. Existing items without a stored
+execution mode retain direct execution: quotes group arguments, but shell expansions and
+operators are not interpreted. Switch an item explicitly to Bash to enable shell syntax.
+
+Bash items run using `/bin/bash --noprofile --norc -o pipefail -c`, with the home directory
+as the working directory and GNOME Shell's environment and PATH. Pipes, redirects, variables,
+command substitution and other Bash syntax are supported. Startup files are not loaded;
+`BASH_ENV`, `ENV`, `SHELLOPTS` and `BASHOPTS` are removed from the child environment.
+Aliases and functions from interactive shell configuration are not automatically available.
+A failed pipeline stage causes the item to fail, even if its final stage succeeds.
+Use single quotes in Bash for text that must stay literal.
+
+**Commands execute with your user permissions. They can modify or delete files, communicate
+over the network, or start applications. They execute even if they produce no output.
+Only register commands you understand and trust; this is not a sandbox. Timeouts and
+cancellation do not undo actions already performed.**
+
+Interactive input is unsupported. The extension does not acquire, store, or supply passwords.
+No terminal is allocated, and stdin is `/dev/null`. Authentication requested independently by
+a launched program is not managed by the extension; operations already authorized by the OS
+can still proceed. Execution is asynchronous, limited to 3 seconds and 64 KiB of
 combined stdout/stderr; failures, empty output, NUL characters, and invalid UTF-8 are not pasted.
 The optional 「末尾の改行を削除する」 setting defaults to on; it removes trailing LF/CRLF only,
 preserving leading whitespace, internal newlines, and spaces.
 Closing the menu or disabling the extension cancels the running command. A changed target window,
-clipboard, or privacy state prevents a late result from being pasted. Cancellation terminates
-the directly launched process; commands that spawn independent child processes should manage those themselves.
+clipboard, or privacy state prevents a late result from being pasted. A bundled supervisor uses
+Ubuntu's `/usr/bin/python3` standard library (no third-party Python packages) to own a new session
+and process group. Cancellation, timeout, or output overflow terminates the supervisor and normal
+pipeline children in that group, even after the command's original leader exits.
+Commands that deliberately create separate process groups or sessions can escape this cleanup;
+this is process management, not a security sandbox. Direct execution retains the Shell's working
+directory; Bash uses the home directory.
 
 ## Development quick paste: plain text only
 
