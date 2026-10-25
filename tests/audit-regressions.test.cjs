@@ -345,3 +345,56 @@ test('command errors release busy state without pasting or modifying clipboard',
   assert.deepEqual(paste, []);
   assert.equal(errors[0][1], 'failure');
 });
+
+function insertionFixture() {
+  class Line {
+    hide() {this.visible = false;}
+    show() {this.visible = true;}
+    set_position(x, y) {this.position = [x, y];}
+    set_size(width, height) {this.size = [width, height];}
+  }
+  const [owner] = instance(['_showPasteInsertionLine', '_updatePasteInsertionLine', '_clearPasteDropHighlight'], {
+    St: {Widget: Line}, Main: {uiGroup: {add_child: noop}},
+  });
+  const rows = [100, 138, 176].map(y => ({entry: {},
+    get_transformed_position: () => [20, y], get_transformed_size: () => [200, 30]}));
+  Object.assign(owner, {
+    menu: {isOpen: true}, _pasteSetSection: {_getMenuItems: () => rows},
+    _pasteSetScroll: {mapped: true, get_transformed_position: () => [15, 90],
+      get_transformed_size: () => [210, 150]},
+  });
+  return {owner, rows};
+}
+
+test('insertion line marks the same gap from either adjacent row without changing rows', () => {
+  const {owner, rows} = insertionFixture();
+  owner._showPasteInsertionLine(rows[0], true);
+  const line = owner._pasteInsertionLine;
+  assert.deepEqual(line.position, [28, 133]); // Boundary is midway between 130 and 138.
+  assert.deepEqual(line.size, [184, 2]);
+  owner._showPasteInsertionLine(rows[1], false);
+  assert.equal(owner._pasteInsertionLine, line);
+  assert.deepEqual(line.position, [28, 133]);
+  owner._showPasteInsertionLine(rows[2], true);
+  assert.deepEqual(line.position, [28, 205]);
+  owner._clearPasteDropHighlight();
+  assert.equal(line.visible, false);
+  assert.equal(owner._pasteDropPlacement, undefined);
+});
+
+test('insertion line follows scrolling, hides outside viewport and forgets removed rows', () => {
+  const {owner, rows} = insertionFixture();
+  owner._showPasteInsertionLine(rows[1], false);
+  const line = owner._pasteInsertionLine;
+  rows[0].get_transformed_position = () => [20, 60];
+  rows[1].get_transformed_position = () => [20, 98];
+  owner._updatePasteInsertionLine();
+  assert.deepEqual(line.position, [28, 93]);
+  rows[0].get_transformed_position = () => [20, 20];
+  rows[1].get_transformed_position = () => [20, 58];
+  owner._updatePasteInsertionLine();
+  assert.equal(line.visible, false);
+  rows.splice(1, 1);
+  owner._updatePasteInsertionLine();
+  assert.equal(owner._pasteDropPlacement, undefined);
+});

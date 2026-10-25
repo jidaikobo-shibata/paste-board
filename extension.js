@@ -98,6 +98,9 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._stopPasteDragFeedback();
+    this._pasteInsertionLine?.destroy();
+    this._pasteInsertionLine = undefined;
     this._cancelPasteCommand();
     closeConfirmDialog();
     this._hideModeHint();
@@ -167,6 +170,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        this._stopPasteDragFeedback();
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
         this._updatePasteActionChooser();
@@ -448,8 +452,22 @@ class ClipboardIndicator extends PanelMenu.Button {
     draggable.connect('drag-begin', () => {
       this._hideModeHint();
       this._draggingPasteItem = true;
+      this._stopPasteDragFeedback();
+      this._pasteDragMonitor = {
+        dragMotion: () => {
+          this._clearPasteDropHighlight();
+          return DND.DragMotionResult.CONTINUE;
+        },
+      };
+      DND.addDragMonitor(this._pasteDragMonitor);
+      // Follow scrolling and popup movement without contributing to row layout.
+      this._pasteInsertionTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 33, () => {
+        this._updatePasteInsertionLine();
+        return GLib.SOURCE_CONTINUE;
+      });
     });
     draggable.connect('drag-end', () => {
+      this._stopPasteDragFeedback();
       if (this._pasteDragEndTimer) GLib.Source.remove(this._pasteDragEndTimer);
       this._pasteDragEndTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
         this._pasteDragEndTimer = undefined;
@@ -467,11 +485,64 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _clearPasteDropHighlight() {
-    this._tabsBox.get_children().forEach(tab => tab.remove_style_pseudo_class('drop'));
-    this._pasteSetSection?.actor.get_children().forEach(row => {
-      row.remove_style_pseudo_class('drop-before');
-      row.remove_style_pseudo_class('drop-after');
-    });
+    this._tabsBox?.get_children().forEach(tab => tab.remove_style_pseudo_class('drop'));
+    this._pasteDropPlacement = undefined;
+    this._pasteInsertionLine?.hide();
+  }
+
+  _stopPasteDragFeedback() {
+    if (this._pasteDragMonitor) {
+      DND.removeDragMonitor(this._pasteDragMonitor);
+      this._pasteDragMonitor = undefined;
+    }
+    if (this._pasteInsertionTimer) {
+      GLib.Source.remove(this._pasteInsertionTimer);
+      this._pasteInsertionTimer = undefined;
+    }
+    this._clearPasteDropHighlight();
+  }
+
+  _showPasteInsertionLine(row, after) {
+    if (!this._pasteInsertionLine) {
+      this._pasteInsertionLine = new St.Widget({
+        style_class: 'ci-paste-insertion-line', reactive: false, can_focus: false,
+      });
+      Main.uiGroup.add_child(this._pasteInsertionLine);
+    }
+    this._pasteDropPlacement = {row, after};
+    this._updatePasteInsertionLine();
+  }
+
+  _updatePasteInsertionLine() {
+    const placement = this._pasteDropPlacement;
+    if (!placement) return;
+    const rows = this._pasteSetSection._getMenuItems().filter(item => item.entry);
+    const index = rows.indexOf(placement.row);
+    if (index < 0 || !this.menu.isOpen || !this._pasteSetScroll.mapped) {
+      this._clearPasteDropHighlight();
+      return;
+    }
+    const [x, y] = placement.row.get_transformed_position();
+    const [width, height] = placement.row.get_transformed_size();
+    const neighbor = rows[index + (placement.after ? 1 : -1)];
+    let boundary = placement.after ? y + height : y;
+    if (neighbor) {
+      const [, otherY] = neighbor.get_transformed_position();
+      const [, otherHeight] = neighbor.get_transformed_size();
+      boundary = (boundary + (placement.after ? otherY : otherY + otherHeight)) / 2;
+    }
+    const [clipX, clipY] = this._pasteSetScroll.get_transformed_position();
+    const [clipWidth, clipHeight] = this._pasteSetScroll.get_transformed_size();
+    const left = Math.max(x + 8, clipX);
+    const right = Math.min(x + width - 8, clipX + clipWidth);
+    if (boundary < clipY || boundary > clipY + clipHeight || right <= left || clipHeight < 2) {
+      this._pasteInsertionLine.hide();
+      return;
+    }
+    this._pasteInsertionLine.set_position(Math.round(left),
+      Math.round(Math.max(clipY, Math.min(boundary - 1, clipY + clipHeight - 2))));
+    this._pasteInsertionLine.set_size(Math.round(right - left), 2);
+    this._pasteInsertionLine.show();
   }
 
   _makePasteItemDropTarget(row) {
@@ -484,7 +555,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     row.handleDragOver = (source, actor, x, y) => {
       this._clearPasteDropHighlight();
       if (!canDrop(source)) return DND.DragMotionResult.NO_DROP;
-      row.add_style_pseudo_class(y >= row.height / 2 ? 'drop-after' : 'drop-before');
+      this._showPasteInsertionLine(row, y >= row.height / 2);
       return DND.DragMotionResult.MOVE_DROP;
     };
     row.acceptDrop = (source, actor, x, y) => {
@@ -499,6 +570,10 @@ class ClipboardIndicator extends PanelMenu.Button {
         return false;
       }
     };
+    row.connect('destroy', () => {
+      if (this._pasteDropPlacement?.row === row)
+        this._clearPasteDropHighlight();
+    });
   }
 
   _canDropPasteItem(source, setId) {
@@ -547,6 +622,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   _renderPasteSets() {
     if (!this._pasteSets)
       return;
+    this._clearPasteDropHighlight();
     const sets = this._pasteSets.data.sets;
     if (this._activePasteTab !== 'history' && !sets.some(set => set.id === this._activePasteTab))
       this._activePasteTab = 'history';
