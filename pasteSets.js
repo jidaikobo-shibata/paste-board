@@ -73,6 +73,29 @@ export class PasteSets {
     return id;
   }
 
+  createFromItem(item) {
+    const id = GLib.uuid_string_random();
+    this.change(sets => {
+      const names = new Set([this.data.historyName || '履歴', ...sets.map(set => set.name)]);
+      let name = 'untitled';
+      for (let number = 2; names.has(name); number++) name = `untitled ${number}`;
+      sets.push({id, name, items: [this._copyItem(item)]});
+    });
+    return id;
+  }
+
+  _copyItem(item, previous = null) {
+    const kind = item.kind || 'text';
+    const next = {id: previous?.id || GLib.uuid_string_random(), name: item.name || '',
+      kind, text: kind === 'command' ? '' : item.text};
+    if (kind === 'command') {
+      next.command = item.command;
+      next.executionMode = item.executionMode ?? previous?.executionMode ?? 'direct';
+      next.trimTrailingNewlines = item.trimTrailingNewlines !== false;
+    }
+    return next;
+  }
+
   rename(id, name) {
     this.change(sets => {sets.find(set => set.id === id).name = name.trim();});
   }
@@ -95,14 +118,7 @@ export class PasteSets {
     this.change(sets => {
       const set = sets.find(set => set.id === setId);
       const previous = set.items.find(entry => entry.id === item.id);
-      const kind = item.kind || 'text';
-      const next = {id: previous?.id || GLib.uuid_string_random(), name: item.name || '',
-        kind, text: kind === 'command' ? '' : item.text};
-      if (kind === 'command') {
-        next.command = item.command;
-        next.executionMode = item.executionMode ?? previous?.executionMode ?? 'direct';
-        next.trimTrailingNewlines = item.trimTrailingNewlines !== false;
-      }
+      const next = this._copyItem(item, previous);
       if (previous)
         set.items[set.items.indexOf(previous)] = next;
       else

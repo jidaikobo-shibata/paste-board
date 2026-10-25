@@ -122,6 +122,28 @@ async function main() {
     catch {rejected = true;}
     equal(rejected, true);
     equal(store.data.sets[0].items.length, 2);
+    store.create('untitled');
+    store.create('untitled 2');
+    const sourceItem = store.data.sets[1].items[0];
+    const sourceSnapshot = JSON.stringify(sourceItem);
+    const createdId = store.createFromItem(sourceItem);
+    const created = store.data.sets.find(set => set.id === createdId);
+    equal(created.name, 'untitled 3');
+    equal(created.items.length, 1);
+    equal(created.items[0].executionMode, 'bash');
+    equal(created.items[0].command, sourceItem.command);
+    equal(created.items[0].id === sourceItem.id, false);
+    equal(JSON.stringify(store.data.sets[1].items[0]), sourceSnapshot);
+    equal(new PasteSets(directory).data.sets.find(set => set.id === createdId).name, 'untitled 3');
+    store.renameHistory('untitled 4');
+    const nextId = store.createFromItem({text: 'from history'});
+    equal(store.data.sets.find(set => set.id === nextId).name, 'untitled 5');
+    const beforeInvalid = JSON.stringify(store.data);
+    let invalidRejected = false;
+    try {store.createFromItem({text: ''});} catch {invalidRejected = true;}
+    equal(invalidRejected, true);
+    equal(JSON.stringify(store.data), beforeInvalid);
+    equal(JSON.stringify(new PasteSets(directory).data), beforeInvalid);
   } finally {
     GLib.unlink(GLib.build_filenamev([directory, 'paste-sets.json']));
     GLib.rmdir(directory);

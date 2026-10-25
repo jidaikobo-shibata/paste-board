@@ -188,6 +188,11 @@
   background-color: rgba(90, 160, 230, 0.2);
 }
 
+.ci-paste-tabs:drop-new {
+  background-color: rgba(90, 160, 230, 0.2);
+  border-radius: 5px;
+}
+
 .ci-paste-drag-label {
   color: #ffffff;
   background-color: rgba(35, 35, 35, 0.95);

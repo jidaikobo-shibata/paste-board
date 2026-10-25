@@ -398,3 +398,62 @@ test('insertion line follows scrolling, hides outside viewport and forgets remov
   owner._updatePasteInsertionLine();
   assert.equal(owner._pasteDropPlacement, undefined);
 });
+
+function geometryActor(x, y, width, height, scale = 1) {
+  return {width, height, get_transformed_position: () => [x, y],
+    get_transformed_size: () => [width * scale, height * scale],
+    transform_stage_point: (px, py) => [true, (px - x) / scale, (py - y) / scale]};
+}
+
+test('new-tab drops accept only visible tab-strip space, including scaled and scrolled strips', () => {
+  const [owner] = instance(['_isPasteTabSpace']);
+  const scroll = geometryActor(100, 50, 300, 40);
+  const box = geometryActor(100, 50, 300, 40);
+  box.get_children = () => [geometryActor(100, 50, 60, 40), geometryActor(168, 50, 70, 40)];
+  Object.assign(owner, {_tabsScroll: scroll, _tabsBox: box});
+  assert.equal(owner._isPasteTabSpace(box, 200, 20), true);
+  assert.equal(owner._isPasteTabSpace(scroll, 10, 20), false);
+  assert.equal(owner._isPasteTabSpace(scroll, 80, 20), false);
+  assert.equal(owner._isPasteTabSpace(scroll, 300, 20), false);
+  assert.equal(owner._isPasteTabSpace(scroll, 200, -1), false);
+  const scaled = geometryActor(100, 50, 300, 40, 2);
+  scaled.get_children = () => [geometryActor(100, 50, 60, 40, 2)];
+  owner._tabsScroll = owner._tabsBox = scaled;
+  assert.equal(owner._isPasteTabSpace(scaled, 10, 20), false);
+  assert.equal(owner._isPasteTabSpace(scaled, 200, 20), true);
+  owner._tabsScroll = scroll;
+  owner._tabsBox = geometryActor(-100, 50, 600, 40);
+  owner._tabsBox.get_children = () => [geometryActor(100, 50, 150, 40)];
+  assert.equal(owner._isPasteTabSpace(owner._tabsBox, 200, 20), false);
+  assert.equal(owner._isPasteTabSpace(owner._tabsBox, 400, 20), true);
+  assert.equal(owner._isPasteTabSpace(owner._tabsBox, 550, 20), false);
+});
+
+test('dropping into tab space creates one copy and defers activation until drag ends', () => {
+  const timers = [], callbacks = {}, switches = [], copies = [];
+  const [owner] = instance(['_makePasteTabSpaceDropTarget', '_makePasteItemDraggable'], {
+    PRIVATE_MODE: false,
+    DND: {DragMotionResult: {NO_DROP: 0, COPY_DROP: 1},
+      makeDraggable: () => ({connect: (name, fn) => {callbacks[name] = fn;}})},
+    GLib: {PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, Source: {remove: noop},
+      timeout_add: (_, ms, fn) => {timers.push(fn); return timers.length;}},
+  });
+  const actor = {};
+  Object.assign(owner, {_pasteSets: {createFromItem: item => {copies.push(item); return 'created';}},
+    _isPasteTabSpace: (_, x) => x > 100, _clearPasteDropHighlight: noop,
+    _stopPasteDragFeedback: noop, _switchPasteTab: id => switches.push(id),
+    _tabsScroll: {add_style_pseudo_class: noop}});
+  const item = {text: 'original'};
+  const source = {pasteDragOwner: owner, getPasteDragContent: () => item};
+  owner._makePasteTabSpaceDropTarget(actor);
+  assert.equal(actor._delegate.acceptDrop(source, null, 50, 10), false);
+  assert.equal(actor._delegate.acceptDrop({pasteDragOwner: {}}, null, 150, 10), false);
+  assert.equal(actor._delegate.acceptDrop(source, null, 150, 10), true);
+  assert.deepEqual(copies, [item]);
+  assert.deepEqual(switches, []);
+  owner._makePasteItemDraggable({entry: {text: 'original'}, label: {}});
+  callbacks['drag-end']();
+  while (timers.length) timers.shift()();
+  assert.deepEqual(switches, ['created']);
+  assert.equal(owner._pasteDropNewTab, undefined);
+});

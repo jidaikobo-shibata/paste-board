@@ -3,6 +3,10 @@
 Tabs separate automatic clipboard history from independent, manually ordered paste sets.
 Use the new-tab icon in the bottom toolbar to create a set. Drag a history item onto a set tab to copy it there; dragging between sets also copies.
 The source item is preserved. Row controls edit names and text, reorder, or delete items.
+Dropping an item onto unused space in the tab strip creates an `untitled` set containing a copy
+and activates it after the drag ends. Duplicate names use `untitled 2`, `untitled 3`, and so on.
+Command execution mode and output options are copied too; dropping never executes a command.
+Drops outside the tab strip do not create sets.
 The history row's add button is an alternative way to copy into a chosen set. Editing a copy does not affect history or other sets.
 Set and item deletion require confirmation. The bottom toolbar's edit button renames the current tab and offers confirmed deletion
 for sets. The history tab can be renamed but cannot be deleted.

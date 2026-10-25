@@ -152,12 +152,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     header.add_child(this.searchEntry);
     this.menu.box.add_child(header);
     this._activePasteTab = 'history';
-    const tabsScroll = new St.ScrollView({style_class: 'ci-paste-tabs'});
+    const tabsScroll = new St.ScrollView({style_class: 'ci-paste-tabs', x_expand: true, reactive: true});
     this._tabsScroll = tabsScroll;
     tabsScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.NEVER);
     tabsScroll.connect('notify::allocation', () => this._updatePasteTabScroll());
-    this._tabsBox = new St.BoxLayout({style_class: 'ci-paste-tabs-box'});
+    this._tabsBox = new St.BoxLayout({style_class: 'ci-paste-tabs-box', x_expand: true, reactive: true});
     tabsScroll.add_child(this._tabsBox);
+    this._makePasteTabSpaceDropTarget(tabsScroll);
+    this._makePasteTabSpaceDropTarget(this._tabsBox);
     this.menu.box.add_child(tabsScroll);
     this.menu.connect('open-state-changed', (self, open) => {
       // PopupMenuManager must receive grab changes, but they are not menu opens.
@@ -476,7 +478,10 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._clearPasteDropHighlight();
           if (this._pasteDropChanged) {
             this._pasteDropChanged = false;
-            this._renderPasteSets();
+            const created = this._pasteDropNewTab;
+            this._pasteDropNewTab = undefined;
+            if (created) this._switchPasteTab(created);
+            else this._renderPasteSets();
           }
         }
         return GLib.SOURCE_REMOVE;
@@ -486,6 +491,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _clearPasteDropHighlight() {
     this._tabsBox?.get_children().forEach(tab => tab.remove_style_pseudo_class('drop'));
+    this._tabsScroll?.remove_style_pseudo_class('drop-new');
     this._pasteDropPlacement = undefined;
     this._pasteInsertionLine?.hide();
   }
@@ -602,6 +608,48 @@ class ClipboardIndicator extends PanelMenu.Button {
           return true;
         } catch (error) {
           this._showNotification('セットへ追加できません', error.message);
+          return false;
+        }
+      },
+    };
+  }
+
+  _isPasteTabSpace(actor, x, y) {
+    if (actor.width <= 0 || actor.height <= 0 || x < 0 || y < 0 || x >= actor.width || y >= actor.height)
+      return false;
+    const [left, top] = actor.get_transformed_position();
+    const [width, height] = actor.get_transformed_size();
+    const stageX = left + x * width / actor.width;
+    const stageY = top + y * height / actor.height;
+    const [inside, sx, sy] = this._tabsScroll.transform_stage_point(stageX, stageY);
+    if (!inside || sx < 0 || sy < 0 || sx >= this._tabsScroll.width || sy >= this._tabsScroll.height)
+      return false;
+    // Failed drops onto existing tabs must not bubble into new-tab creation.
+    return !this._tabsBox.get_children().some(tab => {
+      const [valid, tx, ty] = tab.transform_stage_point(stageX, stageY);
+      return valid && tx >= 0 && ty >= 0 && tx < tab.width && ty < tab.height;
+    });
+  }
+
+  _makePasteTabSpaceDropTarget(actor) {
+    const canDrop = (source, x, y) => !this._destroyed && !PRIVATE_MODE && !this._quickPasteBusy &&
+      Boolean(this._pasteSets) && source?.pasteDragOwner === this &&
+      typeof source.getPasteDragContent === 'function' && this._isPasteTabSpace(actor, x, y);
+    actor._delegate = {
+      handleDragOver: (source, dragActor, x, y) => {
+        this._clearPasteDropHighlight();
+        if (!canDrop(source, x, y)) return DND.DragMotionResult.NO_DROP;
+        this._tabsScroll.add_style_pseudo_class('drop-new');
+        return DND.DragMotionResult.COPY_DROP;
+      },
+      acceptDrop: (source, dragActor, x, y) => {
+        if (!canDrop(source, x, y)) return false;
+        try {
+          this._pasteDropNewTab = this._pasteSets.createFromItem(source.getPasteDragContent());
+          this._pasteDropChanged = true;
+          return true;
+        } catch (error) {
+          this._showNotification('セットを作成できません', error.message);
           return false;
         }
       },
