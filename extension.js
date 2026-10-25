@@ -25,6 +25,7 @@ import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
 import { FavoriteNameDialog } from './favoriteNameDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
+import { runCommand } from './commandOutput.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
@@ -97,6 +98,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._cancelPasteCommand();
     closeConfirmDialog();
     this._hideModeHint();
     this._pasteSetDialog?.destroy();
@@ -165,6 +167,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        this._cancelPasteCommand();
         this._choosingPasteAction = false;
         this._updatePasteActionChooser();
         this._flushDeferredHistoryMoves();
@@ -433,7 +436,9 @@ class ClipboardIndicator extends PanelMenu.Button {
   _makePasteItemDraggable(row) {
     row.pasteDragOwner = this;
     row.getPasteDragContent = () => ({text: row.entry.text,
-      name: row.entry.name || '', sourceSetId: row.entry.sourceSetId, id: row.entry.id});
+      name: row.entry.name || '', sourceSetId: row.entry.sourceSetId, id: row.entry.id,
+      kind: row.entry.kind || 'text', command: row.entry.command,
+      trimTrailingNewlines: row.entry.trimTrailingNewlines});
     row.getDragActor = () => new St.Label({
       text: this._truncated(row.label.get_text(), 60), style_class: 'ci-paste-drag-label',
     });
@@ -516,7 +521,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           return false;
         const item = source.getPasteDragContent();
         try {
-          this._pasteSets.put(setId, {name: item.name, text: item.text});
+          this._pasteSets.put(setId, {...item, id: undefined});
           this._pasteDropChanged = true;
           return true;
         } catch (error) {
@@ -567,13 +572,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     const query = this.searchEntry.get_text().toLowerCase();
     if (set) {
       const items = set.items.filter(item => !query ||
-        item.name.toLowerCase().includes(query) || item.text.toLowerCase().includes(query));
+        item.name.toLowerCase().includes(query) ||
+        (item.kind === 'command' ? item.command : item.text).toLowerCase().includes(query));
       items.forEach((item, index) => {
-        const row = new PopupMenu.PopupMenuItem(item.name || this._truncated(item.text, MAX_VISIBLE_CHARS), {hover: false});
+        const row = new PopupMenu.PopupMenuItem(item.name || this._truncated(
+          item.kind === 'command' ? item.command : item.text, MAX_VISIBLE_CHARS), {hover: false});
         row.add_style_class_name('ci-clipboard-row');
         row.label.x_expand = true;
         this._setCandidateSelection(row, false);
-        row.entry = {id: item.id, type: DS.TYPE_TEXT, text: item.text, name: item.name, sourceSetId: set.id, pasteSetItem: true};
+        row.entry = {...item, type: DS.TYPE_TEXT, sourceSetId: set.id, pasteSetItem: true};
+        if (item.kind === 'command')
+          row.insert_child_at_index(new St.Icon({icon_name: 'utilities-terminal-symbolic',
+            style_class: 'popup-menu-icon'}), 1);
         this._makePasteItemDraggable(row);
         this._makePasteItemDropTarget(row);
         row.connect('key-focus-in', () => ensureActorVisibleInScrollView(this._pasteSetScroll, row));
@@ -664,11 +674,14 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _editPasteSetItem(setId, item = null) {
-    this._openPasteSetDialog(new PasteSetDialog(item ? 'ペースト項目を編集' : 'ペースト項目を追加', item?.name || '', item?.text || '', (name, text) => {
+    this._openPasteSetDialog(new PasteSetDialog(item ? 'ペースト項目を編集' : 'ペースト項目を追加', item?.name || '',
+      (item?.kind === 'command' ? item.command : item?.text) || '', (name, text, options) => {
       if (this._destroyed) return;
-      this._pasteSets.put(setId, {id: item?.id, name, text});
+      this._pasteSets.put(setId, {id: item?.id, name, ...options,
+        text: options.kind === 'command' ? '' : text,
+        command: options.kind === 'command' ? text : undefined});
       this._renderPasteSets();
-    }));
+    }, null, {kind: item?.kind || 'text', trimTrailingNewlines: item?.trimTrailingNewlines !== false}));
   }
 
   _addToPasteSet(text) {
@@ -850,9 +863,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     this._quickPasteKeysHeld.add(code);
     if (this._quickPasteBusy) {
-      // Ctrl+0 remains available after the brief injection interval.
-      if (modifierBits(event.get_state(), Clutter.ModifierType) === 1 &&
-          event.get_key_unicode() === '0')
+      // Allow closing while a command or paste is in progress.
+      const bits = modifierBits(event.get_state(), Clutter.ModifierType);
+      if (event.get_key_symbol() === Clutter.KEY_Escape ||
+          ((bits === 1 || bits === this._historyPasteModifiers) && event.get_key_unicode() === '0'))
         this.menu.close();
       return Clutter.EVENT_STOP;
     }
@@ -1060,6 +1074,10 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false, commitSelection = false,
     deferHistoryMove = false) {
+    if (entry.pasteSetItem && entry.kind === 'command') {
+      this._quickPasteCommand(entry, closeAfterPaste, allowClosedMenu);
+      return;
+    }
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
       console.log(this.extension.uuid, 'Quick paste skipped: no text entry or focused application');
       return;
@@ -1120,6 +1138,42 @@ class ClipboardIndicator extends PanelMenu.Button {
         });
         return GLib.SOURCE_REMOVE;
       });
+    });
+  }
+
+  _cancelPasteCommand() {
+    const running = this._pasteCommandRun;
+    if (!running) return;
+    this._pasteCommandRun = undefined;
+    running.cancel();
+    this._endQuickPasteTracking();
+  }
+
+  _quickPasteCommand(entry, closeAfterPaste, allowClosedMenu) {
+    if (this._quickPasteBusy || this._destroyed || !global.display.focus_window)
+      return;
+    const target = global.display.focus_window;
+    const generation = this._clipboardGeneration || 0;
+    const epoch = this._clipboardQueryEpoch || 0;
+    this._quickPasteBusy = true;
+    const running = runCommand(entry.command, {trimTrailingNewlines: entry.trimTrailingNewlines});
+    this._pasteCommandRun = running;
+    running.promise.then(text => {
+      if (this._pasteCommandRun !== running) return;
+      this._pasteCommandRun = undefined;
+      this._endQuickPasteTracking();
+      if (this._destroyed || PRIVATE_MODE || (!allowClosedMenu && !this.menu.isOpen) ||
+          global.display.focus_window !== target || generation !== (this._clipboardGeneration || 0) ||
+          epoch !== (this._clipboardQueryEpoch || 0))
+        return;
+      // Output is temporary; never save it as a history item or a set edit.
+      this._quickPaste({...entry, kind: 'text', text}, closeAfterPaste, allowClosedMenu);
+    }).catch(error => {
+      if (this._pasteCommandRun !== running) return;
+      this._pasteCommandRun = undefined;
+      this._endQuickPasteTracking();
+      if (!this._destroyed)
+        this._showNotification('コマンドを実行できません', error.message);
     });
   }
 
@@ -1456,8 +1510,9 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _setCandidateAccessibleName(item) {
     const shortcut = item.shortcutLabel?.get_text();
+    const description = `${item.entry.kind === 'command' ? 'コマンド：' : ''}${item.label.get_text()}`;
     item.accessible_name = shortcut
-      ? `${item.shortcutLabel.shortcutName || shortcut}. ${item.label.get_text()}` : item.label.get_text();
+      ? `${item.shortcutLabel.shortcutName || shortcut}. ${description}` : description;
   }
 
   _updateCandidateNumbers() {

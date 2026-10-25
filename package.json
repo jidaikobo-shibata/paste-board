@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "test": "node tests/audit-regressions.test.cjs"
+    "test": "node tests/audit-regressions.test.cjs && gjs -m tests/command-output.test.mjs"
   },
   "devDependencies": {
     "prettier": "2.5.1"

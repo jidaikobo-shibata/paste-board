@@ -36,8 +36,17 @@ export class PasteSets {
       for (const item of set.items) {
         if (typeof item.id !== 'string' || ids.has(item.id) ||
             typeof item.name !== 'string' || item.name.length > 200 ||
-            typeof item.text !== 'string' || !item.text || item.text.includes('\0'))
+            !['text', 'command'].includes(item.kind || 'text') ||
+            typeof item.text !== 'string' || item.text.includes('\0') ||
+            ((item.kind || 'text') === 'text' && !item.text))
           throw new Error('ペースト項目の形式が不正です。');
+        if (item.kind === 'command' &&
+            (typeof item.command !== 'string' || !item.command.trim() ||
+             item.command.length > 8192 || item.command.includes('\0') ||
+             typeof item.trimTrailingNewlines !== 'boolean'))
+          throw new Error('コマンド項目の形式が不正です。');
+        if (item.kind === 'command')
+          GLib.shell_parse_argv(item.command);
         ids.add(item.id);
       }
     }
@@ -87,10 +96,17 @@ export class PasteSets {
     this.change(sets => {
       const set = sets.find(set => set.id === setId);
       const previous = set.items.find(entry => entry.id === item.id);
+      const kind = item.kind || 'text';
+      const next = {id: previous?.id || GLib.uuid_string_random(), name: item.name || '',
+        kind, text: kind === 'command' ? '' : item.text};
+      if (kind === 'command') {
+        next.command = item.command;
+        next.trimTrailingNewlines = item.trimTrailingNewlines !== false;
+      }
       if (previous)
-        Object.assign(previous, item);
+        set.items[set.items.indexOf(previous)] = next;
       else
-        set.items.push({id: GLib.uuid_string_random(), name: item.name || '', text: item.text});
+        set.items.push(next);
     });
   }
 

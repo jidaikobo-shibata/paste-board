@@ -11,9 +11,29 @@ Existing favorites are copied once, in their original visible order, into a set 
 「お気に入り」. Original favorites and the history log remain intact for rollback.
 Sets are stored separately in `paste-sets.json` under the extension UUID's directory
 in the XDG configuration home. They persist independently of the history cache.
-The active tab resets to History on extension restart; within a session, reopening
-keeps the selected tab. Left/Right outside search switches tabs and focuses the first item.
+Opening the menu always selects History. Pasting while the menu is pinned preserves
+the active tab and search filter. Left/Right outside search switches tabs and focuses the first item.
 Number shortcuts always refer to the visible tab; only the item numbers are shown.
+
+### Command items
+
+Edit an item in a custom tab and select 「コマンド」 instead of 「テキスト」.
+For example, name an item “Current date” and enter `date '+%Y-%m-%d %H:%M:%S'`.
+Click, Enter, and number shortcuts run it afresh and paste its standard output.
+Opening, searching, editing, dragging, or saving an item never runs it.
+The output is temporary: the original clipboard is restored and output is not added to history.
+
+Commands run directly with arguments, using GNOME Shell's environment and PATH.
+Quoting is supported; pipes, redirection, variable/tilde expansion, aliases, and shell functions
+are not interpreted. There is no implicit shell. Commands run with the user's permissions.
+Only configure commands you intend to execute; this is not a sandbox.
+The default stdin is empty. Execution is asynchronous, limited to 3 seconds and 64 KiB of
+combined stdout/stderr; failures, empty output, NUL characters, and invalid UTF-8 are not pasted.
+The optional 「末尾の改行を削除する」 setting defaults to on; it removes trailing LF/CRLF only,
+preserving leading whitespace, internal newlines, and spaces.
+Closing the menu or disabling the extension cancels the running command. A changed target window,
+clipboard, or privacy state prevents a late result from being pasted. Cancellation terminates
+the directly launched process; commands that spawn independent child processes should manage those themselves.
 
 ## Development quick paste: plain text only
 

@@ -273,3 +273,63 @@ test('paste restores custom-set and numeric selections while retaining explicit 
       JSON.stringify({custom, operation, pinned, externalCopy}));
     }
 });
+
+function commandFixture() {
+  let resolve, reject;
+  let cancelled = 0;
+  const running = {promise: new Promise((yes, no) => {resolve = yes; reject = no;}), cancel() {cancelled++;}};
+  const target = {};
+  const paste = [], errors = [];
+  const [owner, context] = instance(['_quickPasteCommand', '_cancelPasteCommand', '_endQuickPasteTracking'], {
+    PRIVATE_MODE: false, global: {display: {focus_window: target}}, runCommand: () => running,
+  });
+  Object.assign(owner, {menu: {isOpen: true},
+    _quickPaste: (...args) => paste.push(args), _showNotification: (...args) => errors.push(args)});
+  return {owner, context, resolve, reject, paste, errors, cancelled: () => cancelled};
+}
+
+test('command output enters temporary plain-text paste and keeps the set item unchanged', async () => {
+  const {owner, resolve, paste} = commandFixture();
+  const item = {id: 'date', kind: 'command', command: 'date', text: '', pasteSetItem: true};
+  owner._quickPasteCommand(item, false, false);
+  assert.equal(owner._quickPasteBusy, true);
+  assert.equal(paste.length, 0);
+  resolve('generated');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(paste.length, 1);
+  assert.equal(paste[0][0].text, 'generated');
+  assert.equal(paste[0][0].kind, 'text');
+  assert.equal(paste[0][0].pasteSetItem, true);
+  assert.equal(item.kind, 'command');
+  assert.equal(item.text, '');
+  assert.equal(paste[0].length, 3); // No commitSelection: output must restore the clipboard.
+});
+
+test('late command results cannot paste after menu close, disable or context changes', async () => {
+  for (const change of ['close', 'disable', 'focus', 'clipboard', 'privacy', 'cancel']) {
+    const {owner, context, resolve, paste, cancelled} = commandFixture();
+    owner._quickPasteCommand({command: 'date'}, false, false);
+    if (change === 'close') owner.menu.isOpen = false;
+    if (change === 'disable') owner._destroyed = true;
+    if (change === 'focus') context.global.display.focus_window = {};
+    if (change === 'clipboard') owner._clipboardGeneration = 1;
+    if (change === 'privacy') owner._clipboardQueryEpoch = 1;
+    if (change === 'cancel') owner._cancelPasteCommand();
+    resolve('late');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(paste, [], change);
+    assert.equal(owner._quickPasteBusy, false);
+    if (change === 'cancel') assert.equal(cancelled(), 1);
+  }
+});
+
+test('command errors release busy state without pasting or modifying clipboard', async () => {
+  const {owner, reject, paste, errors} = commandFixture();
+  owner._quickPasteCommand({command: 'false'}, false, false);
+  reject(new Error('failure'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(owner._quickPasteBusy, false);
+  assert.deepEqual(paste, []);
+  assert.equal(errors[0][1], 'failure');
+});
