@@ -15,14 +15,25 @@ export function openConfirmDialog(
   callback,
 ) {
   if (!_openDialog) {
-    _openDialog = new ConfirmDialog(
+    const dialog = new ConfirmDialog(
       title,
       message + '\n' + sub_message,
       ok_label,
       cancel_label,
       callback,
-    ).open();
+    );
+    _openDialog = dialog;
+    dialog.connect('destroy', () => {
+      if (_openDialog === dialog)
+        _openDialog = null;
+    });
+    if (!dialog.open())
+      dialog.destroy();
   }
+}
+
+export function closeConfirmDialog() {
+  _openDialog?.destroy();
 }
 
 const ConfirmDialog = GObject.registerClass(
@@ -56,16 +67,14 @@ const ConfirmDialog = GObject.registerClass(
           label: cancel_label,
           action: () => {
             this.close();
-            _openDialog = null;
           },
-          key: Clutter.Escape,
+          key: Clutter.KEY_Escape,
         },
         {
           label: ok_label,
           action: () => {
             this.close();
             callback();
-            _openDialog = null;
           },
         },
       ]);

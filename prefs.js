@@ -135,7 +135,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const pasteOnSelectionLabel = new Gtk.Label({
-      label: _('Paste on selection'),
+      label: '履歴をEnter・クリックで選ぶと貼り付ける',
       hexpand: true,
       halign: Gtk.Align.START,
     });

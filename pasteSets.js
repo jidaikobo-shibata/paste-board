@@ -102,6 +102,19 @@ export class PasteSets {
     });
   }
 
+  moveRelative(setId, itemId, targetId, after) {
+    this.change(sets => {
+      const items = sets.find(set => set.id === setId)?.items;
+      const index = items?.findIndex(item => item.id === itemId) ?? -1;
+      if (index < 0 || !items.some(item => item.id === targetId))
+        throw new Error('移動する項目が見つかりません。');
+      if (itemId === targetId) return;
+      const [item] = items.splice(index, 1);
+      const target = items.findIndex(entry => entry.id === targetId);
+      items.splice(target + (after ? 1 : 0), 0, item);
+    });
+  }
+
   move(setId, itemId, direction) {
     this.change(sets => {
       const items = sets.find(set => set.id === setId).items;

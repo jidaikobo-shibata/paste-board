@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "test": "node tests/audit-regressions.test.cjs"
+  },
   "devDependencies": {
     "prettier": "2.5.1"
   }
