@@ -1,19 +1,20 @@
+import {_, format} from './i18n.js';
 import GLib from 'gi://GLib';
 
 export class PasteSets {
   constructor(directory, favorites = []) {
     this.path = GLib.build_filenamev([directory, 'paste-sets.json']);
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
-      throw new Error('ペーストセットの保存先を作成できません。');
+      throw new Error(_("Could not create the paste set directory."));
     if (GLib.file_test(this.path, GLib.FileTest.EXISTS)) {
       const [ok, bytes] = GLib.file_get_contents(this.path);
       if (!ok || bytes.length > 16 * 1024 * 1024)
-        throw new Error('ペーストセットを読み込めません。');
+        throw new Error(_("Could not read paste sets."));
       this.data = JSON.parse(new TextDecoder().decode(bytes));
       this._validate(this.data);
     } else {
       this.data = {version: 1, sets: favorites.length ? [{
-        id: GLib.uuid_string_random(), name: 'お気に入り',
+        id: GLib.uuid_string_random(), name: _("Favorites"),
         items: favorites.map(item => ({id: GLib.uuid_string_random(), name: item.name || '', text: item.text})),
       }] : []};
       this._save(this.data);
@@ -22,16 +23,16 @@ export class PasteSets {
 
   _validate(data) {
     if (data?.version !== 1 || !Array.isArray(data.sets) || data.sets.length > 100)
-      throw new Error('ペーストセットの形式が不正です。');
+      throw new Error(_("Invalid paste set format."));
     if (data.historyName !== undefined &&
         (typeof data.historyName !== 'string' || !data.historyName.trim() || data.historyName.length > 100))
-      throw new Error('履歴タブ名が不正です。');
+      throw new Error(_("Invalid history tab name."));
     const ids = new Set();
     for (const set of data.sets) {
       if (typeof set.id !== 'string' || ids.has(set.id) ||
           typeof set.name !== 'string' || !set.name.trim() || set.name.length > 100 ||
           !Array.isArray(set.items) || set.items.length > 1000)
-        throw new Error('ペーストセットの形式が不正です。');
+        throw new Error(_("Invalid paste set format."));
       ids.add(set.id);
       for (const item of set.items) {
         if (typeof item.id !== 'string' || ids.has(item.id) ||
@@ -39,13 +40,13 @@ export class PasteSets {
             !['text', 'command'].includes(item.kind || 'text') ||
             typeof item.text !== 'string' || item.text.includes('\0') ||
             ((item.kind || 'text') === 'text' && !item.text))
-          throw new Error('ペースト項目の形式が不正です。');
+          throw new Error(_("Invalid paste item format."));
         if (item.kind === 'command' &&
             (typeof item.command !== 'string' || !item.command.trim() ||
              item.command.length > 8192 || item.command.includes('\0') ||
              !['direct', 'bash'].includes(item.executionMode ?? 'direct') ||
              typeof item.trimTrailingNewlines !== 'boolean'))
-          throw new Error('コマンド項目の形式が不正です。');
+          throw new Error(_("Invalid command item format."));
         ids.add(item.id);
       }
     }
@@ -55,9 +56,9 @@ export class PasteSets {
     this._validate(data);
     const json = JSON.stringify(data);
     if (new TextEncoder().encode(json).length > 16 * 1024 * 1024)
-      throw new Error('ペーストセットの保存容量を超えています。');
+      throw new Error(_("Paste sets exceed the storage limit."));
     if (!GLib.file_set_contents(this.path, json))
-      throw new Error('ペーストセットを保存できません。');
+      throw new Error(_("Could not save paste sets."));
   }
 
   change(update) {
@@ -76,9 +77,9 @@ export class PasteSets {
   createFromItem(item) {
     const id = GLib.uuid_string_random();
     this.change(sets => {
-      const names = new Set([this.data.historyName || '履歴', ...sets.map(set => set.name)]);
-      let name = 'untitled';
-      for (let number = 2; names.has(name); number++) name = `untitled ${number}`;
+      const names = new Set([this.data.historyName || _("History"), ...sets.map(set => set.name)]);
+      let name = _('untitled');
+      for (let number = 2; names.has(name); number++) name = format(_('%s %d'), _('untitled'), number);
       sets.push({id, name, items: [this._copyItem(item)]});
     });
     return id;
@@ -109,7 +110,7 @@ export class PasteSets {
   remove(id) {
     this.change(sets => {
       const index = sets.findIndex(set => set.id === id);
-      if (index < 0) throw new Error('セットが見つかりません。');
+      if (index < 0) throw new Error(_("Paste set not found."));
       sets.splice(index, 1);
     });
   }
@@ -139,7 +140,7 @@ export class PasteSets {
       const items = sets.find(set => set.id === setId)?.items;
       const index = items?.findIndex(item => item.id === itemId) ?? -1;
       if (index < 0 || !items.some(item => item.id === targetId))
-        throw new Error('移動する項目が見つかりません。');
+        throw new Error(_("The item to move was not found."));
       if (itemId === targetId) return;
       const [item] = items.splice(index, 1);
       const target = items.findIndex(entry => entry.id === targetId);

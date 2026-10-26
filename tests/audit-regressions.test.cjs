@@ -17,7 +17,7 @@ function method(name) {
   return rest.slice(0, end);
 }
 function instance(names, globals = {}) {
-  const context = vm.createContext({console: {log() {}}, ...globals});
+  const context = vm.createContext({_: value => value, console: {log() {}}, ...globals});
   const Class = vm.runInContext(`(class {${names.map(method).join('\n')}})`, context);
   return [new Class(), context];
 }

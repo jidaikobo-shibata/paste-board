@@ -21,8 +21,8 @@ def main():
 
     signal.signal(signal.SIGTERM, stop_group)
 
-    def fail(message):
-        print(json.dumps({"error": message}), flush=True)
+    def fail(code, detail=""):
+        print(json.dumps({"error": code, "detail": detail}), flush=True)
         stop_group()
 
     try:
@@ -48,17 +48,21 @@ def main():
                         continue
                     total += len(data)
                     if total > limit:
-                        fail("コマンドの出力量が上限を超えました。")
+                        fail("output-limit")
                     output[key.data].extend(data)
         if child.wait() != 0:
             detail = output["stderr"].decode("utf-8", errors="replace")[:300]
-            fail("コマンドが正常に終了しませんでした。" + ("\n" + detail if detail else ""))
+            fail("command-failed", detail)
         text = output["stdout"].decode("utf-8", errors="strict")
         if "\0" in text:
-            fail("出力にNUL文字が含まれています。")
+            fail("nul-output")
         print(json.dumps({"text": text}, ensure_ascii=False), flush=True)
+    except UnicodeError:
+        fail("invalid-utf8")
+    except OSError as error:
+        fail("launch-failed", str(error))
     except Exception as error:
-        fail(str(error))
+        fail("supervisor-failed", str(error))
 
 
 if __name__ == "__main__":

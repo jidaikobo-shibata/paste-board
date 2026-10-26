@@ -1,3 +1,4 @@
+import {_, format} from './i18n.js';
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
@@ -16,7 +17,6 @@ import * as LoginManager from 'resource:///org/gnome/shell/misc/loginManager.js'
 
 import {
   Extension,
-  gettext as _,
 } from 'resource:///org/gnome/shell/extensions/extension.js';
 
 import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc/animationUtils.js';
@@ -149,8 +149,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       name: 'searchEntry',
       style_class: 'search-entry ci-history-search-entry',
       can_focus: true,
-      hint_text: '履歴を検索…',
-      accessible_name: 'クリップボード履歴を検索',
+      hint_text: _("Search items…"),
+      accessible_name: _("Search items in the paste panel"),
       track_hover: true,
       x_expand: true,
       y_expand: false,
@@ -280,16 +280,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     actionsBox.add_child(new St.BoxLayout({ x_expand: true }));
 
     this.privateModeMenuItem = this._createModeButton(
-      'view-private-symbolic', 'プライベートモード：履歴の記録を停止',
+      'view-private-symbolic', _("Private mode: pause history recording"),
       SettingsFields.PRIVATE_MODE,
     );
     this.keepMenuOpenItem = this._createModeButton(
-      'view-pin-symbolic', 'パネルを固定', SettingsFields.KEEP_MENU_OPEN,
+      'view-pin-symbolic', _("Pin the panel"), SettingsFields.KEEP_MENU_OPEN,
     );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
-    actionsBox.add_child(this._setActionButton('tab-new-symbolic', 'ペーストセットを追加', () => this._editPasteSetName()));
-    actionsBox.add_child(this._setActionButton('document-edit-symbolic', '表示中のタブを編集', () => this._editCurrentPasteTab()));
+    actionsBox.add_child(this._setActionButton('tab-new-symbolic', _("Add a paste set"), () => this._editPasteSetName()));
+    actionsBox.add_child(this._setActionButton('document-edit-symbolic', _("Edit the current tab"), () => this._editCurrentPasteTab()));
     this._buildPasteActionChooser(actionsSection);
     this._syncModeButtons();
     this._updatePrivateModeState();
@@ -382,7 +382,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       const session = await LoginManager.getLoginManager().getCurrentSessionProxy();
       if (this._destroyed) return false;
-      if (!session?.Id) throw new Error('ログインセッションを識別できません。');
+      if (!session?.Id) throw new Error(_("Cannot identify the login session."));
       const [, bytes] = GLib.file_get_contents('/proc/sys/kernel/random/boot_id');
       const identity = `${new TextDecoder().decode(bytes).trim()}:${session.Id}`;
       this._historySession = new HistorySession(
@@ -394,7 +394,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return this._historySession.discardHistory;
     } catch (error) {
       if (!this._destroyed)
-        this._showNotification('ログアウト時の履歴消去を準備できません', error.message);
+        this._showNotification(_("Could not prepare history cleanup on logout"), error.message);
       return false;
     }
   }
@@ -404,7 +404,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     Store.resetDatabase(this._currentStateBuilder.bind(this), () => {
       if (this._destroyed || this._historySession !== session) return;
       try {session?.cleared();}
-      catch (error) {this._showNotification('セッション情報を保存できません', error.message);}
+      catch (error) {this._showNotification(_("Could not save session metadata"), error.message);}
     });
   }
 
@@ -431,7 +431,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._renderPasteSets();
     } catch (error) {
       // Leave original favorites available if migration or loading fails.
-      this._showNotification('ペーストセットを読み込めません', error.message);
+      this._showNotification(_("Could not load paste sets"), error.message);
       this._tabsBox.hide();
     }
   }
@@ -626,7 +626,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._pasteDropChanged = true;
         return true;
       } catch (error) {
-        this._showNotification('項目を移動できません', error.message);
+        this._showNotification(_("Could not move the item"), error.message);
         return false;
       }
     };
@@ -661,7 +661,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._pasteDropChanged = true;
           return true;
         } catch (error) {
-          this._showNotification('セットへ追加できません', error.message);
+          this._showNotification(_("Could not add to the paste set"), error.message);
           return false;
         }
       },
@@ -703,7 +703,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._pasteDropChanged = true;
           return true;
         } catch (error) {
-          this._showNotification('セットを作成できません', error.message);
+          this._showNotification(_("Could not create the paste set"), error.message);
           return false;
         }
       },
@@ -729,7 +729,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._activePasteTab !== 'history' && !sets.some(set => set.id === this._activePasteTab))
       this._activePasteTab = 'history';
     this._tabsBox.get_children().forEach(actor => actor.destroy());
-    for (const [id, name] of [['history', this._pasteSets.data.historyName || '履歴'], ...sets.map(set => [set.id, set.name])]) {
+    for (const [id, name] of [['history', this._pasteSets.data.historyName || _("History")], ...sets.map(set => [set.id, set.name])]) {
       const button = new St.Button({can_focus: true,
         accessible_role: Atk.Role.PAGE_TAB, accessible_name: name,
         style_class: 'ci-paste-tab'});
@@ -774,10 +774,10 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._activatePasteEntry(row.entry);
         });
         for (const [icon, label, action, enabled] of [
-          ['go-up-symbolic', '上へ移動', () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, -1)), set.items.indexOf(item) > 0],
-          ['go-down-symbolic', '下へ移動', () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, 1)), set.items.indexOf(item) < set.items.length - 1],
-          ['document-edit-symbolic', '名前と本文を編集', () => this._editPasteSetItem(set.id, item), true],
-          ['edit-delete-symbolic', '項目を削除', () => this._confirmPasteSetDelete(set.id, item), true],
+          ['go-up-symbolic', _("Move up"), () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, -1)), set.items.indexOf(item) > 0],
+          ['go-down-symbolic', _("Move down"), () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, 1)), set.items.indexOf(item) < set.items.length - 1],
+          ['document-edit-symbolic', _("Edit name and content"), () => this._editPasteSetItem(set.id, item), true],
+          ['edit-delete-symbolic', _("Delete item"), () => this._confirmPasteSetDelete(set.id, item), true],
         ]) {
           const button = this._setActionButton(icon, label, action);
           button.set_style_class_name('ci-action-btn');
@@ -788,7 +788,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._pasteSetSection.addMenuItem(row);
       });
       if (!items.length) {
-        const empty = new PopupMenu.PopupMenuItem(query ? '一致する項目がありません' : '履歴の項目をこのタブへドラッグして追加できます', {reactive: false, can_focus: false});
+        const empty = new PopupMenu.PopupMenuItem(query ? _("No matching items") : _("Drag a history item onto this tab to add it"), {reactive: false, can_focus: false});
         this._pasteSetSection.addMenuItem(empty);
       }
     }
@@ -801,7 +801,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._quickPasteBusy || this._destroyed)
       return;
     try {change(); this._renderPasteSets();}
-    catch (error) {this._showNotification('ペーストセットを保存できません', error.message);}
+    catch (error) {this._showNotification(_("Could not save paste sets"), error.message);}
   }
 
   _openPasteSetDialog(dialog) {
@@ -823,9 +823,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     const id = this._activePasteTab;
     const set = this._pasteSets.data.sets.find(item => item.id === id);
-    const name = id === 'history' ? this._pasteSets.data.historyName || '履歴' : set?.name;
+    const name = id === 'history' ? this._pasteSets.data.historyName || _("History") : set?.name;
     if (!name) return;
-    this._openPasteSetDialog(new PasteSetDialog('タブを編集', name, null, nextName => {
+    this._openPasteSetDialog(new PasteSetDialog(_("Edit tab"), name, null, nextName => {
       if (this._destroyed) return;
       if (id === 'history') this._pasteSets.renameHistory(nextName);
       else this._pasteSets.rename(id, nextName);
@@ -837,7 +837,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!this._pasteSets)
       return;
     const set = this._pasteSets.data.sets.find(item => item.id === id);
-    this._openPasteSetDialog(new PasteSetDialog(id ? 'セット名を変更' : 'ペーストセットを作成', set?.name || '', null, name => {
+    this._openPasteSetDialog(new PasteSetDialog(id ? _("Rename paste set") : _("Create paste set"), set?.name || '', null, name => {
       if (this._destroyed) return;
       if (id) this._pasteSets.rename(id, name);
       else {
@@ -853,7 +853,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _editPasteSetItem(setId, item = null) {
-    this._openPasteSetDialog(new PasteSetDialog(item ? 'ペースト項目を編集' : 'ペースト項目を追加', item?.name || '',
+    this._openPasteSetDialog(new PasteSetDialog(item ? _("Edit paste item") : _("Add paste item"), item?.name || '',
       (item?.kind === 'command' ? item.command : item?.text) || '', (name, text, options) => {
       if (this._destroyed) return;
       this._pasteSets.put(setId, {id: item?.id, name, ...options,
@@ -882,10 +882,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     const set = this._pasteSets.data.sets.find(entry => entry.id === setId);
     if (!set) return;
     this.menu.close();
-    openConfirmDialog(item ? '項目を削除しますか？' : 'セットを削除しますか？',
-      item ? (item.name || '選択した項目') : set.name,
-      item ? 'この項目をセットから削除します。' : 'セット内のすべての項目も削除します。',
-      '削除', 'キャンセル', () => {
+    openConfirmDialog(item ? _("Delete this item?") : _("Delete this paste set?"),
+      item ? (item.name || _("Selected item")) : set.name,
+      item ? _("This item will be removed from the paste set.") : _("All items in this paste set will also be deleted."),
+      _("Delete"), _("Cancel"), () => {
         if (this._destroyed) return;
         this._changePasteSet(() => item
           ? this._pasteSets.removeItem(setId, item.id) : this._pasteSets.remove(setId));
@@ -948,13 +948,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   _buildPasteActionChooser(section) {
     this._pasteAfterAction = 'none';
     this._pasteActionRow = new St.BoxLayout({style_class: 'ci-paste-action-row'});
-    this._pasteActionRow.add_child(new St.Label({text: '貼付後',
+    this._pasteActionRow.add_child(new St.Label({text: _("After paste"),
       y_align: Clutter.ActorAlign.CENTER}));
     this._pasteActionButtons = [];
-    for (const [value, label] of [['none', 'そのまま'], ['enter', 'Enter'], ['tab', 'Tab']]) {
+    for (const [value, label] of [['none', _("No action")], ['enter', 'Enter'], ['tab', 'Tab']]) {
       const button = new St.Button({label, can_focus: true,
         style_class: 'ci-paste-action-choice', accessible_role: Atk.Role.TOGGLE_BUTTON,
-        accessible_name: value === 'none' ? '貼付後の操作なし' : `貼付後に${label}キーを送る`});
+        accessible_name: value === 'none' ? _("No key after paste") : format(_('Send %s after paste'), label)});
       button.connect('clicked', () => {
         if (this._quickPasteBusy)
           return;
@@ -992,7 +992,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     for (const [button, active] of [
       [this.privateModeMenuItem, PRIVATE_MODE], [this.keepMenuOpenItem, this._keepMenuOpen],
     ]) {
-      button.accessible_name = `${button.modeDescription}：${active ? 'オン' : 'オフ'}`;
+      button.accessible_name = format(_('%s: %s'), button.modeDescription, active ? _('On') : _('Off'));
       if (active) {
         button.add_style_pseudo_class('checked');
         button.add_accessible_state(Atk.StateType.CHECKED);
@@ -1350,7 +1350,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._pasteCommandRun = undefined;
       this._endQuickPasteTracking();
       if (!this._destroyed)
-        this._showNotification('コマンドを実行できません', error.message);
+        this._showNotification(_("Could not execute the command"), error.message);
     });
   }
 
@@ -1553,7 +1553,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const icofavBtn = new St.Button({
       style_class: 'ci-action-btn',
       can_focus: true,
-      accessible_name: 'ペーストセットへ追加',
+      accessible_name: _("Add to a paste set"),
       child: iconfav,
       x_align: Clutter.ActorAlign.END,
       x_expand: false,
@@ -1568,8 +1568,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (entry.favorite) {
       menuItem.favoriteMoveButtons = [];
       for (const [direction, icon, label] of [
-        [-1, 'go-up-symbolic', 'お気に入りを上へ移動'],
-        [1, 'go-down-symbolic', 'お気に入りを下へ移動'],
+        [-1, 'go-up-symbolic', _("Move favorite up")],
+        [1, 'go-down-symbolic', _("Move favorite down")],
       ]) {
         const button = new St.Button({style_class: 'ci-action-btn',
           can_focus: true, accessible_name: label,
@@ -1580,7 +1580,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       const renameButton = new St.Button({
         style_class: 'ci-action-btn', can_focus: true,
-        accessible_name: 'お気に入りの名前を編集',
+        accessible_name: _("Edit favorite name"),
         child: new St.Icon({icon_name: 'document-edit-symbolic',
           style_class: 'system-status-icon'}),
       });
@@ -1608,7 +1608,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const icoBtn = new St.Button({
       style_class: 'ci-action-btn',
       can_focus: true,
-      accessible_name: '履歴から削除',
+      accessible_name: _("Delete from history"),
       child: icon,
       x_align: Clutter.ActorAlign.END,
       x_expand: false,
@@ -1687,7 +1687,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _setCandidateAccessibleName(item) {
     const shortcut = item.shortcutLabel?.get_text();
-    const description = `${item.entry.kind === 'command' ? 'コマンド：' : ''}${item.label.get_text()}`;
+    const description = item.entry.kind === 'command'
+      ? format(_('Command: %s'), item.label.get_text()) : item.label.get_text();
     item.accessible_name = shortcut
       ? `${item.shortcutLabel.shortcutName || shortcut}. ${description}` : description;
   }
@@ -2267,7 +2268,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const mode = COPY_FEEDBACK;
     if (mode === 0) return;
     if (mode === 4) {
-      this._showNotification('コピーしました', '');
+      this._showNotification(_("Copied"), '');
       return;
     }
     if (mode === 1 || mode === 2)
@@ -2284,7 +2285,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const monitor = Main.layoutManager.findMonitorForActor(this);
     if (mode === 2 && monitor && this.mapped) {
       this._copyBubble = new St.Label({
-        text: 'Copied!',
+        text: _('Copied!'),
         style_class: 'ci-copy-bubble',
         reactive: false,
         can_focus: false,
@@ -2538,7 +2539,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._fetchSettings();
     if (prevClearOnLogout !== CLEAR_ON_LOGOUT) {
       try {this._historySession?.setEnabled(CLEAR_ON_LOGOUT);}
-      catch (error) {this._showNotification('セッション情報を保存できません', error.message);}
+      catch (error) {this._showNotification(_("Could not save session metadata"), error.message);}
     }
     this._updateCandidateNumbers();
     this._syncModeButtons();

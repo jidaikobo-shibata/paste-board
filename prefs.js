@@ -1,3 +1,4 @@
+import {_, format} from './i18n.js';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
@@ -5,7 +6,6 @@ import Adw from 'gi://Adw';
 
 import {
   ExtensionPreferences,
-  gettext as _,
 } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import Fields, {migrateSettings} from './settingsFields.js';
@@ -62,7 +62,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const field_disable_down_arrow = new Gtk.Switch();
     const field_cache_disable = new Gtk.Switch();
     const field_notification_toggle = new Gtk.ComboBoxText();
-    for (const label of ['表示しない', 'アイコンを強調', 'アイコンを強調＋吹き出し', 'トップバー全体を強調', 'OSの通知'])
+    for (const label of [_("Do not show"), _("Highlight the icon"), _("Highlight the icon and show a bubble"), _("Highlight the entire top bar"), _("System notification")])
       field_notification_toggle.append_text(label);
     const field_strip_text = new Gtk.Switch();
     const field_paste_on_selection = new Gtk.Switch();
@@ -73,7 +73,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       field_keybinding.model,
       settings,
       'toggle-menu',
-      'パネルを開く',
+      _("Open the panel"),
     );
 
     const field_keybinding_activation = new Gtk.Switch();
@@ -87,27 +87,27 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const windowWidthPercentageLabel = new Gtk.Label({
-      label: 'パネルの幅（%）',
+      label: _("Panel width (%)"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const cacheDisableLabel = new Gtk.Label({
-      label: 'ログアウト時に履歴を消去する\n（ペーストセットは消去しません）',
+      label: _("Clear history on logout\n(Paste sets are kept)"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const notificationLabel = new Gtk.Label({
-      label: 'コピーしたことを表示する',
+      label: _("Copy feedback"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const moveFirstLabel = new Gtk.Label({
-      label: '選んだ履歴を先頭に移す\n（固定中の操作・数字キー・ペーストセットは対象外）',
+      label: _("Move selected history to the top\n(Except while pinned, number shortcuts, and paste sets)"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const keybindingLabel = new Gtk.Label({
-      label: 'パネルを開くショートカット',
+      label: _("Panel opening shortcut"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -127,17 +127,17 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const stripTextLabel = new Gtk.Label({
-      label: '前後の空白・改行を削除する',
+      label: _("Trim leading and trailing whitespace"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const pasteOnSelectionLabel = new Gtk.Label({
-      label: 'Enter・クリックで貼り付ける',
+      label: _("Paste on Enter or click"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const processPrimarySelection = new Gtk.Label({
-      label: '選択した文字も履歴に保存する',
+      label: _("Also save selected text to history"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -175,11 +175,11 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const modifierSelectors = [];
     let updatingModifiers = false;
     for (const [key, title] of [
-      [Fields.QUICK_PASTE_MODIFIERS, '数字キーで貼り付けるときの修飾キー'],
+      [Fields.QUICK_PASTE_MODIFIERS, _("Modifiers for number-key paste")],
     ]) {
       const selector = new Gtk.ComboBoxText();
       for (let value = 1; value <= 15; value++)
-        selector.append(String(value), modifierLabel(value) + '+数字');
+        selector.append(String(value), format(_('%s+number'), modifierLabel(value)));
       const label = new Gtk.Label({label: title, xalign: 0, hexpand: true});
       label.set_mnemonic_widget(selector);
       addRow(label, selector);

@@ -1,6 +1,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as DS from './dataStructures.js';
+import {_} from './i18n.js';
 
 let EXTENSION_UUID;
 let CACHE_DIR;
@@ -217,9 +218,9 @@ function _consumeStream(stream, state, callback) {
           entries.prepend(node);
         };
 
-        addEntry('Your clipboard data has been corrupted and was moved to:');
+        addEntry(_('Your clipboard data has been corrupted and was moved to:'));
         addEntry(GLib.build_filenamev([CACHE_DIR, 'corrupted.log']));
-        addEntry('Please file a bug report at:');
+        addEntry(_('Please file a bug report at:'));
         addEntry(
           'https://github.com/SUPERCILEX/gnome-clipboard-history/issues/new?assignees=&labels=bug&template=1-bug.md',
         );

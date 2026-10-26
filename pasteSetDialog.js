@@ -1,3 +1,4 @@
+import {_, format} from './i18n.js';
 import Clutter from 'gi://Clutter';
 import St from 'gi://St';
 import GObject from 'gi://GObject';
@@ -10,7 +11,7 @@ export const PasteSetDialog = GObject.registerClass(
       super._init();
       this.contentLayout.add_child(new St.Label({text: title}));
       const nameInput = new St.Entry({text: name, can_focus: true,
-        accessible_name: '名前', hint_text: '名前'});
+        accessible_name: _("Name"), hint_text: _("Name")});
       nameInput.clutter_text.set_max_length(text === null ? 100 : 200);
       this.contentLayout.add_child(nameInput);
       let body;
@@ -23,7 +24,7 @@ export const PasteSetDialog = GObject.registerClass(
         const bodyLabel = new St.Label({text: ''});
         this.contentLayout.add_child(bodyLabel);
         const scroll = new St.ScrollView({style_class: 'ci-set-body-scroll'});
-        body = new St.Entry({text, can_focus: true, accessible_name: '貼り付ける本文',
+        body = new St.Entry({text, can_focus: true, accessible_name: _("Text to paste"),
           style_class: 'ci-set-body'});
         body.clutter_text.single_line_mode = false;
         body.clutter_text.activatable = false;
@@ -32,7 +33,7 @@ export const PasteSetDialog = GObject.registerClass(
         bodyBox.add_child(body);
         scroll.add_child(bodyBox);
         this.contentLayout.add_child(scroll);
-        const modes = new St.BoxLayout({style_class: 'ci-paste-action-row', accessible_name: '実行方式'});
+        const modes = new St.BoxLayout({style_class: 'ci-paste-action-row', accessible_name: _("Execution mode")});
         this.contentLayout.add_child(modes);
         const explanation = new St.Label({style_class: 'ci-set-error',
           text: ''});
@@ -46,20 +47,21 @@ export const PasteSetDialog = GObject.registerClass(
         const sync = () => {
           const command = kind === 'command';
           bodyLabel.set_text(command
-            ? executionMode === 'bash' ? 'Bashワンライナー' : 'コマンドと引数'
-            : '本文（改行もそのまま保存）');
-          body.accessible_name = command ? '実行するコマンド' : '貼り付ける本文';
+            ? executionMode === 'bash' ? _("Bash one-liner") : _("Command and arguments")
+            : _("Text (line breaks are preserved)"));
+          body.accessible_name = command ? _("Command to execute") : _("Text to paste");
           body.hint_text = command ? "date '+%Y-%m-%d %H:%M:%S'" : '';
           explanation.visible = trim.visible = modes.visible = command;
-          explanation.set_text((executionMode === 'bash'
-            ? '貼付時にBashで実行します。パイプ・変数展開が使えます。\n'
-            : '貼付時に直接実行します。パイプ・変数展開は行いません。\n')
-            + 'あなたの権限で実行され、ファイルの変更・削除や外部への通信も可能です。'
-            + '出力がなくても実行されます。内容を理解し、信頼できるコマンドだけを登録してください。\n'
-            + '対話入力には対応しません。パスワードの取得・保存・受け渡しは行いません。\n'
-            + '制限は3秒・出力64KiBです。実行済みの操作は取り消せません。');
-          trim.label = `${trimTrailingNewlines ? '☑' : '☐'} 末尾の改行を削除する`;
-          trim.accessible_name = `末尾の改行を削除する：${trimTrailingNewlines ? 'オン' : 'オフ'}`;
+          explanation.set_text([
+            executionMode === 'bash'
+              ? _('Runs in Bash when pasted. Pipes and variable expansion are supported.')
+              : _('Runs directly when pasted. Pipes and variable expansion are not performed.'),
+            _('Runs with your permissions and can modify or delete files or access the network. Commands execute even without output. Register only commands you understand and trust.'),
+            _('Interactive input is not supported. Passwords are never requested, stored, or supplied by this extension.'),
+            _('Limits: 3 seconds and 64 KiB of output. Actions already performed cannot be undone.'),
+          ].join('\n'));
+          trim.label = `${trimTrailingNewlines ? '☑' : '☐'} ${_('Trim trailing newlines')}`;
+          trim.accessible_name = format(_('Trim trailing newlines: %s'), trimTrailingNewlines ? _('On') : _('Off'));
           if (trimTrailingNewlines) trim.add_accessible_state(Atk.StateType.CHECKED);
           else trim.remove_accessible_state(Atk.StateType.CHECKED);
           for (const [value, button] of typeButtons) {
@@ -81,14 +83,14 @@ export const PasteSetDialog = GObject.registerClass(
             }
           }
         };
-        for (const [value, label] of [['text', 'テキスト'], ['command', 'コマンド']]) {
+        for (const [value, label] of [['text', _("Text")], ['command', _("Command")]]) {
           const button = new St.Button({label, can_focus: true,
             accessible_role: Atk.Role.RADIO_BUTTON, style_class: 'ci-paste-action-choice'});
           button.connect('clicked', () => {kind = value; sync();});
           typeButtons.push([value, button]);
           types.add_child(button);
         }
-        for (const [value, label] of [['direct', '直接実行'], ['bash', 'Bash（ワンライナー）']]) {
+        for (const [value, label] of [['direct', _("Direct execution")], ['bash', _("Bash (one-liner)")]]) {
           const button = new St.Button({label, can_focus: true,
             accessible_role: Atk.Role.RADIO_BUTTON, style_class: 'ci-paste-action-choice'});
           button.connect('clicked', () => {executionMode = value; sync();});
@@ -109,10 +111,10 @@ export const PasteSetDialog = GObject.registerClass(
       };
       if (!body) nameInput.clutter_text.connect('activate', commit);
       const buttons = [
-        {label: 'キャンセル', key: Clutter.KEY_Escape, action: () => this.close()},
-        {label: '保存', action: commit},
+        {label: _("Cancel"), key: Clutter.KEY_Escape, action: () => this.close()},
+        {label: _("Save"), action: commit},
       ];
-      if (remove) buttons.unshift({label: 'タブを削除', action: () => {
+      if (remove) buttons.unshift({label: _("Delete tab"), action: () => {
         this.connect('closed', remove);
         this.close();
       }});
@@ -126,7 +128,7 @@ export const PasteSetTargetDialog = GObject.registerClass(
   class PasteSetTargetDialog extends ModalDialog.ModalDialog {
     _init(sets, choose) {
       super._init();
-      this.contentLayout.add_child(new St.Label({text: '追加先のペーストセット'}));
+      this.contentLayout.add_child(new St.Label({text: _("Choose a paste set")}));
       const scroll = new St.ScrollView({style_class: 'ci-set-targets'});
       const list = new St.BoxLayout({});
       list.set_vertical(true);
@@ -142,7 +144,7 @@ export const PasteSetTargetDialog = GObject.registerClass(
         });
         list.add_child(button);
       }
-      this.setButtons([{label: 'キャンセル', key: Clutter.KEY_Escape, action: () => this.close()}]);
+      this.setButtons([{label: _("Cancel"), key: Clutter.KEY_Escape, action: () => this.close()}]);
       this.setInitialKeyFocus(list.get_first_child());
     }
   },

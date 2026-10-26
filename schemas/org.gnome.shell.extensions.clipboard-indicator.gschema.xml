@@ -1,4 +1,4 @@
-<schemalist gettext-domain="gnome-shell-extensions">
+<schemalist gettext-domain="clipboard-history-dev">
   <schema
       id="org.gnome.shell.extensions.clipboard-history-dev"
       path="/org/gnome/shell/extensions/clipboard-history-dev/">

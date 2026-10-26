@@ -1,16 +1,17 @@
+import {_} from './i18n.js';
 import GLib from 'gi://GLib';
 
 // Metadata only. Clipboard history and paste-set files are managed separately.
 export class HistorySession {
   constructor(directory, sessionId, clearOnLogout) {
-    if (!sessionId) throw new Error('ログインセッションを識別できません。');
+    if (!sessionId) throw new Error(_("Cannot identify the login session."));
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
-      throw new Error('セッション情報の保存先を作成できません。');
+      throw new Error(_("Could not create the session metadata directory."));
     this.path = GLib.build_filenamev([directory, 'history-session.json']);
     let previous = null;
     if (GLib.file_test(this.path, GLib.FileTest.EXISTS)) {
       const [ok, bytes] = GLib.file_get_contents(this.path);
-      if (!ok) throw new Error('セッション情報を読み込めません。');
+      if (!ok) throw new Error(_("Could not read session metadata."));
       previous = JSON.parse(new TextDecoder().decode(bytes));
     }
     const changed = !previous || previous.sessionId !== sessionId || previous.ended;
@@ -22,7 +23,7 @@ export class HistorySession {
 
   _save() {
     if (!GLib.file_set_contents(this.path, JSON.stringify(this.state)))
-      throw new Error('セッション情報を保存できません。');
+      throw new Error(_("Could not save session metadata."));
   }
 
   setEnabled(enabled) {

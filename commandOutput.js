@@ -1,3 +1,4 @@
+import {_} from './i18n.js';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
 
@@ -27,12 +28,12 @@ export function runCommand(command, {trimTrailingNewlines = true, executionMode 
         resolve(text);
       }
     };
-    cancel = () => finish(new Error('コマンドの実行を中止しました。'));
+    cancel = () => finish(new Error(_("Command execution was cancelled.")));
     try {
       if (typeof command !== 'string' || !command.trim() || command.length > 8192 || command.includes('\0'))
-        throw new Error('コマンドを入力してください（8192文字以内）。');
+        throw new Error(_("Enter a command (up to 8192 characters)."));
       if (!['direct', 'bash'].includes(executionMode))
-        throw new Error('コマンドの実行方式が不正です。');
+        throw new Error(_("Invalid command execution mode."));
       const launcher = new Gio.SubprocessLauncher({
         flags: Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
       });
@@ -49,7 +50,7 @@ export function runCommand(command, {trimTrailingNewlines = true, executionMode 
       process = launcher.spawnv(['/usr/bin/python3', '-I', SUPERVISOR, String(maxOutputBytes), ...argv]);
       timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
         timer = undefined;
-        finish(new Error('コマンドの実行が時間制限を超えました。'));
+        finish(new Error(_("Command execution timed out.")));
         return GLib.SOURCE_REMOVE;
       });
       // Only the trusted supervisor writes here, with bounded JSON-encoded output.
@@ -58,12 +59,23 @@ export function runCommand(command, {trimTrailingNewlines = true, executionMode 
           const [, stdout, stderr] = self.communicate_utf8_finish(result);
           if (settled) return;
           const response = JSON.parse(stdout);
-          if (response.error) throw new Error(response.error);
+          if (response.error) {
+            const messages = {
+              'output-limit': _('Command output exceeded the size limit.'),
+              'command-failed': _('The command did not exit successfully.'),
+              'nul-output': _('The output contains a NUL character.'),
+              'invalid-utf8': _('The output is not valid UTF-8 text.'),
+              'launch-failed': _('Could not start the command.'),
+              'supervisor-failed': _('Command supervision failed.'),
+            };
+            const message = messages[response.error] || _('Command supervision failed.');
+            throw new Error(message + (response.detail ? '\n' + response.detail : ''));
+          }
           if (!self.get_successful() || typeof response.text !== 'string')
-            throw new Error(stderr || 'コマンド監視処理に失敗しました。');
+            throw new Error(stderr || _("Command supervision failed."));
           let text = response.text;
           if (trimTrailingNewlines) text = text.replace(/(?:\r?\n)+$/, '');
-          if (!text) throw new Error('コマンドの出力が空のため、貼り付けませんでした。');
+          if (!text) throw new Error(_("The command produced no output; nothing was pasted."));
           finish(null, text);
         } catch (error) {finish(error);}
       });

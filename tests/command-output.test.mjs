@@ -34,17 +34,17 @@ async function main() {
   equal(await runCommand('printf "%s" "$((7 * 6))"').promise, '42');
   equal(await runCommand("cat <<'TEXT'\n$HOME stays literal\nTEXT").promise, '$HOME stays literal');
   equal(await runCommand('read answer; printf "%s" "${answer:-no-input}"').promise, 'no-input');
-  await rejects('false | printf partial', {}, '正常に終了');
-  await rejects('read answer', {}, '正常に終了');
+  await rejects('false | printf partial', {}, 'did not exit successfully');
+  await rejects('read answer', {}, 'did not exit successfully');
   equal(await runCommand("printf '日本語'").promise, '日本語');
   equal(/^\d{4}-\d{2}-\d{2}$/.test(await runCommand("date '+%Y-%m-%d'").promise), true);
   await rejects('no-such-clipboard-test-command-4f70');
-  await rejects('false', {}, '正常に終了');
+  await rejects('false', {}, 'did not exit successfully');
   await rejects("sh -c 'printf failure >&2; exit 2'", {}, 'failure');
-  await rejects('true', {}, '空');
-  await rejects('sleep 2', {timeoutMs: 40}, '時間制限');
-  await rejects('yes', {maxOutputBytes: 8192}, '上限');
-  await rejects("sh -c 'yes >&2'", {maxOutputBytes: 8192}, '上限');
+  await rejects('true', {}, 'no output');
+  await rejects('sleep 2', {timeoutMs: 40}, 'timed out');
+  await rejects('yes', {maxOutputBytes: 8192}, 'size limit');
+  await rejects("sh -c 'yes >&2'", {maxOutputBytes: 8192}, 'size limit');
   await rejects("printf '\\000'", {}, 'NUL');
   await rejects("printf '\\377'");
   await rejects('   ');
@@ -52,7 +52,7 @@ async function main() {
   const pending = runCommand('sleep 2');
   pending.cancel();
   try {await pending.promise; throw new Error('Cancellation did not reject');}
-  catch (error) {equal(error.message.includes('中止'), true);}
+  catch (error) {equal(error.message.includes('cancelled'), true);}
 
   const directory = GLib.dir_make_tmp('clipboard-command-store-XXXXXX');
   try {
