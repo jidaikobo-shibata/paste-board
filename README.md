@@ -46,7 +46,9 @@ Edit an item in a custom tab and select “Command” instead of “Text”.
 For example, name an item “Current date” and enter `date '+%Y-%m-%d %H:%M:%S'`.
 Click, Enter, and number shortcuts run it afresh and paste its standard output.
 Opening, searching, editing, dragging, or saving an item never runs it.
-The output is temporary: the original clipboard is restored and output is not added to history.
+Pasting output is temporary: the original clipboard is restored and output is not added to history.
+With “Paste on Enter or click” disabled, explicit copy-only actions put output into
+the clipboard and ordinary history instead.
 
 The editor offers “Direct execution” and “Bash (one-liner)”. Existing items without a stored
 execution mode retain direct execution: quotes group arguments, but shell expansions and
@@ -86,7 +88,8 @@ directory; Bash uses the home directory.
 Number shortcuts in the open panel paste from the active history or paste-set tab and restore the
 previous clipboard **as plain text**. Formatting, images, and application-specific
 clipboard metadata are not preserved. If the previous clipboard cannot be read
-as text, quick paste is cancelled without replacing it.
+as text, it is treated as empty text. Non-text data cannot be restored by this
+plain-text extension.
 
 Number shortcuts close the history panel after paste by default. Enable the
 “Pin the panel” switch at the bottom to keep it open for repeated pastes.
@@ -104,14 +107,26 @@ The popup is called the paste panel. Its width setting is “Panel width (%)”.
 The opener shortcut and in-panel number modifier are independent; disabling the opener
 shortcut does not disable number-key paste inside an already open panel.
 
-“Move selected history to the top” applies only to unpinned Enter/click selection in History.
-Pinned selection never reorders history, including after the panel closes. Actual copies
-from other applications still move to the top. PRIMARY-selection capture remains optional.
+The first item in unfiltered History represents the current text clipboard; there is
+no selection dot. Ordinary copies and unpinned Enter/click selection in History
+always move that text to the top and make it the current clipboard. This behavior
+is fixed rather than controlled by a preference. Search and pagination can show
+other portions of history without changing the clipboard. Reopening the panel starts
+at the first page. On activation, an empty clipboard is restored from the first saved
+history item; an existing clipboard containing non-text data is left untouched.
+An explicitly emptied clipboard has no current text item until a new copy is made.
+
+Pinned pastes, number-key pastes, and pastes from sets restore the previous clipboard
+and preserve history order. Set item order never changes as a result of pasting.
+PRIMARY-selection capture remains optional: selected text is placed immediately below
+the current clipboard item, preserving both the current clipboard and the first item.
 
 “Paste on Enter or click” applies to all tabs. When off, Enter/click copies only;
-command items run and copy their output. Number shortcuts always paste. Copies from paste
-sets change CLIPBOARD but are not automatically added to ordinary history.
-The pin controls whether the panel closes for both paste and copy-only selection.
+command items run and copy their output. Copy-only actions update the current clipboard
+and put their text at the top of ordinary history, including when pinned or using a set.
+Number shortcuts always paste. The pin controls panel closure for both paste and copy-only
+selection. Enabling whitespace trimming normalizes both captured clipboard text and
+history; PRIMARY capture never changes the clipboard.
 
 Copy feedback choices are off, icon, icon plus bubble, whole top bar, and OS notification.
 OS notifications say only “Copied” (localized), never the copied text, and honor notification policy.

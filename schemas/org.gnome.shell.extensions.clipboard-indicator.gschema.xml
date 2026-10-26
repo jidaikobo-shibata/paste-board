@@ -120,7 +120,7 @@
 
     <key name="move-item-first" type="b">
       <default>true</default>
-      <summary>Move history selected by Enter or click to the top, excluding favorites and number shortcuts</summary>
+      <summary>Legacy setting (unused): clipboard changes always move history to the top</summary>
     </key>
 
     <key name="private-mode" type="b">

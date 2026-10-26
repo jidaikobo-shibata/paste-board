@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Clipboard History (Development) 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-26 17:34+0900\n"
+"POT-Creation-Date: 2026-10-26 18:31+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -61,219 +61,219 @@ msgstr ""
 msgid "The command produced no output; nothing was pasted."
 msgstr ""
 
-#: extension.js:152
+#: extension.js:151
 msgid "Search items…"
 msgstr ""
 
-#: extension.js:153
+#: extension.js:152
 msgid "Search items in the paste panel"
 msgstr ""
 
-#: extension.js:283
+#: extension.js:285
 msgid "Private mode: pause history recording"
 msgstr ""
 
-#: extension.js:287
+#: extension.js:289
 msgid "Pin the panel"
 msgstr ""
 
-#: extension.js:291
+#: extension.js:293
 msgid "Add a paste set"
 msgstr ""
 
-#: extension.js:292
+#: extension.js:294
 msgid "Edit the current tab"
 msgstr ""
 
-#: extension.js:385 historySession.js:7
+#: extension.js:387 historySession.js:7
 msgid "Cannot identify the login session."
 msgstr ""
 
-#: extension.js:397
+#: extension.js:399
 msgid "Could not prepare history cleanup on logout"
 msgstr ""
 
-#: extension.js:407 extension.js:2542
+#: extension.js:409 extension.js:2551
 msgid "Could not save session metadata"
 msgstr ""
 
-#: extension.js:434
+#: extension.js:436
 msgid "Could not load paste sets"
 msgstr ""
 
-#: extension.js:629
+#: extension.js:631
 msgid "Could not move the item"
 msgstr ""
 
-#: extension.js:664
+#: extension.js:666
 msgid "Could not add to the paste set"
 msgstr ""
 
-#: extension.js:706
+#: extension.js:708
 msgid "Could not create the paste set"
 msgstr ""
 
-#: extension.js:732 extension.js:826 pasteSets.js:80
+#: extension.js:734 extension.js:829 pasteSets.js:80
 msgid "History"
 msgstr ""
 
-#: extension.js:777
+#: extension.js:780
 msgid "Move up"
 msgstr ""
 
-#: extension.js:778
+#: extension.js:781
 msgid "Move down"
 msgstr ""
 
-#: extension.js:779
+#: extension.js:782
 msgid "Edit name and content"
 msgstr ""
 
-#: extension.js:780
+#: extension.js:783
 msgid "Delete item"
 msgstr ""
 
-#: extension.js:791
+#: extension.js:794
 msgid "No matching items"
 msgstr ""
 
-#: extension.js:791
+#: extension.js:794
 msgid "Drag a history item onto this tab to add it"
 msgstr ""
 
-#: extension.js:804
+#: extension.js:807
 msgid "Could not save paste sets"
 msgstr ""
 
-#: extension.js:828
+#: extension.js:831
 msgid "Edit tab"
 msgstr ""
 
-#: extension.js:840
+#: extension.js:843
 msgid "Rename paste set"
 msgstr ""
 
-#: extension.js:840
+#: extension.js:843
 msgid "Create paste set"
 msgstr ""
 
-#: extension.js:856
+#: extension.js:859
 msgid "Edit paste item"
 msgstr ""
 
-#: extension.js:856
+#: extension.js:859
 msgid "Add paste item"
 msgstr ""
 
-#: extension.js:885
+#: extension.js:888
 msgid "Delete this item?"
 msgstr ""
 
-#: extension.js:885
+#: extension.js:888
 msgid "Delete this paste set?"
 msgstr ""
 
-#: extension.js:886
+#: extension.js:889
 msgid "Selected item"
 msgstr ""
 
-#: extension.js:887
+#: extension.js:890
 msgid "This item will be removed from the paste set."
 msgstr ""
 
-#: extension.js:887
+#: extension.js:890
 msgid "All items in this paste set will also be deleted."
 msgstr ""
 
-#: extension.js:888
+#: extension.js:891
 msgid "Delete"
 msgstr ""
 
-#: extension.js:888 extension.js:1803 favoriteNameDialog.js:29
+#: extension.js:891 extension.js:1806 favoriteNameDialog.js:29
 #: pasteSetDialog.js:114 pasteSetDialog.js:147
 msgid "Cancel"
 msgstr ""
 
-#: extension.js:951
+#: extension.js:954
 msgid "After paste"
 msgstr ""
 
-#: extension.js:954
+#: extension.js:957
 msgid "No action"
 msgstr ""
 
-#: extension.js:957
+#: extension.js:960
 msgid "No key after paste"
 msgstr ""
 
-#: extension.js:957
+#: extension.js:960
 #, javascript-format
 msgid "Send %s after paste"
 msgstr ""
 
-#: extension.js:995
+#: extension.js:998
 #, javascript-format
 msgid "%s: %s"
 msgstr ""
 
-#: extension.js:995 pasteSetDialog.js:64
+#: extension.js:998 pasteSetDialog.js:64
 msgid "On"
 msgstr ""
 
-#: extension.js:995 pasteSetDialog.js:64
+#: extension.js:998 pasteSetDialog.js:64
 msgid "Off"
 msgstr ""
 
-#: extension.js:1353
+#: extension.js:1358
 msgid "Could not execute the command"
 msgstr ""
 
-#: extension.js:1556
+#: extension.js:1561
 msgid "Add to a paste set"
 msgstr ""
 
-#: extension.js:1571
+#: extension.js:1576
 msgid "Move favorite up"
 msgstr ""
 
-#: extension.js:1572
+#: extension.js:1577
 msgid "Move favorite down"
 msgstr ""
 
-#: extension.js:1583
+#: extension.js:1588
 msgid "Edit favorite name"
 msgstr ""
 
-#: extension.js:1611
+#: extension.js:1616
 msgid "Delete from history"
 msgstr ""
 
-#: extension.js:1691
+#: extension.js:1694
 #, javascript-format
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:1794
+#: extension.js:1797
 msgid "Clear all?"
 msgstr ""
 
-#: extension.js:1795
+#: extension.js:1798
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr ""
 
-#: extension.js:1796
+#: extension.js:1799
 msgid "This operation cannot be undone."
 msgstr ""
 
-#: extension.js:1802
+#: extension.js:1805
 msgid "Clear"
 msgstr ""
 
-#: extension.js:2271
+#: extension.js:2281
 msgid "Copied"
 msgstr ""
 
-#: extension.js:2288
+#: extension.js:2298
 msgid "Copied!"
 msgstr ""
 
@@ -471,84 +471,78 @@ msgstr ""
 msgid "System notification"
 msgstr ""
 
-#: prefs.js:76
+#: prefs.js:75
 msgid "Open the panel"
 msgstr ""
 
-#: prefs.js:85
+#: prefs.js:84
 msgid "Max number of items"
 msgstr ""
 
-#: prefs.js:90
+#: prefs.js:89
 msgid "Panel width (%)"
 msgstr ""
 
-#: prefs.js:95
+#: prefs.js:94
 msgid ""
 "Clear history on logout\n"
 "(Paste sets are kept)"
 msgstr ""
 
-#: prefs.js:100
+#: prefs.js:99
 msgid "Copy feedback"
 msgstr ""
 
-#: prefs.js:105
-msgid ""
-"Move selected history to the top\n"
-"(Except while pinned, number shortcuts, and paste sets)"
-msgstr ""
-
-#: prefs.js:110
+#: prefs.js:104
 msgid "Panel opening shortcut"
 msgstr ""
 
-#: prefs.js:115
+#: prefs.js:109
 msgid "Number of characters in status bar"
 msgstr ""
 
-#: prefs.js:120
+#: prefs.js:114
 msgid "What to show in status bar"
 msgstr ""
 
-#: prefs.js:125
+#: prefs.js:119
 msgid "Remove down arrow in status bar"
 msgstr ""
 
-#: prefs.js:130
+#: prefs.js:124
 msgid "Trim leading and trailing whitespace"
 msgstr ""
 
-#: prefs.js:135
+#: prefs.js:129
 msgid "Paste on Enter or click"
 msgstr ""
 
-#: prefs.js:140
+#: prefs.js:134
 msgid "Also save selected text to history"
 msgstr ""
 
-#: prefs.js:178
+#: prefs.js:171
 msgid "Modifiers for number-key paste"
 msgstr ""
 
-#: prefs.js:182
+#: prefs.js:175
 #, javascript-format
 msgid "%s+number"
 msgstr ""
 
-#: prefs.js:303
+#: prefs.js:290
 msgid "Icon"
 msgstr ""
 
-#: prefs.js:304
+#: prefs.js:291
 msgid "Clipboard contents"
 msgstr ""
 
-#: prefs.js:305
+#: prefs.js:292
 msgid "Both"
 msgstr ""
 
-#: prefs.js:306
+#: prefs.js:293
 msgid "Neither"
 msgstr ""
 

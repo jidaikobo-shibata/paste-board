@@ -67,7 +67,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const field_strip_text = new Gtk.Switch();
     const field_paste_on_selection = new Gtk.Switch();
     const field_process_primary_selection = new Gtk.Switch();
-    const field_move_item_first = new Gtk.Switch();
     const field_keybinding = createKeybindingWidget(settings);
     addKeybinding(
       field_keybinding.model,
@@ -98,11 +97,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     });
     const notificationLabel = new Gtk.Label({
       label: _("Copy feedback"),
-      hexpand: true,
-      halign: Gtk.Align.START,
-    });
-    const moveFirstLabel = new Gtk.Label({
-      label: _("Move selected history to the top\n(Except while pinned, number shortcuts, and paste sets)"),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -171,7 +165,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addRow(windowWidthPercentageLabel, window_width_percentage);
     addRow(sizeLabel, field_size);
     addRow(cacheDisableLabel, field_cache_disable);
-    addRow(moveFirstLabel, field_move_item_first);
     const modifierSelectors = [];
     let updatingModifiers = false;
     for (const [key, title] of [
@@ -237,12 +230,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     settings.bind(
       Fields.COPY_FEEDBACK,
       field_notification_toggle,
-      'active',
-      Gio.SettingsBindFlags.DEFAULT,
-    );
-    settings.bind(
-      Fields.MOVE_ITEM_FIRST,
-      field_move_item_first,
       'active',
       Gio.SettingsBindFlags.DEFAULT,
     );

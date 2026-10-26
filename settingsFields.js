@@ -10,7 +10,6 @@ const SettingsFields = {
   COPY_FEEDBACK: 'copy-feedback',
   NOTIFY_ON_COPY: 'notify-on-copy',
   CONFIRM_ON_CLEAR: 'confirm-clear',
-  MOVE_ITEM_FIRST: 'move-item-first',
   ENABLE_KEYBINDING: 'enable-keybindings',
   TOPBAR_PREVIEW_SIZE: 'topbar-preview-size',
   TOPBAR_DISPLAY_MODE_ID: 'display-mode',

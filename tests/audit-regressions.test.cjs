@@ -45,7 +45,7 @@ test('initial display and private-mode transitions preserve the clipboard', () =
   Object.assign(owner, {
     scrollViewMenuSection: {actor: {}}, scrollViewFavoritesMenuSection: {actor: {}},
     icon: {remove_style_class_name: noop, add_style_class_name: noop},
-    _applyPasteSetVisibility: noop, _updateButtonText: noop, _setCandidateSelection: noop,
+    _applyPasteSetVisibility: noop, _updateButtonText: noop, _queryClipboard: noop,
   });
   owner._updatePrivateModeState();
   owner.currentlySelectedEntry = {type: 1, text: 'old history'};
@@ -64,7 +64,7 @@ test('rebuilding visible history does not write the selected item to clipboard',
   const entry = {type: 1, text: 'selected'};
   Object.assign(owner, {
     activeHistoryMenuItems: 0, entries: {last: () => entry}, currentlySelectedEntry: entry,
-    _setCandidateSelection: noop, _updateButtonText: noop,
+    _updateButtonText: noop,
     _addEntry(item, select, update) {
       this.activeHistoryMenuItems++;
       if (select) this._selectEntry(item, update);
@@ -88,7 +88,7 @@ test('history-loading callback ignores an indicator disabled before completion',
 
 test('recycling rows clears old ownership without erasing a newly assigned row', () => {
   const [owner] = instance(['_rewriteMenuItem']);
-  Object.assign(owner, {_setEntryLabel: noop, _setCandidateSelection: noop});
+  Object.assign(owner, {_setEntryLabel: noop});
   const a = {id: 1}, b = {id: 2}, c = {id: 3};
   const first = {entry: a}, second = {entry: b};
   a.menuItem = first; b.menuItem = second;
@@ -263,13 +263,13 @@ test('paste restores custom-set and numeric selections while retaining explicit 
       });
       const text = '\nbody\n\n';
       owner._quickPaste({type: 1, text, pasteSetItem: custom}, !pinned,
-        false, operation !== 'digit', pinned);
+        false, operation !== 'digit');
       timers.shift()();
       if (externalCopy) {clipboard = 'new copy'; owner._quickPasteState.changed = true;}
       while (timers.length) timers.shift()();
       assert.equal(pasted, text);
       assert.equal(clipboard, externalCopy ? 'new copy'
-        : !custom && operation !== 'digit' ? text : 'original',
+        : !custom && !pinned && operation !== 'digit' ? text : 'original',
       JSON.stringify({custom, operation, pinned, externalCopy}));
     }
 });
@@ -482,17 +482,17 @@ test('pin click immediately enables keep-open with no post-paste key, second cli
   assert.deepEqual(writes, [['keep-menu-open', true], ['keep-menu-open', false]]);
 });
 
-test('copy-only mode applies to every tab and command, respecting pin and leaving history order stable', () => {
+test('copy-only mode records every tab and command output as the current clipboard', () => {
   for (const pinned of [false, true]) for (const custom of [false, true]) for (const command of [false, true]) {
     if (!custom && command) continue;
     const copied = [], moved = [], commands = [], closed = [];
     const [owner] = instance(['_activatePasteEntry', '_copyPasteEntry'], {
-      PASTE_ON_SELECTION: false, St: {ClipboardType: {CLIPBOARD: 1}},
+      PASTE_ON_SELECTION: false, STRIP_TEXT: false, St: {ClipboardType: {CLIPBOARD: 1}},
       Clipboard: {set_text: (_, text) => copied.push(text)},
     });
     Object.assign(owner, {_keepMenuOpen: pinned,
       menu: {close: () => closed.push(true)},
-      _moveEntryFirst: entry => moved.push(entry), _selectEntry: noop, _resetSelectedMenuItem: noop,
+      _processClipboardContent: (text, select, external) => {assert.equal(select, true); assert.equal(external, true); moved.push(text);},
       _quickPaste: () => assert.fail('copy-only injected paste'),
       _quickPasteCommand: (...args) => commands.push(args)});
     const entry = {text: 'chosen', kind: command ? 'command' : 'text', pasteSetItem: custom};
@@ -502,13 +502,13 @@ test('copy-only mode applies to every tab and command, respecting pin and leavin
       assert.deepEqual(copied, []);
     } else {
       assert.deepEqual(copied, ['chosen']);
-      assert.equal(moved.length, !custom && !pinned ? 1 : 0);
+      assert.deepEqual(moved, ['chosen']);
       assert.equal(closed.length, pinned ? 0 : 1);
     }
   }
 });
 
-test('fixed history paste updates the clipboard selection without reordering on paste or close', () => {
+test('fixed history paste preserves the clipboard and order on paste or close', () => {
   const copied = [], timers = [], moves = [];
   const target = {};
   const [owner, context] = instance(['_quickPaste'], {
@@ -522,7 +522,7 @@ test('fixed history paste updates the clipboard selection without reordering on 
     _sendQuickPasteKeys: noop, _moveEntryFirst: entry => moves.push(entry), _selectEntry: noop,
     _stopPasteDragFeedback: noop, _cancelPasteCommand: noop, _updatePasteActionChooser: noop,
     _hideModeHint: noop, _quickPasteKeysHeld: new Set()});
-  owner._quickPaste({type: 1, text: 'chosen'}, false, false, true, true);
+  owner._quickPaste({type: 1, text: 'chosen'}, false, false, true);
   timers.shift()();
   assert.deepEqual(copied, ['chosen']);
   assert.deepEqual(moves, []);
@@ -607,5 +607,137 @@ test('pasting saved text works with an initially empty clipboard and restores em
     assert.equal(pasted, 1);
     timers.shift()();
     assert.deepEqual(writes, ['saved text', original ?? '']);
+  }
+});
+
+function historyFixture(options = {}) {
+  const dsContext = vm.createContext({});
+  const dsSource = fs.readFileSync(path.join(root, 'dataStructures.js'), 'utf8').replace(/export /g, '');
+  const DS = vm.runInContext(dsSource + '\n({LLNode, LinkedList, TYPE_TEXT})', dsContext);
+  let clipboard = '', nextDiskId = 1;
+  const disk = [], rows = [];
+  const [owner, context] = instance(['_processClipboardContent', '_moveEntryFirst', '_selectEntry',
+    '_copyPasteEntry', '_setClipboardText', '_resetSelectedMenuItem', '_queryPrimaryClipboard',
+    '_pruneOldestEntries', '_removeEntry', '_deleteEntryAndRestoreLatest', '_clearHistory'], {
+    DS, STRIP_TEXT: false, NOTIFY_ON_COPY: false, CACHE_ONLY_FAVORITES: false,
+    MAX_REGISTRY_LENGTH: options.limit || 50, MAX_BYTES: Infinity, PASTE_ON_SELECTION: false,
+    PROCESS_PRIMARY_SELECTION: true, PRIVATE_MODE: false,
+    St: {ClipboardType: {CLIPBOARD: 1, PRIMARY: 2}},
+    Clipboard: {set_text: (type, text) => {if (type === 1) clipboard = text;},
+      get_text: (_, fn) => fn(null, options.primary?.())},
+    Store: {storeTextEntry: text => disk.push({id: nextDiskId++, text}),
+      moveEntryToEnd: id => {const index = disk.findIndex(item => item.id === id); assert.ok(index >= 0); disk.push(...disk.splice(index, 1));},
+      deleteTextEntry: id => {const index = disk.findIndex(item => item.id === id); assert.ok(index >= 0); disk.splice(index, 1);},
+      getFavoriteName: () => '', maybePerformLogCompaction: noop,
+      resetDatabase: () => {disk.length = 0;}},
+  });
+  Object.assign(owner, {entries: new DS.LinkedList(), favoriteEntries: new DS.LinkedList(),
+    _pasteSets: {}, nextId: 1, nextDiskId: 1,
+    menu: {close: noop}, _updateButtonText: noop, _updateCandidateNumbers: noop,
+    _maybeRestoreMenuPages: noop, _shouldAbortClipboardQuery: () => false,
+    _currentStateBuilder: noop,
+    historySection: {moveMenuItem: (row, index) => {rows.splice(rows.indexOf(row), 1); rows.splice(index, 0, row);},
+      removeAll: () => {rows.length = 0;}},
+    _addEntry(entry, selected, update, index = rows.length) {
+      const row = {entry, destroy: () => {rows.splice(rows.indexOf(row), 1); delete entry.menuItem;}};
+      entry.menuItem = row; rows.splice(index, 0, row);
+      if (selected) this._selectEntry(entry, update);
+    },
+  });
+  return {owner, context, rows, disk, clipboard: () => clipboard,
+    copy(text) {clipboard = text; owner._processClipboardContent(text, true, true);},
+    order: () => Array.from(owner.entries.toArray(), item => item.text).reverse(),
+    checkOrder() {
+      assert.deepEqual(rows.map(row => row.entry.text), this.order());
+      assert.deepEqual(disk.map(item => item.text).reverse(), this.order());
+    }};
+}
+
+test('ordinary copies and copy-only actions always make history first equal clipboard', () => {
+  const fixture = historyFixture();
+  const {owner} = fixture;
+  for (const text of ['first', 'second', 'third', 'first']) {
+    fixture.copy(text);
+    assert.equal(fixture.order()[0], fixture.clipboard());
+    fixture.checkOrder();
+  }
+  for (const pinned of [true, false]) for (const custom of [true, false]) {
+    owner._keepMenuOpen = pinned;
+    owner._copyPasteEntry({text: custom ? 'set output' : 'second', pasteSetItem: custom});
+    assert.equal(fixture.order()[0], fixture.clipboard());
+    fixture.checkOrder();
+  }
+});
+
+test('PRIMARY text stays below current clipboard, coalesces without deleting it, and persists order', () => {
+  let primary;
+  const fixture = historyFixture({primary: () => primary});
+  const {owner} = fixture;
+  fixture.copy('current');
+  for (primary of ['cur', 'current expanded', 'other', 'other expanded']) {
+    owner._queryPrimaryClipboard();
+    assert.equal(fixture.clipboard(), 'current');
+    assert.equal(fixture.order()[0], 'current');
+    fixture.checkOrder();
+  }
+  assert.equal(fixture.order().includes('other'), false);
+  primary = 'current'; owner._queryPrimaryClipboard();
+  primary = 'current plus'; owner._queryPrimaryClipboard();
+  assert.equal(fixture.order()[0], 'current');
+  fixture.checkOrder();
+  fixture.copy('other expanded');
+  assert.equal(fixture.order()[0], 'other expanded');
+  fixture.checkOrder();
+});
+
+test('PRIMARY capture with a one-entry limit cannot evict the current clipboard', () => {
+  const fixture = historyFixture({limit: 1, primary: () => 'selected'});
+  fixture.copy('current');
+  fixture.owner._queryPrimaryClipboard();
+  assert.deepEqual(fixture.order(), ['current']);
+  assert.equal(fixture.clipboard(), 'current');
+  fixture.checkOrder();
+});
+
+test('deleting current history selects the next first item; clearing also clears clipboard', () => {
+  const fixture = historyFixture();
+  fixture.copy('older'); fixture.copy('current');
+  fixture.owner._deleteEntryAndRestoreLatest(fixture.owner.entries.last());
+  assert.equal(fixture.clipboard(), 'older');
+  fixture.checkOrder();
+  fixture.owner._clearHistory();
+  assert.deepEqual(fixture.order(), []);
+  assert.equal(fixture.clipboard(), '');
+});
+
+test('trimmed history and clipboard remain identical while PRIMARY never changes clipboard', () => {
+  const fixture = historyFixture({primary: () => ' selected \n'});
+  fixture.context.STRIP_TEXT = true;
+  fixture.copy('\n current \n');
+  assert.equal(fixture.clipboard(), 'current');
+  assert.equal(fixture.order()[0], 'current');
+  fixture.owner._queryPrimaryClipboard();
+  assert.equal(fixture.clipboard(), 'current');
+  fixture.checkOrder();
+});
+
+test('startup restores saved first text only into an empty text-only clipboard', () => {
+  for (const text of [null, '', 'existing']) for (const mimetypes of [[], ['text/plain;charset=utf-8'], ['image/png'], ['text/plain', 'image/png']]) {
+    for (const restoreEmpty of [true, false]) {
+      const restored = [], processed = [], entry = {text: 'saved'};
+      const [owner] = instance(['_queryClipboard'], {
+        PRIVATE_MODE: false, St: {ClipboardType: {CLIPBOARD: 1}},
+        Meta: {SelectionType: {SELECTION_CLIPBOARD: 1}},
+        Clipboard: {get_text: (_, fn) => fn(null, text)},
+      });
+      Object.assign(owner, {entries: {last: () => entry},
+        selection: {get_mimetypes: () => mimetypes}, _shouldAbortClipboardQuery: () => false,
+        _selectEntry: (item, update) => {assert.equal(item, entry); assert.equal(update, true); restored.push(item.text);},
+        _processClipboardContent: value => processed.push(value)});
+      owner._queryClipboard(true, restoreEmpty);
+      const shouldRestore = !text && restoreEmpty && !mimetypes.includes('image/png');
+      assert.equal(restored.length, shouldRestore ? 1 : 0);
+      assert.equal(processed.length, shouldRestore ? 0 : 1);
+    }
   }
 });
