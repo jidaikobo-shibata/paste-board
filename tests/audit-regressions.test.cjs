@@ -565,3 +565,47 @@ test('history load finishing after disable cannot initialize UI or listeners', a
   assert.equal(owner.entries, undefined);
   assert.equal(owner._settingsChangedId, undefined);
 });
+
+test('row activation retains the panel until asynchronous paste handles closing', () => {
+  for (const pinned of [false, true]) for (const custom of [false, true]) {
+    let stopped = false;
+    const row = {entry: {text: 'chosen', pasteSetItem: custom}};
+    const [owner] = instance(['_onMenuItemSelectedAndMenuClose'], {
+      GObject: {signal_stop_emission_by_name: (item, signal) => {
+        assert.equal(item, row); assert.equal(signal, 'activate'); stopped = true;
+      }},
+    });
+    Object.assign(owner, {_keepMenuOpen: pinned, _activatePasteEntry: entry => {
+      assert.equal(stopped, true); assert.equal(entry, row.entry);
+    }});
+    if (custom) {
+      const activate = callback("        row.connect('activate', () => {", '\n        });', '',
+        vm.createContext({row, GObject: {signal_stop_emission_by_name: () => {stopped = true;}}}));
+      activate.call(owner);
+    } else owner._onMenuItemSelectedAndMenuClose(row);
+    assert.equal(stopped, true);
+  }
+});
+
+test('pasting saved text works with an initially empty clipboard and restores empty text', () => {
+  for (const original of [null, undefined, '', 'previous']) {
+    const target = {}, writes = [], timers = [];
+    const [owner] = instance(['_quickPaste', '_finishQuickPaste'], {
+      DS: {TYPE_TEXT: 'text'}, global: {display: {focus_window: target}},
+      St: {ClipboardType: {CLIPBOARD: 1}},
+      Clipboard: {get_text: (_, fn) => fn(null, original), set_text: (_, text) => writes.push(text)},
+      GLib: {PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false,
+        timeout_add: (_, ms, fn) => {timers.push(fn); return timers.length;}},
+    });
+    let pasted = 0;
+    Object.assign(owner, {menu: {isOpen: true}, _quickPasteKeysAreHeld: () => false,
+      _suspendQuickPasteInput: noop, _resumeQuickPasteInput: noop,
+      _endQuickPasteTracking: noop, _sendQuickPasteKeys: () => {pasted++;}});
+    owner._quickPaste({type: 'text', text: 'saved text'}, true);
+    assert.equal(timers.length, 1);
+    timers.shift()();
+    assert.equal(pasted, 1);
+    timers.shift()();
+    assert.deepEqual(writes, ['saved text', original ?? '']);
+  }
+});

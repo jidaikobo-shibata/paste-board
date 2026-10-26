@@ -769,7 +769,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         row.shortcutLabel = new St.Label({style_class: 'ci-shortcut-number', y_align: Clutter.ActorAlign.CENTER});
         row.insert_child_at_index(row.shortcutLabel, 1);
         row.connect('activate', () => {
-          if (this._keepMenuOpen) GObject.signal_stop_emission_by_name(row, 'activate');
+          // Keep the grab until asynchronous paste releases it itself.
+          GObject.signal_stop_emission_by_name(row, 'activate');
           if (!this._quickPasteBusy && !this._draggingPasteItem)
             this._activatePasteEntry(row.entry);
         });
@@ -1266,10 +1267,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._quickPasteBusy = true;
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
       if (this._destroyed || (!allowClosedMenu && !this.menu.isOpen) ||
-          generation !== (this._clipboardGeneration || 0) || typeof original !== 'string') {
+          generation !== (this._clipboardGeneration || 0)) {
         this._endQuickPasteTracking();
         return;
       }
+      // A new login can have saved history but no current text selection.
+      // Treat an absent text clipboard as empty instead of rejecting every paste.
+      original ??= '';
       let attempts = 0;
       // Wait for the physical shortcut keys to be released before injecting paste.
       this._quickPasteTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 25, () => {
@@ -1925,8 +1929,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       GObject.signal_stop_emission_by_name(menuItem, 'activate');
       return;
     }
-    if (this._keepMenuOpen || this._draggingPasteItem)
-      GObject.signal_stop_emission_by_name(menuItem, 'activate');
+    // PopupMenu's default activation would close before Clipboard.get_text
+    // completes, aborting unpinned pastes (and cancelling command execution).
+    GObject.signal_stop_emission_by_name(menuItem, 'activate');
     this._activatePasteEntry(menuItem.entry);
   }
 
