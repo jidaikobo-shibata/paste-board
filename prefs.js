@@ -8,7 +8,7 @@ import {
   ExtensionPreferences,
 } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
-import Fields, {migrateSettings} from './settingsFields.js';
+import Fields from './settingsFields.js';
 import { modifierLabel } from './shortcutModifiers.js';
 
 export default class ClipboardHistoryPrefs extends ExtensionPreferences {
@@ -19,7 +19,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
   // https://gjs.guide/extensions/development/preferences.html#prefs-js
   fillPreferencesWindow(window) {
     const settings = this.getSettings();
-    migrateSettings(settings);
 
     const main = new Gtk.Grid({
       margin_top: 10,

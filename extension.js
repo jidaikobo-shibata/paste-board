@@ -24,12 +24,11 @@ import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc
 import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
-import { FavoriteNameDialog } from './favoriteNameDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { HistorySession } from './historySession.js';
-import SettingsFields, {migrateSettings} from './settingsFields.js';
+import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
 const Clipboard = St.Clipboard.get_default();
@@ -54,10 +53,8 @@ const MAX_VISIBLE_CHARS = 200;
 let MAX_REGISTRY_LENGTH;
 let MAX_BYTES;
 let WINDOW_WIDTH_PERCENTAGE;
-let CACHE_ONLY_FAVORITES;
 let ENABLE_KEYBINDING;
 let PRIVATE_MODE;
-let NOTIFY_ON_COPY;
 let COPY_FEEDBACK;
 let CLEAR_ON_LOGOUT;
 let MAX_TOPBAR_LENGTH;
@@ -66,7 +63,6 @@ let DISABLE_DOWN_ARROW;
 let STRIP_TEXT;
 let PASTE_ON_SELECTION;
 let PROCESS_PRIMARY_SELECTION;
-let ENABLE_TYPEAHEAD_SEARCH;
 
 class ClipboardIndicator extends PanelMenu.Button {
   _init(extension) {
@@ -74,7 +70,6 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this.extension = extension;
     this.settings = extension.getSettings();
-    migrateSettings(this.settings);
 
     this._shortcutsBindingIds = [];
 
@@ -134,10 +129,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._initialFocusCallbackId) {
       GLib.Source.remove(this._initialFocusCallbackId);
       this._initialFocusCallbackId = undefined;
-    }
-    if (this._pasteHackCallbackId) {
-      GLib.Source.remove(this._pasteHackCallbackId);
-      this._pasteHackCallbackId = undefined;
     }
 
     super.destroy();
@@ -208,22 +199,6 @@ class ClipboardIndicator extends PanelMenu.Button {
         );
       }
     });
-
-    // Create menu sections for items
-    // Favorites
-    this.favoritesSection = new PopupMenu.PopupMenuSection();
-
-    this.scrollViewFavoritesMenuSection = new PopupMenu.PopupMenuSection();
-    const favoritesScrollView = new St.ScrollView({
-      style_class: 'ci-history-menu-section',
-      overlay_scrollbars: true,
-    });
-    favoritesScrollView.add_child(this.favoritesSection.actor);
-
-    this.scrollViewFavoritesMenuSection.actor.add_child(favoritesScrollView);
-    this.menu.addMenuItem(this.scrollViewFavoritesMenuSection);
-    this._legacyFavoriteSeparator = new PopupMenu.PopupSeparatorMenuItem();
-    this.menu.addMenuItem(this._legacyFavoriteSeparator);
 
     // History
     this.historySection = new PopupMenu.PopupMenuSection();
@@ -327,7 +302,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
 
     Store.buildClipboardStateFromLog(
-      async (entries, favoriteEntries, nextId, nextDiskId) => {
+      async (entries, archivedEntries, nextId, nextDiskId) => {
         if (this._destroyed)
           return;
         const discard = await this._prepareHistorySession();
@@ -341,26 +316,23 @@ class ClipboardIndicator extends PanelMenu.Button {
         /**
          * These two IDs are extremely important: making a mistake with either one breaks the
          * extension. Both IDs are globally unique within compaction intervals. The normal ID is
-         * *always* present and valid -- it allows us to build an inverted index so we can find
-         * previously copied items in O(1) time. The Disk ID is only present when we cache all
-         * entries. This additional complexity is needed to know what the ID of an item is on disk as
-         * compared to in memory when we're only caching favorites.
+         * *always* present and valid -- it allows us to find copied items in O(1) time.
+         * Disk IDs are reassigned when the append-only log is compacted.
          */
         this.nextId = nextId;
         this.nextDiskId = nextDiskId || nextId;
         /**
          * DS.LinkedList is the actual clipboard history and source of truth. Never use historySection
-         * or favoritesSection as the source of truth as these may get outdated during pagination.
+         * as the source of truth as it may get outdated during pagination.
          *
          * Entries *may* have a menuItem attached, meaning they are currently visible. On the other
          * hand, menu items must always have an entry attached.
          */
         this.entries = entries;
-        this.favoriteEntries = favoriteEntries;
+        this._archivedHistoryEntries = archivedEntries;
         if (discard) this._saveClearedSessionHistory();
 
-        this.currentlySelectedEntry = undefined;
-        this._restoreFavoritedEntries();
+        this._currentClipboardEntry = undefined;
         this._maybeRestoreMenuPages();
         this._setupPasteSets();
 
@@ -416,7 +388,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._cancelPasteCommand();
     try {this._historySession?.end();}
     catch (error) {console.error(this.extension.uuid, error);}
-    this._resetSelectedMenuItem(false);
+    this._clearCurrentClipboardEntry(false);
     this.entries = new DS.LinkedList();
     this.historySection.removeAll();
     this._saveClearedSessionHistory();
@@ -426,13 +398,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       this._pasteSets = new PasteSets(
         GLib.build_filenamev([GLib.get_user_config_dir(), this.extension.uuid]),
-        this.favoriteEntries.toArray().reverse().map(entry => ({
-          name: Store.getFavoriteName(entry.text), text: entry.text,
-        })),
       );
       this._renderPasteSets();
     } catch (error) {
-      // Leave original favorites available if migration or loading fails.
       this._showNotification(_("Could not load paste sets"), error.message);
       this._tabsBox.hide();
     }
@@ -447,8 +415,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!this._pasteSets)
       return;
     const history = this._activePasteTab === 'history';
-    this.scrollViewFavoritesMenuSection.actor.hide();
-    this._legacyFavoriteSeparator.actor.hide();
     this.scrollViewMenuSection.actor.visible = history && !PRIVATE_MODE;
     this._pasteSetContainer.actor.visible = !history && !PRIVATE_MODE;
 
@@ -909,8 +875,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._handleCtrlSelectKeyEvent(event) ||
       this._handleSettingsKeyEvent(event) ||
       this._handleNavigationKeyEvent(event) ||
-      this._handleFocusSearchKeyEvent(event) ||
-      this._handleSearchTypeAheadKeyEvent(event)
+      this._handleFocusSearchKeyEvent(event)
     );
   }
 
@@ -1301,7 +1266,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
         if (commitSelection && !entry.pasteSetItem) {
           this._moveEntryFirst(entry);
-          this._selectEntry(entry, false);
+          this._setCurrentClipboardEntry(entry, false);
         }
         this._sendQuickPasteKeys(closeAfterPaste);
         // Experimental delay: application clipboard reads are asynchronous.
@@ -1336,7 +1301,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
     const running = runCommand(entry.command, {trimTrailingNewlines: entry.trimTrailingNewlines,
-      executionMode: entry.executionMode || 'direct'});
+      executionMode: entry.executionMode});
     this._pasteCommandRun = running;
     running.promise.then(text => {
       if (this._pasteCommandRun !== running) return;
@@ -1462,52 +1427,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     return true;
   }
 
-  _handleSearchTypeAheadKeyEvent(event) {
-    if (!ENABLE_TYPEAHEAD_SEARCH) {
-      return false;
-    }
-
-    if (global.stage.get_key_focus() === this.searchEntry) {
-      return false;
-    }
-
-    if (
-      event.has_control_modifier() ||
-      event.has_alt_modifier?.() ||
-      event.has_super_modifier?.()
-    ) {
-      return false;
-    }
-
-    const keySymbol = event.get_key_symbol();
-    if (keySymbol === Clutter.KEY_BackSpace) {
-      const currentText = this.searchEntry.get_text();
-      if (!currentText) {
-        return false;
-      }
-
-      global.stage.set_key_focus(this.searchEntry);
-      this.searchEntry.set_text(currentText.slice(0, -1));
-      return true;
-    }
-
-    const unicode = event.get_key_unicode();
-    if (!unicode || unicode.length !== 1) {
-      return false;
-    }
-
-    const codePoint = unicode.charCodeAt(0);
-    if (codePoint < 32 || codePoint === 127) {
-      return false;
-    }
-
-    global.stage.set_key_focus(this.searchEntry);
-    this.searchEntry.set_text(this.searchEntry.get_text() + unicode);
-    return true;
-  }
-
   _addEntry(entry, selectEntry, updateClipboard, insertIndex) {
-    if (!entry.favorite && this.activeHistoryMenuItems >= PAGE_SIZE) {
+    if (this.activeHistoryMenuItems >= PAGE_SIZE) {
       const items = this.historySection._getMenuItems();
       const item = items[items.length - 1];
       this._rewriteMenuItem(item, entry);
@@ -1515,7 +1436,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._updateCandidateNumbers();
 
       if (selectEntry) {
-        this._selectEntry(entry, updateClipboard);
+        this._setCurrentClipboardEntry(entry, updateClipboard);
       }
       return;
     }
@@ -1540,18 +1461,14 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     menuItem.connect(
       'activate',
-      this._onMenuItemSelectedAndMenuClose.bind(this),
-    );
-    menuItem.connect('key-press-event', (_, event) =>
-      this._handleMenuItemKeyEvent(event, menuItem),
+      this._activateHistoryRow.bind(this),
     );
 
     this._setEntryLabel(menuItem);
 
-    // Favorite button
-    const icon_name = entry.favorite ? 'starred-symbolic' : 'list-add-symbolic';
+    // Add this history text to a paste set without changing the clipboard.
     const iconfav = new St.Icon({
-      icon_name: icon_name,
+      icon_name: 'list-add-symbolic',
       style_class: 'system-status-icon',
     });
 
@@ -1569,40 +1486,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     icofavBtn.connect('clicked', () => {
       this._addToPasteSet(menuItem.entry.text);
     });
-
-    if (entry.favorite) {
-      menuItem.favoriteMoveButtons = [];
-      for (const [direction, icon, label] of [
-        [-1, 'go-up-symbolic', _("Move favorite up")],
-        [1, 'go-down-symbolic', _("Move favorite down")],
-      ]) {
-        const button = new St.Button({style_class: 'ci-action-btn',
-          can_focus: true, accessible_name: label,
-          child: new St.Icon({icon_name: icon, style_class: 'system-status-icon'})});
-        menuItem.actor.add_child(button);
-        menuItem.favoriteMoveButtons.push([direction, button]);
-        button.connect('clicked', () => this._moveFavorite(menuItem, direction));
-      }
-      const renameButton = new St.Button({
-        style_class: 'ci-action-btn', can_focus: true,
-        accessible_name: _("Edit favorite name"),
-        child: new St.Icon({icon_name: 'document-edit-symbolic',
-          style_class: 'system-status-icon'}),
-      });
-      menuItem.actor.add_child(renameButton);
-      renameButton.connect('clicked', () => {
-        const target = menuItem.entry;
-        this.menu.close();
-        const dialog = new FavoriteNameDialog(Store.getFavoriteName(target.text), name => {
-          if (this._destroyed || !target.list)
-            return;
-          Store.setFavoriteName(target.text, name);
-          if (target.menuItem)
-            this._setEntryLabel(target.menuItem);
-        });
-        dialog.open();
-      });
-    }
 
     // Delete button
     const icon = new St.Icon({
@@ -1628,41 +1511,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     menuItem.connect('destroy', () => {
       if (menuItem.entry.menuItem === menuItem)
         delete menuItem.entry.menuItem;
-      if (!menuItem.entry.favorite) {
-        this.activeHistoryMenuItems--;
-      }
+      this.activeHistoryMenuItems--;
     });
     menuItem.connect('key-focus-in', () => {
-      if (!menuItem.entry.favorite) {
-        ensureActorVisibleInScrollView(this.historyScrollView, menuItem);
-      }
+      ensureActorVisibleInScrollView(this.historyScrollView, menuItem);
     });
 
-    if (entry.favorite) {
-      this.favoritesSection.addMenuItem(menuItem, insertIndex);
-    } else {
-      this.historySection.addMenuItem(menuItem, insertIndex);
-
-      this.activeHistoryMenuItems++;
-    }
+    this.historySection.addMenuItem(menuItem, insertIndex);
+    this.activeHistoryMenuItems++;
 
     this._updateCandidateNumbers();
     if (selectEntry) {
-      this._selectEntry(entry, updateClipboard);
-    }
-  }
-
-  _handleMenuItemKeyEvent(event, menuItem) {
-    if (event.get_key_unicode() === 'f') {
-      if (this._pasteSets) this._addToPasteSet(menuItem.entry.text);
-      else this._favoriteToggle(menuItem);
-    }
-    if (event.get_key_code() === 119) {
-      const next = menuItem.entry.prev || menuItem.entry.next;
-      if (next?.menuItem) {
-        global.stage.set_key_focus(next.menuItem);
-      }
-      this._deleteEntryAndRestoreLatest(menuItem.entry);
+      this._setCurrentClipboardEntry(entry, updateClipboard);
     }
   }
 
@@ -1700,7 +1560,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._destroyed) return;
     for (const [section, modifiers] of [
       [this.historySection, this._historyPasteModifiers],
-      [this.favoritesSection, this._historyPasteModifiers],
       [this._pasteSetSection, this._historyPasteModifiers],
     ]) {
       if (!section) continue;
@@ -1712,12 +1571,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           ? `${modifierLabel(modifiers)}+${index + 1}` : '';
         item.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
         this._setCandidateAccessibleName(item);
-        for (const [direction, button] of item.favoriteMoveButtons || []) {
-          const enabled = Boolean(direction < 0 ? item.entry.next : item.entry.prev);
-          button.reactive = enabled;
-          button.can_focus = enabled;
-          button.opacity = enabled ? 255 : 80;
-        }
+
       });
     }
   }
@@ -1726,67 +1580,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     const entry = menuItem.entry;
     if (entry.type === DS.TYPE_TEXT) {
       menuItem.label.set_text(this._truncated(
-        (entry.favorite && Store.getFavoriteName(entry.text)) || entry.text, MAX_VISIBLE_CHARS));
+        entry.text, MAX_VISIBLE_CHARS));
     } else {
       throw new TypeError('Unknown type: ' + entry.type);
     }
-  }
-
-  _moveFavorite(menuItem, direction) {
-    if (this._quickPasteBusy)
-      return;
-    const entry = menuItem.entry;
-    const neighbor = direction < 0 ? entry.next : entry.prev;
-    if (!entry.favorite || !neighbor)
-      return;
-    // The displayed order is the reverse of the linked list's order.
-    if (direction < 0)
-      neighbor.append(entry);
-    else
-      neighbor.prepend(entry);
-    Store.reorderFavorites(this.favoriteEntries.toArray().map(item => item.diskId));
-    const visible = this.favoritesSection._getMenuItems();
-    const order = this.favoriteEntries.toArray().reverse();
-    order.filter(item => visible.includes(item.menuItem)).forEach((item, index) => {
-      this.favoritesSection.moveMenuItem(item.menuItem, index);
-    });
-    this._updateCandidateNumbers();
-    global.stage.set_key_focus(menuItem);
-  }
-
-  _favoriteToggle(menuItem) {
-    const entry = menuItem.entry;
-    const wasSelected = this.currentlySelectedEntry?.id === entry.id;
-
-    // Favorites display the linked list in reverse: prepend adds at the bottom.
-    if (entry.favorite)
-      this.entries.append(entry);
-    else
-      this.favoriteEntries.prepend(entry);
-    this._removeEntry(entry);
-    entry.favorite = !entry.favorite;
-    this._addEntry(entry, wasSelected, false, entry.favorite ? undefined : 0);
-    this._maybeRestoreMenuPages();
-    global.stage.set_key_focus(entry.menuItem);
-
-    if (CACHE_ONLY_FAVORITES && !entry.favorite) {
-      if (entry.diskId) {
-        Store.deleteTextEntry(entry.diskId, true);
-        delete entry.diskId;
-      }
-      return;
-    }
-
-    if (entry.diskId) {
-      Store.updateFavoriteStatus(entry.diskId, entry.favorite);
-    } else {
-      entry.diskId = this.nextDiskId++;
-
-      Store.storeTextEntry(entry.text);
-      Store.updateFavoriteStatus(entry.diskId, true);
-    }
-    if (entry.favorite)
-      Store.reorderFavorites(this.favoriteEntries.toArray().map(item => item.diskId));
   }
 
   _removeAll() {
@@ -1812,10 +1609,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _clearHistory() {
-    this._resetSelectedMenuItem(true);
+    this._clearCurrentClipboardEntry(true);
     this._lastPrimaryEntry = undefined;
 
-    // Favorites aren't touched when clearing history
+    // Paste sets and archived history records are independent of ordinary history.
     this.entries = new DS.LinkedList();
     this.historySection.removeAll();
     this.activeHistoryMenuItems = 0;
@@ -1825,17 +1622,15 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _removeEntry(entry, fullyDelete, humanGenerated) {
     if (fullyDelete) {
-      if (Store.getFavoriteName(entry.text))
-        Store.setFavoriteName(entry.text, '');
       entry.detach();
 
       if (entry.diskId) {
-        Store.deleteTextEntry(entry.diskId, entry.favorite);
+        Store.deleteTextEntry(entry.diskId);
       }
     }
 
-    if (entry.id === this.currentlySelectedEntry?.id) {
-      this._resetSelectedMenuItem(humanGenerated);
+    if (entry.id === this._currentClipboardEntry?.id) {
+      this._clearCurrentClipboardEntry(humanGenerated);
     }
     entry.menuItem?.destroy();
     this._updateCandidateNumbers();
@@ -1859,9 +1654,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     Store.maybePerformLogCompaction(this._currentStateBuilder.bind(this));
   }
 
-  _selectEntry(entry, updateClipboard, triggerPaste) {
+  _setCurrentClipboardEntry(entry, updateClipboard) {
     // Tracks the actual clipboard, independently of keyboard focus.
-    this.currentlySelectedEntry = entry;
+    this._currentClipboardEntry = entry;
 
     this._updateButtonText(entry);
     if (updateClipboard !== false) {
@@ -1871,9 +1666,6 @@ class ClipboardIndicator extends PanelMenu.Button {
         throw new TypeError('Unknown type: ' + entry.type);
       }
 
-      if (PASTE_ON_SELECTION && triggerPaste) {
-        this._triggerPasteHack();
-      }
     }
   }
 
@@ -1885,43 +1677,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     } finally {this._quickPasteRestoring = false;}
   }
 
-  _triggerPasteHack() {
-    this._pasteHackCallbackId = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT,
-      1, // Just post to the end of the event loop
-      () => {
-        const SHIFT_L = 42;
-        const INSERT = 110;
-
-        const eventTime = Clutter.get_current_event_time() * 1000;
-        VirtualKeyboard().notify_key(
-          eventTime,
-          SHIFT_L,
-          Clutter.KeyState.PRESSED,
-        );
-        VirtualKeyboard().notify_key(
-          eventTime,
-          INSERT,
-          Clutter.KeyState.PRESSED,
-        );
-        VirtualKeyboard().notify_key(
-          eventTime,
-          INSERT,
-          Clutter.KeyState.RELEASED,
-        );
-        VirtualKeyboard().notify_key(
-          eventTime,
-          SHIFT_L,
-          Clutter.KeyState.RELEASED,
-        );
-
-        this._pasteHackCallbackId = undefined;
-        return false;
-      },
-    );
-  }
-
-  _onMenuItemSelectedAndMenuClose(menuItem) {
+  _activateHistoryRow(menuItem) {
     if (this._draggingPasteItem) {
       GObject.signal_stop_emission_by_name(menuItem, 'activate');
       return;
@@ -1935,8 +1691,6 @@ class ClipboardIndicator extends PanelMenu.Button {
   _activatePasteEntry(entry) {
     if (this._quickPasteBusy)
       return;
-    // Legacy favorites shown after a set-loading failure behave like set items.
-    if (entry.favorite) entry = {...entry, pasteSetItem: true};
     if (PASTE_ON_SELECTION) {
       this._quickPaste(entry, !this._keepMenuOpen, false, !entry.pasteSetItem && !this._keepMenuOpen);
       return;
@@ -1956,17 +1710,11 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!this._keepMenuOpen) this.menu.close();
   }
 
-  _resetSelectedMenuItem(resetClipboard) {
-    this.currentlySelectedEntry = undefined;
+  _clearCurrentClipboardEntry(resetClipboard) {
+    this._currentClipboardEntry = undefined;
     this._updateButtonText();
     if (resetClipboard) {
       this._setClipboardText('');
-    }
-  }
-
-  _restoreFavoritedEntries() {
-    for (let entry = this.favoriteEntries.last(); entry; entry = entry.prev) {
-      this._addEntry(entry);
     }
   }
 
@@ -1980,7 +1728,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       entry && this.activeHistoryMenuItems < PAGE_SIZE;
       entry = entry.prev
     ) {
-      this._addEntry(entry, this.currentlySelectedEntry === entry, false);
+      this._addEntry(entry, this._currentClipboardEntry === entry, false);
     }
   }
 
@@ -2058,10 +1806,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     if (!query) {
       this.historySection.removeAll();
-      this.favoritesSection.removeAll();
 
       this.searchEntryFront = this.searchEntryBack = undefined;
-      this._restoreFavoritedEntries();
       this._maybeRestoreMenuPages();
       return;
     }
@@ -2072,7 +1818,6 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   populateSearchResults(query, forward) {
     this.historySection.removeAll();
-    this.favoritesSection.removeAll();
 
     if (typeof forward !== 'boolean') {
       forward = true;
@@ -2083,13 +1828,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       searchExp = new RegExp(query, 'i');
     } catch {}
-    for (const favorite of (this._pasteSets ? [] : this.favoriteEntries.toArray().reverse())) {
-      const name = Store.getFavoriteName(favorite.text);
-      const matches = [name, favorite.text].some(text =>
-        text.toLowerCase().includes(query) || (searchExp && searchExp.test(text)));
-      if (matches)
-        this._addEntry(favorite, favorite === this.currentlySelectedEntry, false);
-    }
     if (!this.searchEntryFront)
       return;
     const start = forward ? this.searchEntryFront : this.searchEntryBack;
@@ -2104,7 +1842,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (match >= 0) {
           this._addEntry(
             entry,
-            entry === this.currentlySelectedEntry,
+            entry === this._currentClipboardEntry,
             false,
             forward ? undefined : 0,
           );
@@ -2135,16 +1873,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
-  _shouldAbortClipboardQuery(kind) {
-    if (PRIVATE_MODE) {
-      return true;
-    }
-
-    return false;
-  }
-
   _queryClipboard(externalCopy = false, restoreEmpty = false) {
-    if (this._destroyed || !this.entries || this._shouldAbortClipboardQuery(St.ClipboardType.CLIPBOARD)) {
+    if (this._destroyed || !this.entries || PRIVATE_MODE) {
       return;
     }
 
@@ -2160,7 +1890,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         const textOnly = mimetypes.every(type =>
           /^(text\/plain(?:;.*)?|UTF8_STRING|STRING|TEXT|COMPOUND_TEXT)$/i.test(type));
         if (textOnly) {
-          this._selectEntry(this.entries.last(), true);
+          this._setCurrentClipboardEntry(this.entries.last(), true);
           return;
         }
       }
@@ -2170,7 +1900,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _queryPrimaryClipboard() {
     if (this._destroyed || !this.entries || !PROCESS_PRIMARY_SELECTION ||
-        this._shouldAbortClipboardQuery(St.ClipboardType.PRIMARY)) {
+        PRIVATE_MODE) {
       return;
     }
 
@@ -2184,7 +1914,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       text = this._processClipboardContent(text, false);
       this._lastPrimaryEntry = text ? this.entries.findTextItem(text) : undefined;
       if (
-        last && last.list === this.entries && last !== this.currentlySelectedEntry &&
+        last && last.list === this.entries && last !== this._currentClipboardEntry &&
         last !== this._lastPrimaryEntry && text &&
         text.length !== last.text.length &&
         (text.endsWith(last.text) ||
@@ -2214,34 +1944,30 @@ class ClipboardIndicator extends PanelMenu.Button {
       text = trimmed;
     }
     if (!text) {
-      if (selectEntry) this._resetSelectedMenuItem(false);
+      if (selectEntry) this._clearCurrentClipboardEntry(false);
       return;
     }
-    const current = this.currentlySelectedEntry;
+    const current = this._currentClipboardEntry;
 
     let entry = this.entries.findTextItem(text);
     if (entry) {
-      const isFirst =
-        entry === this.entries.last() || entry === this.favoriteEntries.last();
+      const isFirst = entry === this.entries.last();
       if (!isFirst) {
         this._moveEntryFirst(entry);
       }
-      if (selectEntry && (!isFirst || entry !== this.currentlySelectedEntry)) {
-        this._selectEntry(entry, false);
+      if (selectEntry && (!isFirst || entry !== this._currentClipboardEntry)) {
+        this._setCurrentClipboardEntry(entry, false);
       }
     } else {
       entry = new DS.LLNode();
       entry.id = this.nextId++;
-      entry.diskId = CACHE_ONLY_FAVORITES ? undefined : this.nextDiskId++;
+      entry.diskId = this.nextDiskId++;
       entry.type = DS.TYPE_TEXT;
       entry.text = text;
-      entry.favorite = false;
       this.entries.append(entry);
       this._addEntry(entry, selectEntry, false, 0);
 
-      if (!CACHE_ONLY_FAVORITES) {
-        Store.storeTextEntry(text);
-      }
+      Store.storeTextEntry(text);
     }
 
     // PRIMARY selections are saved immediately below the current clipboard.
@@ -2250,7 +1976,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._moveEntryFirst(current);
     this._pruneOldestEntries();
 
-    if (NOTIFY_ON_COPY) {
+    if (COPY_FEEDBACK !== 0) {
       this._highlightCopy();
     }
 
@@ -2336,28 +2062,14 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _moveEntryFirst(entry) {
-    if (entry.favorite) {
-      return;
-    }
-
-    let menu;
-    let entries;
-    if (entry.favorite) {
-      menu = this.favoritesSection;
-      entries = this.favoriteEntries;
-    } else {
-      menu = this.historySection;
-      entries = this.entries;
-    }
-
     if (entry.menuItem) {
-      menu.moveMenuItem(entry.menuItem, 0);
+      this.historySection.moveMenuItem(entry.menuItem, 0);
       this._updateCandidateNumbers();
     } else {
       this._addEntry(entry, false, false, 0);
     }
 
-    entries.append(entry);
+    this.entries.append(entry);
     if (entry.diskId) {
       Store.moveEntryToEnd(entry.diskId);
     }
@@ -2367,17 +2079,14 @@ class ClipboardIndicator extends PanelMenu.Button {
     const state = [];
 
     this.nextDiskId = 1;
-    for (const entry of this.favoriteEntries) {
+    // Preserve archived log records without exposing a second history UI.
+    for (const entry of this._archivedHistoryEntries) {
       entry.diskId = this.nextDiskId++;
       state.push(entry);
     }
     for (const entry of this.entries) {
-      if (CACHE_ONLY_FAVORITES) {
-        delete entry.diskId;
-      } else {
-        entry.diskId = this.nextDiskId++;
-        state.push(entry);
-      }
+      entry.diskId = this.nextDiskId++;
+      state.push(entry);
     }
 
     return state;
@@ -2429,10 +2138,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   _deleteEntryAndRestoreLatest(entry) {
     this._removeEntry(entry, true, true);
 
-    if (!this.currentlySelectedEntry) {
+    if (!this._currentClipboardEntry) {
       const nextEntry = this.entries.last();
       if (nextEntry) {
-        this._selectEntry(nextEntry, true);
+        this._setCurrentClipboardEntry(nextEntry, true);
       }
     }
   }
@@ -2493,19 +2202,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     // We hide the history in private mode because it will be out of sync
     // (selected item will not reflect clipboard)
     this.scrollViewMenuSection.actor.visible = !PRIVATE_MODE;
-    this.scrollViewFavoritesMenuSection.actor.visible = !PRIVATE_MODE;
     this._applyPasteSetVisibility();
 
     if (PRIVATE_MODE) {
-      this._resetSelectedMenuItem(false);
+      this._clearCurrentClipboardEntry(false);
       this.icon.add_style_class_name('private-mode');
       this._updateButtonText();
     } else {
       this.icon.remove_style_class_name('private-mode');
-      if (this.currentlySelectedEntry) {
-        this._selectEntry(this.currentlySelectedEntry, false);
+      if (this._currentClipboardEntry) {
+        this._setCurrentClipboardEntry(this._currentClipboardEntry, false);
       } else {
-        this._resetSelectedMenuItem(false);
+        this._clearCurrentClipboardEntry(false);
       }
       this._queryClipboard(true);
     }
@@ -2514,18 +2222,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   _fetchSettings() {
     this._keepMenuOpen = this.settings.get_boolean(SettingsFields.KEEP_MENU_OPEN);
     this._historyPasteModifiers = this.settings.get_int(SettingsFields.QUICK_PASTE_MODIFIERS);
-    this._favoritePasteModifiers = this.settings.get_int(SettingsFields.FAVORITE_PASTE_MODIFIERS);
     MAX_REGISTRY_LENGTH = this.settings.get_int(SettingsFields.HISTORY_SIZE);
     MAX_BYTES =
       (1 << 20) * this.settings.get_int(SettingsFields.CACHE_FILE_SIZE);
     WINDOW_WIDTH_PERCENTAGE = this.settings.get_int(
       SettingsFields.WINDOW_WIDTH_PERCENTAGE,
     );
-    CACHE_ONLY_FAVORITES = this.settings.get_boolean(
-      SettingsFields.CACHE_ONLY_FAVORITES,
-    );
     COPY_FEEDBACK = this.settings.get_int(SettingsFields.COPY_FEEDBACK);
-    NOTIFY_ON_COPY = COPY_FEEDBACK !== 0;
     CLEAR_ON_LOGOUT = this.settings.get_boolean(SettingsFields.CLEAR_ON_LOGOUT);
     ENABLE_KEYBINDING = this.settings.get_boolean(
       SettingsFields.ENABLE_KEYBINDING,
@@ -2547,13 +2250,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     PROCESS_PRIMARY_SELECTION = this.settings.get_boolean(
       SettingsFields.PROCESS_PRIMARY_SELECTION,
     );
-    ENABLE_TYPEAHEAD_SEARCH = this.settings.get_boolean(
-      SettingsFields.ENABLE_TYPEAHEAD_SEARCH,
-    );
   }
 
   _onSettingsChange() {
-    const prevCacheOnlyFavorites = CACHE_ONLY_FAVORITES;
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;
 
@@ -2564,22 +2263,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     this._updateCandidateNumbers();
     this._syncModeButtons();
-    if (!NOTIFY_ON_COPY || PRIVATE_MODE)
+    if (COPY_FEEDBACK === 0 || PRIVATE_MODE)
       this._clearCopyHighlight();
-
-    if (
-      prevCacheOnlyFavorites !== undefined &&
-      CACHE_ONLY_FAVORITES !== prevCacheOnlyFavorites
-    ) {
-      if (CACHE_ONLY_FAVORITES) {
-        Store.resetDatabase(this._currentStateBuilder.bind(this));
-      } else {
-        for (const entry of this.entries) {
-          entry.diskId = this.nextDiskId++;
-          Store.storeTextEntry(entry.text);
-        }
-      }
-    }
 
     if (prevPrivateMode !== undefined && PRIVATE_MODE !== prevPrivateMode) {
       this._updatePrivateModeState();
@@ -2590,12 +2275,11 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     // Re-set menu-items labels in case preview size changed
     const resetLabel = (item) => this._setEntryLabel(item);
-    this.favoritesSection._getMenuItems().forEach(resetLabel);
     this.historySection._getMenuItems().forEach(resetLabel);
 
     this._updateTopbarLayout();
-    if (this.currentlySelectedEntry) {
-      this._updateButtonText(this.currentlySelectedEntry);
+    if (this._currentClipboardEntry) {
+      this._updateButtonText(this._currentClipboardEntry);
     }
     this._setMenuWidth();
 
@@ -2714,7 +2398,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
 const ClipboardIndicatorObj = GObject.registerClass(ClipboardIndicator);
 
-export default class ClipboardHistoryExtension extends Extension {
+export default class PasteBoardExtension extends Extension {
   enable() {
     this.indicatorName = `${this.metadata.name} Indicator`;
 

@@ -1,7 +1,7 @@
-<schemalist gettext-domain="clipboard-history-dev">
+<schemalist gettext-domain="paste-board">
   <schema
-      id="org.gnome.shell.extensions.clipboard-history-dev"
-      path="/org/gnome/shell/extensions/clipboard-history-dev/">
+      id="org.gnome.shell.extensions.paste-board"
+      path="/org/gnome/shell/extensions/paste-board/">
 
     <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
     <key type="b" name="clear-history-on-logout">
@@ -22,12 +22,6 @@
       <range min="1" max="15" />
       <summary>Modifiers for history number shortcuts</summary>
     </key>
-    <key type="i" name="favorite-paste-modifiers">
-      <default>12</default>
-      <range min="1" max="15" />
-      <summary>Modifiers for favorite number shortcuts</summary>
-    </key>
-
     <key type="i" name="history-size">
       <default>1000</default>
       <summary>The maximum number of items to remember</summary>
@@ -47,7 +41,7 @@
 
     <key type="i" name="window-width-percentage">
       <default>33</default>
-      <summary>Window width (%)</summary>
+      <summary>Panel width (%)</summary>
       <description>
         The width of the clipboard panel as a percentage of screen width.
       </description>
@@ -74,31 +68,6 @@
       <range min="1" max="1024" />
     </key>
 
-    <key name="cache-only-favorites" type="b">
-      <default>false</default>
-      <summary>Only save favorites to disk</summary>
-      <description>
-        Non-favorite items will still be saved, but only in-memory. Restarting the Gnome Shell will
-        result in the loss of those items.
-      </description>
-    </key>
-
-    <key name="notify-on-copy" type="b">
-      <default>true</default>
-      <summary>Highlight the panel icon on copy</summary>
-      <description>
-        If true, the panel icon is highlighted briefly when text is captured.
-      </description>
-    </key>
-
-    <key name="confirm-clear" type="b">
-      <default>true</default>
-      <summary>Show confirmation dialog on Clear History</summary>
-      <description>
-        If true, a confirmation dialog is shown when attempting to Clear History.
-      </description>
-    </key>
-
     <key name="strip-text" type="b">
       <default>false</default>
       <summary>Remove whitespace around copied plaintext items</summary>
@@ -118,11 +87,6 @@
       </description>
     </key>
 
-    <key name="move-item-first" type="b">
-      <default>true</default>
-      <summary>Legacy setting (unused): clipboard changes always move history to the top</summary>
-    </key>
-
     <key name="private-mode" type="b">
       <default>false</default>
       <summary>Enable private mode</summary>
@@ -140,12 +104,5 @@
       <summary>Shortcut to open the clipboard history</summary>
     </key>
 
-    <key name="enable-typeahead-search" type="b">
-      <default>false</default>
-      <summary>Enable type-ahead search in the menu</summary>
-      <description>
-        If true, typing in the open menu focuses the search entry and appends typed characters.
-      </description>
-    </key>
   </schema>
 </schemalist>

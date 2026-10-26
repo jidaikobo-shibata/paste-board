@@ -5,14 +5,6 @@ import {_} from './i18n.js';
 
 let EXTENSION_UUID;
 let CACHE_DIR;
-let favoriteNames = {};
-let favoriteNamesFile;
-const OLD_REGISTRY_FILE = GLib.build_filenamev([
-  GLib.get_user_cache_dir(),
-  'clipboard-indicator@tudmotu.com',
-  'registry.txt',
-]);
-
 /**
  * Stores our compacting log implementation. Here are its key ideas:
  * - We only ever append to the log.
@@ -28,8 +20,9 @@ const BYTE_ORDER = Gio.DataStreamByteOrder.LITTLE_ENDIAN;
 // Don't use zero b/c DataInputStream uses 0 as its error value
 const OP_TYPE_SAVE_TEXT = 1;
 const OP_TYPE_DELETE_TEXT = 2;
-const OP_TYPE_FAVORITE_ITEM = 3;
-const OP_TYPE_UNFAVORITE_ITEM = 4;
+// Record numbers are stable: existing logs keep their archived text and IDs.
+const OP_TYPE_ARCHIVE_ENTRY = 3;
+const OP_TYPE_RESTORE_ENTRY = 4;
 const OP_TYPE_MOVE_ITEM_TO_END = 5;
 
 const MAX_WASTED_OPS = 500;
@@ -43,22 +36,6 @@ export function init(uuid) {
   EXTENSION_UUID = uuid;
   CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), EXTENSION_UUID]);
   DATABASE_FILE = GLib.build_filenamev([CACHE_DIR, 'database.log']);
-  favoriteNamesFile = GLib.build_filenamev([CACHE_DIR, 'favorite-names.json']);
-  favoriteNames = {};
-  if (GLib.file_test(favoriteNamesFile, GLib.FileTest.EXISTS)) {
-    const [ok, bytes] = GLib.file_get_contents(favoriteNamesFile);
-    if (!ok)
-      throw new Error('Could not read favorite names');
-    const names = JSON.parse(new TextDecoder().decode(bytes));
-    if (!names || typeof names !== 'object' || Array.isArray(names))
-      throw new Error('Invalid favorite names file');
-    for (const [key, value] of Object.entries(names)) {
-      if (/^[a-f0-9]{64}$/.test(key) && typeof value === 'string')
-        favoriteNames[key] = value;
-    }
-  }
-
-
   if (GLib.mkdir_with_parents(CACHE_DIR, 0o775) !== 0) {
     console.log(
       EXTENSION_UUID,
@@ -93,7 +70,7 @@ export function buildClipboardStateFromLog(callback) {
       _parseLog(src.read_finish(res), callback);
     } catch (e) {
       if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-        _readAndConsumeOldFormat(callback);
+        callback(new DS.LinkedList(), new DS.LinkedList(), 1);
       } else {
         throw e;
       }
@@ -107,7 +84,7 @@ function _parseLog(stream, callback) {
 
   const state = {
     entries: new DS.LinkedList(),
-    favorites: new DS.LinkedList(),
+    archivedEntries: new DS.LinkedList(),
     nextId: 1,
   };
   _consumeStream(stream, state, callback);
@@ -115,7 +92,7 @@ function _parseLog(stream, callback) {
 
 function _consumeStream(stream, state, callback) {
   const finish = () => {
-    callback(state.entries, state.favorites, state.nextId);
+    callback(state.entries, state.archivedEntries, state.nextId);
   };
   const forceFill = (minBytes, fillCallback) => {
     stream.fill_async(/*count=*/ -1, 0, null, (src, res) => {
@@ -150,7 +127,7 @@ function _consumeStream(stream, state, callback) {
           node.diskId = node.id = state.nextId++;
           node.type = DS.TYPE_TEXT;
           node.text = text || '';
-          node.favorite = false;
+          node.archived = false;
           state.entries.append(node);
 
           loop();
@@ -160,23 +137,23 @@ function _consumeStream(stream, state, callback) {
       uselessOpCount += 2;
       parseAvailableAware(4, () => {
         const id = stream.read_uint32(null);
-        (state.entries.findById(id) || state.favorites.findById(id)).detach();
+        (state.entries.findById(id) || state.archivedEntries.findById(id)).detach();
       });
-    } else if (opType === OP_TYPE_FAVORITE_ITEM) {
+    } else if (opType === OP_TYPE_ARCHIVE_ENTRY) {
       parseAvailableAware(4, () => {
         const id = stream.read_uint32(null);
         const entry = state.entries.findById(id);
 
-        entry.favorite = true;
-        state.favorites.append(entry);
+        entry.archived = true;
+        state.archivedEntries.append(entry);
       });
-    } else if (opType === OP_TYPE_UNFAVORITE_ITEM) {
+    } else if (opType === OP_TYPE_RESTORE_ENTRY) {
       uselessOpCount += 2;
       parseAvailableAware(4, () => {
         const id = stream.read_uint32(null);
-        const entry = state.favorites.findById(id);
+        const entry = state.archivedEntries.findById(id);
 
-        entry.favorite = false;
+        entry.archived = false;
         state.entries.append(entry);
       });
     } else if (opType === OP_TYPE_MOVE_ITEM_TO_END) {
@@ -184,10 +161,10 @@ function _consumeStream(stream, state, callback) {
       parseAvailableAware(4, () => {
         const id = stream.read_uint32(null);
         const entry =
-          state.entries.findById(id) || state.favorites.findById(id);
+          state.entries.findById(id) || state.archivedEntries.findById(id);
 
-        if (entry.favorite) {
-          state.favorites.append(entry);
+        if (entry.archived) {
+          state.archivedEntries.append(entry);
         } else {
           state.entries.append(entry);
         }
@@ -214,16 +191,12 @@ function _consumeStream(stream, state, callback) {
           node.id = nextId++;
           node.type = DS.TYPE_TEXT;
           node.text = text;
-          node.favorite = false;
+          node.archived = false;
           entries.prepend(node);
         };
 
         addEntry(_('Your clipboard data has been corrupted and was moved to:'));
         addEntry(GLib.build_filenamev([CACHE_DIR, 'corrupted.log']));
-        addEntry(_('Please file a bug report at:'));
-        addEntry(
-          'https://github.com/SUPERCILEX/gnome-clipboard-history/issues/new?assignees=&labels=bug&template=1-bug.md',
-        );
 
         try {
           if (
@@ -258,73 +231,6 @@ function _consumeStream(stream, state, callback) {
   loop();
 }
 
-function _readAndConsumeOldFormat(callback) {
-  // Only the upstream extension may consume the legacy extension's history.
-  if (EXTENSION_UUID !== 'clipboard-history@alexsaveau.dev') {
-    callback(new DS.LinkedList(), new DS.LinkedList(), 1);
-    return;
-  }
-
-  Gio.File.new_for_path(OLD_REGISTRY_FILE).load_contents_async(
-    null,
-    (src, res) => {
-      const entries = new DS.LinkedList();
-      const favorites = new DS.LinkedList();
-      let id = 1;
-
-      let contents;
-      try {
-        [, contents] = src.load_contents_finish(res);
-      } catch (e) {
-        if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-          callback(entries, favorites, id);
-          return;
-        } else {
-          throw e;
-        }
-      }
-
-      let registry = [];
-      try {
-        registry = JSON.parse(GLib.ByteArray.toString(contents));
-      } catch (e) {
-        console.error(e);
-      }
-
-      for (const entry of registry) {
-        const node = new DS.LLNode();
-
-        node.diskId = node.id = id;
-        node.type = DS.TYPE_TEXT;
-        if (typeof entry === 'string') {
-          node.text = entry;
-          node.favorite = false;
-
-          entries.append(node);
-        } else {
-          node.text = entry.contents;
-          node.favorite = entry.favorite;
-
-          favorites.append(node);
-        }
-
-        id++;
-      }
-
-      resetDatabase(() => entries.toArray().concat(favorites.toArray()));
-      Gio.File.new_for_path(OLD_REGISTRY_FILE).trash_async(
-        0,
-        null,
-        (src, res) => {
-          src.trash_finish(res);
-        },
-      );
-
-      callback(entries, favorites, id);
-    },
-  );
-}
-
 export function maybePerformLogCompaction(currentStateBuilder) {
   if (uselessOpCount >= MAX_WASTED_OPS) {
     resetDatabase(currentStateBuilder);
@@ -350,7 +256,7 @@ export function resetDatabase(currentStateBuilder, onComplete = null) {
       priority,
       null,
       (src, res) => {
-        const stream = _intoDataStream(src.replace_finish(res));
+        const stream = _createBufferedDataStream(src.replace_finish(res));
         const finish = () => {
           stream.close_async(priority, null, (src, res) => {
             src.close_finish(res);
@@ -374,8 +280,8 @@ export function resetDatabase(currentStateBuilder, onComplete = null) {
             } else {
               throw new TypeError('Unknown type: ' + entry.type);
             }
-            if (entry.favorite) {
-              _updateFavoriteStatusOp(entry.diskId, true)(dataStream);
+            if (entry.archived) {
+              _archiveEntryOp(entry.diskId)(dataStream);
             }
 
             i++;
@@ -402,12 +308,9 @@ function _storeTextOp(text) {
   };
 }
 
-export function deleteTextEntry(id, isFavorite) {
+export function deleteTextEntry(id) {
   _appendBytesToLog(_deleteTextOp(id), 5);
   uselessOpCount += 2;
-  if (isFavorite) {
-    uselessOpCount++;
-  }
 }
 
 function _deleteTextOp(id) {
@@ -418,20 +321,10 @@ function _deleteTextOp(id) {
   };
 }
 
-export function updateFavoriteStatus(id, favorite) {
-  _appendBytesToLog(_updateFavoriteStatusOp(id, favorite));
-
-  if (!favorite) {
-    uselessOpCount += 2;
-  }
-}
-
-function _updateFavoriteStatusOp(id, favorite) {
-  return (dataStream) => {
-    dataStream.put_byte(
-      favorite ? OP_TYPE_FAVORITE_ITEM : OP_TYPE_UNFAVORITE_ITEM,
-      null,
-    );
+// Archived records remain part of the on-disk log, without a separate user interface.
+function _archiveEntryOp(id) {
+  return dataStream => {
+    dataStream.put_byte(OP_TYPE_ARCHIVE_ENTRY, null);
     dataStream.put_uint32(id, null);
     return true;
   };
@@ -463,7 +356,7 @@ function _appendBytesToLog(callback, priority) {
         priority,
         null,
         (src, res) => {
-          writeStream = _intoDataStream(src.append_to_finish(res));
+          writeStream = _createBufferedDataStream(src.append_to_finish(res));
           runUnsafe();
         },
       );
@@ -474,7 +367,7 @@ function _appendBytesToLog(callback, priority) {
 }
 
 function _writeToStream(stream, priority, resolve, callback) {
-  _writeCallbackBytesAsyncHack(callback, stream, priority, () => {
+  _writeBufferedBatch(callback, stream, priority, () => {
     stream.flush_async(priority, null, (src, res) => {
       src.flush_finish(res);
       resolve();
@@ -483,11 +376,10 @@ function _writeToStream(stream, priority, resolve, callback) {
 }
 
 /**
- * This garbage code is here to keep disk writes off the main thread. DataOutputStream doesn't have
- * async method variants, so we write to a memory buffer and then flush it asynchronously. We're
- * basically trying to balance memory allocations with disk writes.
+ * DataOutputStream only offers synchronous encoding methods. Encode into an auto-growing
+ * memory buffer and flush completed batches asynchronously, keeping disk I/O off the Shell thread.
  */
-function _writeCallbackBytesAsyncHack(
+function _writeBufferedBatch(
   dataCallback,
   stream,
   priority,
@@ -498,12 +390,12 @@ function _writeCallbackBytesAsyncHack(
   } else {
     stream.flush_async(priority, null, (src, res) => {
       src.flush_finish(res);
-      _writeCallbackBytesAsyncHack(dataCallback, stream, priority, callback);
+      _writeBufferedBatch(dataCallback, stream, priority, callback);
     });
   }
 }
 
-function _intoDataStream(stream) {
+function _createBufferedDataStream(stream) {
   const bufStream = Gio.BufferedOutputStream.new(stream);
   bufStream.set_auto_grow(true); // Blocks flushing, needed for hack
   const ioStream = Gio.DataOutputStream.new(bufStream);
@@ -534,37 +426,4 @@ function _pushToOpQueue(op) {
   } else {
     consumeOp();
   }
-}
-
-// Keep labels separate so existing binary history logs remain readable.
-function favoriteNameKey(text) {
-  return GLib.compute_checksum_for_string(GLib.ChecksumType.SHA256, text, -1);
-}
-
-export function getFavoriteName(text) {
-  return favoriteNames[favoriteNameKey(text)] || '';
-}
-
-export function setFavoriteName(text, name) {
-  const key = favoriteNameKey(text);
-  const next = {...favoriteNames};
-  if (name)
-    next[key] = name;
-  else
-    delete next[key];
-  if (!GLib.file_set_contents(favoriteNamesFile, JSON.stringify(next)))
-    throw new Error('Could not save favorite name');
-  favoriteNames = next;
-}
-
-export function reorderFavorites(ids) {
-  if (ids.some(id => !Number.isInteger(id) || id <= 0))
-    throw new Error('Favorite order contains an unsaved entry');
-  // Existing move operations preserve compatibility with the history format.
-  _appendBytesToLog(stream => {
-    for (const id of ids)
-      _moveToEndOp(id)(stream);
-    return true;
-  });
-  uselessOpCount += ids.length;
 }

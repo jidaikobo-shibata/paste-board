@@ -86,8 +86,9 @@ async function main() {
       else GLib.setenv('BASH_ENV', previousEnv, true);
       GLib.unlink(startupFile);
     }
-    const store = new PasteSets(directory, [{name: 'legacy', text: 'original'}]);
-    const id = store.data.sets[0].id;
+    let store = new PasteSets(directory);
+    const id = store.create('test');
+    store.put(id, {name: 'original', text: 'original'});
     equal(store.data.sets[0].items[0].text, 'original');
     store.put(id, {name: 'date', kind: 'command', command: "date '+%F'"});
     let item = store.data.sets[0].items[1];
@@ -97,9 +98,16 @@ async function main() {
     delete store.data.sets[0].items[1].executionMode;
     store.data.sets[0].items[1].command = "printf '%s' $HOME";
     GLib.file_set_contents(store.path, JSON.stringify(store.data));
+    delete store.data.sets[0].items[0].kind;
+    GLib.file_set_contents(store.path, JSON.stringify(store.data));
+    const beforeLoad = GLib.file_get_contents(store.path)[1];
     const reloaded = new PasteSets(directory);
-    const legacy = reloaded.data.sets[0].items[1];
-    equal(await executeCommand(legacy.command, {executionMode: legacy.executionMode || 'direct'}).promise, '$HOME');
+    equal(reloaded.data.sets[0].items[0].kind, 'text');
+    equal(reloaded.data.sets[0].items[1].executionMode, 'direct');
+    equal(new TextDecoder().decode(GLib.file_get_contents(store.path)[1]), new TextDecoder().decode(beforeLoad));
+    const normalized = reloaded.data.sets[0].items[1];
+    equal(await executeCommand(normalized.command, {executionMode: normalized.executionMode}).promise, '$HOME');
+    store = reloaded;
     const marker = GLib.build_filenamev([directory, 'must-not-execute']);
     const complex = `value=$(printf test); printf '%s' "$value" > '${marker}'`;
     store.put(id, {...item, command: complex, executionMode: 'bash'});

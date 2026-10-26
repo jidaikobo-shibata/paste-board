@@ -10,14 +10,3 @@ export function modifierBits(state, masks) {
     (state & masks.SHIFT_MASK ? 4 : 0) |
     (state & (masks.MOD4_MASK | masks.SUPER_MASK) ? 8 : 0);
 }
-
-export function pasteTarget(bits, history, favorites) {
-  if (!bits || history === favorites)
-    return null;
-  return bits === history ? 'history' : bits === favorites ? 'favorites' : null;
-}
-
-export function modifierBadge(value) {
-  return [[1, '⌃'], [2, '⌥'], [4, '⇧'], [8, '◆']]
-    .filter(([bit]) => value & bit).map(([, symbol]) => symbol).join('');
-}

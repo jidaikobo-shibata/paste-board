@@ -5,7 +5,7 @@ import GLib from 'gi://GLib';
 const SUPERVISOR = Gio.File.new_for_uri(import.meta.url).get_parent()
   .get_child('commandSupervisor.py').get_path();
 
-// Missing executionMode deliberately retains the original direct-argv behavior.
+// Direct argument passing is the default; shell interpretation requires explicit Bash mode.
 export function runCommand(command, {trimTrailingNewlines = true, executionMode = 'direct',
   timeoutMs = 3000, maxOutputBytes = 65536} = {}) {
   let cancel = () => {};

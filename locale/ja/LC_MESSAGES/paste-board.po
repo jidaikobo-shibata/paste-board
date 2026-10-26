@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-26 18:37+0900\n"
+"POT-Creation-Date: 2026-10-26 21:31+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -66,241 +66,209 @@ msgstr "コマンド監視処理に失敗しました。"
 msgid "The command produced no output; nothing was pasted."
 msgstr "コマンドの出力が空のため、貼り付けませんでした。"
 
-#: extension.js:151
+#: extension.js:142
 msgid "Search items…"
 msgstr "項目を検索…"
 
-#: extension.js:152
+#: extension.js:143
 msgid "Search items in the paste panel"
 msgstr "貼り付けパネルの項目を検索"
 
-#: extension.js:285
+#: extension.js:260
 msgid "Private mode: pause history recording"
 msgstr "プライベートモード：履歴の記録を停止"
 
-#: extension.js:289
+#: extension.js:264
 msgid "Pin the panel"
 msgstr "パネルを固定"
 
-#: extension.js:293
+#: extension.js:268
 msgid "Add a paste set"
 msgstr "ペーストセットを追加"
 
-#: extension.js:294
+#: extension.js:269
 msgid "Edit the current tab"
 msgstr "表示中のタブを編集"
 
-#: extension.js:387 historySession.js:7
+#: extension.js:359 historySession.js:7
 msgid "Cannot identify the login session."
 msgstr "ログインセッションを識別できません。"
 
-#: extension.js:399
+#: extension.js:371
 msgid "Could not prepare history cleanup on logout"
 msgstr "ログアウト時の履歴消去を準備できません"
 
-#: extension.js:409 extension.js:2563
+#: extension.js:381 extension.js:2262
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
-#: extension.js:436
+#: extension.js:404
 msgid "Could not load paste sets"
 msgstr "ペーストセットを読み込めません"
 
-#: extension.js:631
+#: extension.js:597
 msgid "Could not move the item"
 msgstr "項目を移動できません"
 
-#: extension.js:666
+#: extension.js:632
 msgid "Could not add to the paste set"
 msgstr "セットへ追加できません"
 
-#: extension.js:708
+#: extension.js:674
 msgid "Could not create the paste set"
 msgstr "セットを作成できません"
 
-#: extension.js:734 extension.js:829 pasteSets.js:80
+#: extension.js:700 extension.js:795 pasteSets.js:86
 msgid "History"
 msgstr "履歴"
 
-#: extension.js:780
+#: extension.js:746
 msgid "Move up"
 msgstr "上へ移動"
 
-#: extension.js:781
+#: extension.js:747
 msgid "Move down"
 msgstr "下へ移動"
 
-#: extension.js:782
+#: extension.js:748
 msgid "Edit name and content"
 msgstr "名前と本文を編集"
 
-#: extension.js:783
+#: extension.js:749
 msgid "Delete item"
 msgstr "項目を削除"
 
-#: extension.js:794
+#: extension.js:760
 msgid "No matching items"
 msgstr "一致する項目がありません"
 
-#: extension.js:794
+#: extension.js:760
 msgid "Drag a history item onto this tab to add it"
 msgstr "履歴の項目をこのタブへドラッグして追加できます"
 
-#: extension.js:807
+#: extension.js:773
 msgid "Could not save paste sets"
 msgstr "ペーストセットを保存できません"
 
-#: extension.js:831
+#: extension.js:797
 msgid "Edit tab"
 msgstr "タブを編集"
 
-#: extension.js:843
+#: extension.js:809
 msgid "Rename paste set"
 msgstr "セット名を変更"
 
-#: extension.js:843
+#: extension.js:809
 msgid "Create paste set"
 msgstr "ペーストセットを作成"
 
-#: extension.js:859
+#: extension.js:825
 msgid "Edit paste item"
 msgstr "ペースト項目を編集"
 
-#: extension.js:859
+#: extension.js:825
 msgid "Add paste item"
 msgstr "ペースト項目を追加"
 
-#: extension.js:888
+#: extension.js:854
 msgid "Delete this item?"
 msgstr "項目を削除しますか？"
 
-#: extension.js:888
+#: extension.js:854
 msgid "Delete this paste set?"
 msgstr "セットを削除しますか？"
 
-#: extension.js:889
+#: extension.js:855
 msgid "Selected item"
 msgstr "選択した項目"
 
-#: extension.js:890
+#: extension.js:856
 msgid "This item will be removed from the paste set."
 msgstr "この項目をセットから削除します。"
 
-#: extension.js:890
+#: extension.js:856
 msgid "All items in this paste set will also be deleted."
 msgstr "セット内のすべての項目も削除します。"
 
-#: extension.js:891
+#: extension.js:857
 msgid "Delete"
 msgstr "削除"
 
-#: extension.js:891 extension.js:1806 favoriteNameDialog.js:29
-#: pasteSetDialog.js:114 pasteSetDialog.js:147
+#: extension.js:857 extension.js:1603 pasteSetDialog.js:114
+#: pasteSetDialog.js:147
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: extension.js:954
+#: extension.js:919
 msgid "After paste"
 msgstr "貼付後"
 
-#: extension.js:957
+#: extension.js:922
 msgid "No action"
 msgstr "そのまま"
 
-#: extension.js:960
+#: extension.js:925
 msgid "No key after paste"
 msgstr "貼付後の操作なし"
 
-#: extension.js:960
+#: extension.js:925
 #, javascript-format
 msgid "Send %s after paste"
 msgstr "貼付後に%sキーを送る"
 
-#: extension.js:998
+#: extension.js:963
 #, javascript-format
 msgid "%s: %s"
 msgstr "%s：%s"
 
-#: extension.js:998 pasteSetDialog.js:64
+#: extension.js:963 pasteSetDialog.js:64
 msgid "On"
 msgstr "オン"
 
-#: extension.js:998 pasteSetDialog.js:64
+#: extension.js:963 pasteSetDialog.js:64
 msgid "Off"
 msgstr "オフ"
 
-#: extension.js:1358
+#: extension.js:1323
 msgid "Could not execute the command"
 msgstr "コマンドを実行できません"
 
-#: extension.js:1561
+#: extension.js:1478
 msgid "Add to a paste set"
 msgstr "ペーストセットへ追加"
 
-#: extension.js:1576
-msgid "Move favorite up"
-msgstr "お気に入りを上へ移動"
-
-#: extension.js:1577
-msgid "Move favorite down"
-msgstr "お気に入りを下へ移動"
-
-#: extension.js:1588
-msgid "Edit favorite name"
-msgstr "お気に入りの名前を編集"
-
-#: extension.js:1616
+#: extension.js:1499
 msgid "Delete from history"
 msgstr "履歴から削除"
 
-#: extension.js:1694
+#: extension.js:1554
 #, javascript-format
 msgid "Command: %s"
 msgstr "コマンド：%s"
 
-#: extension.js:1797
+#: extension.js:1594
 msgid "Clear all?"
 msgstr "すべて削除しますか？"
 
-#: extension.js:1798
+#: extension.js:1595
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr "クリップボードの履歴を全て削除してよろしいですか？"
 
-#: extension.js:1799
+#: extension.js:1596
 msgid "This operation cannot be undone."
 msgstr "削除した履歴は復元できません"
 
-#: extension.js:1805
+#: extension.js:1602
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:2285
+#: extension.js:2011
 msgid "Copied"
 msgstr "コピーしました"
 
-#: extension.js:2311
+#: extension.js:2037
 msgid "Copied!"
 msgstr "Copied!"
-
-#: favoriteNameDialog.js:11 favoriteNameDialog.js:14
-msgid "Favorite name"
-msgstr "お気に入りの名前"
-
-#: favoriteNameDialog.js:14
-msgid "Leave empty to show the text"
-msgstr "空欄にすると本文を表示します"
-
-#: favoriteNameDialog.js:17
-msgid "Save status"
-msgstr "保存結果"
-
-#: favoriteNameDialog.js:24
-msgid "Could not save. You can cancel without changing the name."
-msgstr "保存できませんでした。名前を変更せずにキャンセルできます。"
-
-#: favoriteNameDialog.js:30 pasteSetDialog.js:115
-msgid "Save"
-msgstr "保存"
 
 #: historySession.js:9
 msgid "Could not create the session metadata directory."
@@ -400,6 +368,10 @@ msgstr "直接実行"
 msgid "Bash (one-liner)"
 msgstr "Bash（ワンライナー）"
 
+#: pasteSetDialog.js:115
+msgid "Save"
+msgstr "保存"
+
 #: pasteSetDialog.js:117
 msgid "Delete tab"
 msgstr "タブを削除"
@@ -416,88 +388,84 @@ msgstr "ペーストセットの保存先を作成できません。"
 msgid "Could not read paste sets."
 msgstr "ペーストセットを読み込めません。"
 
-#: pasteSets.js:17
-msgid "Favorites"
-msgstr "お気に入り"
-
-#: pasteSets.js:26 pasteSets.js:35
+#: pasteSets.js:32 pasteSets.js:41
 msgid "Invalid paste set format."
 msgstr "ペーストセットの形式が不正です。"
 
-#: pasteSets.js:29
+#: pasteSets.js:35
 msgid "Invalid history tab name."
 msgstr "履歴タブ名が不正です。"
 
-#: pasteSets.js:43
+#: pasteSets.js:49
 msgid "Invalid paste item format."
 msgstr "ペースト項目の形式が不正です。"
 
-#: pasteSets.js:49
+#: pasteSets.js:55
 msgid "Invalid command item format."
 msgstr "コマンド項目の形式が不正です。"
 
-#: pasteSets.js:59
+#: pasteSets.js:65
 msgid "Paste sets exceed the storage limit."
 msgstr "ペーストセットの保存容量を超えています。"
 
-#: pasteSets.js:61
+#: pasteSets.js:67
 msgid "Could not save paste sets."
 msgstr "ペーストセットを保存できません。"
 
-#: pasteSets.js:81 pasteSets.js:82
+#: pasteSets.js:87 pasteSets.js:88
 msgid "untitled"
 msgstr "untitled"
 
-#: pasteSets.js:82
+#: pasteSets.js:88
 #, javascript-format
 msgid "%s %d"
 msgstr "%s %d"
 
-#: pasteSets.js:113
+#: pasteSets.js:119
 msgid "Paste set not found."
 msgstr "セットが見つかりません。"
 
-#: pasteSets.js:143
+#: pasteSets.js:149
 msgid "The item to move was not found."
 msgstr "移動する項目が見つかりません。"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "Do not show"
 msgstr "表示しない"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "Highlight the icon"
 msgstr "アイコンを強調"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "Highlight the icon and show a bubble"
 msgstr "アイコンを強調＋吹き出し"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "Highlight the entire top bar"
 msgstr "トップバー全体を強調"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "System notification"
 msgstr "OSの通知"
 
-#: prefs.js:65
+#: prefs.js:64
 msgid "Highlight the entire top bar and show a bubble"
 msgstr "トップバー全体を強調＋吹き出し"
 
-#: prefs.js:75
+#: prefs.js:74
 msgid "Open the panel"
 msgstr "パネルを開く"
 
-#: prefs.js:84
+#: prefs.js:83
 msgid "Max number of items"
 msgstr "保存する履歴の数"
 
-#: prefs.js:89
+#: prefs.js:88
 msgid "Panel width (%)"
 msgstr "パネルの幅（%）"
 
-#: prefs.js:94
+#: prefs.js:93
 msgid ""
 "Clear history on logout\n"
 "(Paste sets are kept)"
@@ -505,70 +473,93 @@ msgstr ""
 "ログアウト時に履歴を消去する\n"
 "（ペーストセットは消去しません）"
 
-#: prefs.js:99
+#: prefs.js:98
 msgid "Copy feedback"
 msgstr "コピーしたことを表示する"
 
-#: prefs.js:104
+#: prefs.js:103
 msgid "Panel opening shortcut"
 msgstr "パネルを開くショートカット"
 
-#: prefs.js:109
+#: prefs.js:108
 msgid "Number of characters in status bar"
 msgstr "トップバーに表示するクリップボードの内容の文字数"
 
-#: prefs.js:114
+#: prefs.js:113
 msgid "What to show in status bar"
 msgstr "トップバーの表示内容"
 
-#: prefs.js:119
+#: prefs.js:118
 msgid "Remove down arrow in status bar"
 msgstr "トップバーの下矢印を非表示"
 
-#: prefs.js:124
+#: prefs.js:123
 msgid "Trim leading and trailing whitespace"
 msgstr "前後の空白・改行を削除する"
 
-#: prefs.js:129
+#: prefs.js:128
 msgid "Paste on Enter or click"
 msgstr "Enter・クリックで貼り付ける"
 
-#: prefs.js:134
+#: prefs.js:133
 msgid "Also save selected text to history"
 msgstr "選択した文字も履歴に保存する"
 
-#: prefs.js:171
+#: prefs.js:170
 msgid "Modifiers for number-key paste"
 msgstr "数字キーで貼り付けるときの修飾キー"
 
-#: prefs.js:175
+#: prefs.js:174
 #, javascript-format
 msgid "%s+number"
 msgstr "%s+数字"
 
-#: prefs.js:290
+#: prefs.js:289
 msgid "Icon"
 msgstr "アイコン"
 
-#: prefs.js:291
+#: prefs.js:290
 msgid "Clipboard contents"
 msgstr "クリップボードの内容"
 
-#: prefs.js:292
+#: prefs.js:291
 msgid "Both"
 msgstr "両方"
 
-#: prefs.js:293
+#: prefs.js:292
 msgid "Neither"
 msgstr "表示しない"
 
-#: store.js:221
+#: store.js:198
 msgid "Your clipboard data has been corrupted and was moved to:"
 msgstr "クリップボード履歴が破損したため、次の場所へ移動しました："
 
-#: store.js:223
-msgid "Please file a bug report at:"
-msgstr "次の場所へ不具合をご報告ください："
+#~ msgid "Move favorite up"
+#~ msgstr "お気に入りを上へ移動"
+
+#~ msgid "Move favorite down"
+#~ msgstr "お気に入りを下へ移動"
+
+#~ msgid "Edit favorite name"
+#~ msgstr "お気に入りの名前を編集"
+
+#~ msgid "Favorite name"
+#~ msgstr "お気に入りの名前"
+
+#~ msgid "Leave empty to show the text"
+#~ msgstr "空欄にすると本文を表示します"
+
+#~ msgid "Save status"
+#~ msgstr "保存結果"
+
+#~ msgid "Could not save. You can cancel without changing the name."
+#~ msgstr "保存できませんでした。名前を変更せずにキャンセルできます。"
+
+#~ msgid "Favorites"
+#~ msgstr "お気に入り"
+
+#~ msgid "Please file a bug report at:"
+#~ msgstr "次の場所へ不具合をご報告ください："
 
 #~ msgid ""
 #~ "Move selected history to the top\n"

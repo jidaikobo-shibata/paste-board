@@ -1,3 +1,9 @@
+# Paste Board for GNOME
+
+A plain-text clipboard and paste-set manager for GNOME Shell.
+Keep reusable text in tabs, paste with the keyboard, and use Enter or Tab to move
+between fields during repeated pasting. Command items generate text when needed.
+
 ## Localization
 
 UI source strings are English. Japanese translations cover the panel, preferences,
@@ -6,8 +12,8 @@ GNOME selects the language from the session locale; untranslated messages fall b
 to English. Existing set names, item text, commands, and command output are user data
 and are never translated.
 
-Translations use the independent `clipboard-history-dev` gettext domain in
-`locale/<language>/LC_MESSAGES/clipboard-history-dev.po`. The other language catalogs
+Translations use the independent `paste-board` gettext domain in
+`locale/<language>/LC_MESSAGES/paste-board.po`. The other language catalogs
 retain upstream translations and credits, but do not yet cover all added features.
 
 Run `make` after editing translations to rebuild the installed `.mo` catalogs and
@@ -19,7 +25,7 @@ do not construct message IDs dynamically or translate user data.
 `npm test` includes English and Japanese runtime checks. It requires the
 `C.utf8` and `ja_JP.utf8` locales, GJS, Python 3, and compiled catalogs (`make`).
 
-## Paste sets (experimental)
+## Paste sets
 
 Tabs separate automatic clipboard history from independent, manually ordered paste sets.
 Use the new-tab icon in the bottom toolbar to create a set. Drag a history item onto a set tab to copy it there; dragging between sets also copies.
@@ -32,8 +38,6 @@ The history row's add button is an alternative way to copy into a chosen set. Ed
 Set and item deletion require confirmation. The bottom toolbar's edit button renames the current tab and offers confirmed deletion
 for sets. The history tab can be renamed but cannot be deleted.
 
-Existing favorites are copied once, in their original visible order, into a set named
-“Favorites” (localized). Original favorites and the history log remain intact for rollback.
 Sets are stored separately in `paste-sets.json` under the extension UUID's directory
 in the XDG configuration home. They persist independently of the history cache.
 Opening the panel always selects History. Pasting while the panel is pinned preserves
@@ -50,9 +54,9 @@ Pasting output is temporary: the original clipboard is restored and output is no
 With “Paste on Enter or click” disabled, explicit copy-only actions put output into
 the clipboard and ordinary history instead.
 
-The editor offers “Direct execution” and “Bash (one-liner)”. Existing items without a stored
-execution mode retain direct execution: quotes group arguments, but shell expansions and
-operators are not interpreted. Switch an item explicitly to Bash to enable shell syntax.
+The editor offers “Direct execution” and “Bash (one-liner)”. Direct execution groups
+quoted arguments without interpreting shell expansions or operators. Select Bash to use
+shell syntax.
 
 Bash items run using `/bin/bash --noprofile --norc -o pipefail -c`, with the home directory
 as the working directory and GNOME Shell's environment and PATH. Pipes, redirects, variables,
@@ -83,7 +87,7 @@ Commands that deliberately create separate process groups or sessions can escape
 this is process management, not a security sandbox. Direct execution retains the Shell's working
 directory; Bash uses the home directory.
 
-## Development quick paste: plain text only
+## Plain-text pasting
 
 Number shortcuts in the open panel paste from the active history or paste-set tab and restore the
 previous clipboard **as plain text**. Formatting, images, and application-specific
@@ -142,74 +146,26 @@ and a pending-cleanup marker so interrupted cleanup or logout while the extensio
 cannot restore the previous session's history on next activation in a new session.
 If the extension is disabled at logout, physical cleanup occurs at next activation.
 This is ordinary file replacement, not a secure disk-erasure guarantee.
-Legacy memory-only history settings migrate to this logout policy; legacy copy feedback
-on/off settings migrate to icon-plus-bubble/off, preserving their existing choice.
 
-# Gnome Clipboard History
+## Build and install from this checkout
 
-[Gnome Clipboard History](https://extensions.gnome.org/extension/4839/clipboard-history/) is a
-clipboard manager GNOME extension that saves what you've copied into an easily accessible,
-searchable history panel.
+Run `make` to compile translations and settings schemas. Then run `make install`
+to link this checkout into the GNOME Shell extensions directory. Existing unrelated
+installations are never overwritten. GNOME Shell requires the directory name
+`paste-board@jidaikobo.shibata` to match the extension UUID.
 
-The extension is a rewrite of
-[Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator) with
-vastly improved performance, new features, and
-[bug fixes](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator/pull/338).
+On Wayland, log out and log back in after installing or changing Shell code.
+Enable **Paste Board for GNOME** in the Extensions application. The default panel
+shortcut is **Super+F1**. Use the isolated development Shell script in
+`scripts/start-dev-shell.sh` to test without restarting the normal desktop.
 
-A technical overview is available at https://alexsaveau.dev/blog/gch.
+## Origins and license
 
-## Project status: replaced by Ringboard
-
-Gnome Clipboard History is now in maintenance mode as it is being replaced by
-[Ringboard](https://github.com/SUPERCILEX/clipboard-history). I'm still accepting PRs for small
-improvements and bug fixes (such as supporting the latest Gnome version), but no new development
-will take place.
-
-## Download
-
-[<img src="https://raw.githubusercontent.com/andyholmes/gnome-shell-extensions-badge/eb9af9a1c6f04eb060cb01de6aeb5c84232cd8c0/get-it-on-ego.svg?sanitize=true" alt="Get it on GNOME Extensions" height="100" align="middle">](https://extensions.gnome.org/extension/4839/clipboard-history/)
-
-## Tips
-
-![Tutorial screenshot](tutorial-screenshot.png)
-
-- Open the panel from anywhere with <kbd>Super</kbd> + <kbd>F1</kbd>.
-- Modify shortcuts in settings or delete them by hitting backspace while editing a shortcut.
-- History can be kept in memory only; paste sets are saved independently.
-- Use `Private mode` to temporarily stop processing copied items.
-- Use keyboard shortcuts while the panel is open:
-  - <kbd>Super</kbd> + a number from 1 to 9 pastes from the visible tab.
-  - Number shortcuts restore the previous plain text; the bottom switch controls whether the menu stays open.
-  - The modifier combination can be changed in preferences.
-  - <kbd>Esc</kbd> or <kbd>Ctrl</kbd> + <kbd>0</kbd> closes the menu.
-  - Pin the menu and choose no extra key, Enter, or Tab after each paste.
-    The choice is temporary and resets when unpinned.
-  - <kbd>/</kbd> focuses search. Other keys outside search close the panel,
-    except modifier keys and configured number shortcuts.
-- History search supports case-insensitive regular expressions. Paste-set search matches names and text literally, without case sensitivity.
-
-## Install from source
-
-A note on versioning:
-
-- The `master` branch and `1.4.x` tags support GNOME 45.
-- The `pre-45` branch and `1.3.x` (or earlier) tags support GNOME 40-44.
-
-### Build
-
-```shell
-cd ~/.local/share/gnome-shell/extensions/ && \
-  git clone https://github.com/SUPERCILEX/gnome-clipboard-history.git clipboard-history@alexsaveau.dev && \
-  cd clipboard-history@alexsaveau.dev && \
-  make
-```
-
-### Restart GNOME
-
-<kbd>Alt</kbd> + <kbd>F2</kbd> then type `r`.
-
-### Install
-
-```shell
-gnome-extensions enable clipboard-history@alexsaveau.dev
-```
+Paste Board for GNOME is derived from
+[Gnome Clipboard History](https://github.com/SUPERCILEX/gnome-clipboard-history)
+by SUPERCILEX, itself derived from
+[Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator).
+The original project's technical overview is available at
+[alexsaveau.dev](https://alexsaveau.dev/blog/gch).
+Existing copyright notices and translator credits are preserved. See `LICENSE`
+for the MIT License terms.

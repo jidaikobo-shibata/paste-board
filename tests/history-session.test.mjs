@@ -1,6 +1,5 @@
 import GLib from 'gi://GLib';
 import {HistorySession} from '../historySession.js';
-import {migrateSettings} from '../settingsFields.js';
 const directory = GLib.dir_make_tmp('clipboard-history-session-XXXXXX');
 let count = 0;
 function equal(actual, expected) {
@@ -31,20 +30,7 @@ try {
   session = new HistorySession(directory, 'boot3:login2', false);
   equal(session.discardHistory, true); // Honor previous session's policy.
 
-  const values = new Map([['cache-only-favorites', true], ['notify-on-copy', false]]);
-  const settings = {get_user_value: key => values.has(key) ? values.get(key) : null,
-    get_boolean: key => values.get(key) ?? false,
-    set_boolean: (key, value) => values.set(key, value), set_int: (key, value) => values.set(key, value)};
-  migrateSettings(settings);
-  equal(values.get('clear-history-on-logout'), true);
-  equal(values.get('cache-only-favorites'), false);
-  equal(values.get('copy-feedback'), 0);
-  values.set('copy-feedback', 4);
-  values.set('clear-history-on-logout', false);
-  migrateSettings(settings);
-  equal(values.get('copy-feedback'), 4);
-  equal(values.get('clear-history-on-logout'), false);
-  print(`History-session policy and settings migration: ${count} checks passed`);
+  print(`History-session policy: ${count} checks passed`);
 } finally {
   GLib.unlink(GLib.build_filenamev([directory, 'history-session.json']));
   GLib.rmdir(directory);

@@ -40,34 +40,33 @@ function clipboardGlobals(writes) {
 
 test('initial display and private-mode transitions preserve the clipboard', () => {
   const writes = [];
-  const [owner, context] = instance(['_updatePrivateModeState', '_resetSelectedMenuItem',
-    '_selectEntry', '_setClipboardText'], clipboardGlobals(writes));
+  const [owner, context] = instance(['_updatePrivateModeState', '_clearCurrentClipboardEntry',
+    '_setCurrentClipboardEntry', '_setClipboardText'], clipboardGlobals(writes));
   Object.assign(owner, {
-    scrollViewMenuSection: {actor: {}}, scrollViewFavoritesMenuSection: {actor: {}},
-    icon: {remove_style_class_name: noop, add_style_class_name: noop},
+    scrollViewMenuSection: {actor: {}}, icon: {remove_style_class_name: noop, add_style_class_name: noop},
     _applyPasteSetVisibility: noop, _updateButtonText: noop, _queryClipboard: noop,
   });
   owner._updatePrivateModeState();
-  owner.currentlySelectedEntry = {type: 1, text: 'old history'};
+  owner._currentClipboardEntry = {type: 1, text: 'old history'};
   context.PRIVATE_MODE = true;
   owner._updatePrivateModeState();
   context.PRIVATE_MODE = false;
   owner._updatePrivateModeState();
   assert.deepEqual(writes, []);
-  assert.equal(owner.currentlySelectedEntry, undefined);
+  assert.equal(owner._currentClipboardEntry, undefined);
   assert.equal(owner._clipboardQueryEpoch, 3);
 });
 
 test('rebuilding visible history does not write the selected item to clipboard', () => {
   const writes = [];
-  const [owner] = instance(['_maybeRestoreMenuPages', '_selectEntry', '_setClipboardText'], clipboardGlobals(writes));
+  const [owner] = instance(['_maybeRestoreMenuPages', '_setCurrentClipboardEntry', '_setClipboardText'], clipboardGlobals(writes));
   const entry = {type: 1, text: 'selected'};
   Object.assign(owner, {
-    activeHistoryMenuItems: 0, entries: {last: () => entry}, currentlySelectedEntry: entry,
+    activeHistoryMenuItems: 0, entries: {last: () => entry}, _currentClipboardEntry: entry,
     _updateButtonText: noop,
     _addEntry(item, select, update) {
       this.activeHistoryMenuItems++;
-      if (select) this._selectEntry(item, update);
+      if (select) this._setCurrentClipboardEntry(item, update);
     },
   });
   owner._maybeRestoreMenuPages();
@@ -77,8 +76,8 @@ test('rebuilding visible history does not write the selected item to clipboard',
 
 test('history-loading callback ignores an indicator disabled before completion', async () => {
   const context = vm.createContext({});
-  const loaded = callback('      async (entries, favoriteEntries, nextId, nextDiskId) => {',
-    '\n      },\n    );', 'entries, favoriteEntries, nextId, nextDiskId', context);
+  const loaded = callback('      async (entries, archivedEntries, nextId, nextDiskId) => {',
+    '\n      },\n    );', 'entries, archivedEntries, nextId, nextDiskId', context);
   const owner = new Proxy({_destroyed: true}, {
     get(target, key) {assert.equal(key, '_destroyed'); return target[key];},
     set() {assert.fail('disabled indicator was changed');},
@@ -165,7 +164,7 @@ test('grab-transition flag is cleared even when a Shell handler throws', () => {
 test('Enter and click on history respect paste-on-selection, with or without pin', () => {
   for (const paste of [false, true]) for (const pinned of [false, true]) {
     const calls = [];
-    const [owner] = instance(['_captureQuickPasteKey', '_activatePasteEntry', '_onMenuItemSelectedAndMenuClose'], {
+    const [owner] = instance(['_captureQuickPasteKey', '_activatePasteEntry', '_activateHistoryRow'], {
       PASTE_ON_SELECTION: paste, modifierBits: () => 0,
       GObject: {signal_stop_emission_by_name: noop},
       St: {Button: class {}}, global: {stage: {get_key_focus: () => row}},
@@ -184,7 +183,7 @@ test('Enter and click on history respect paste-on-selection, with or without pin
       get_state: () => 0, get_key_symbol: () => 13});
     const enterCalls = [...calls];
     calls.length = 0;
-    owner._onMenuItemSelectedAndMenuClose(row);
+    owner._activateHistoryRow(row);
     assert.deepEqual(calls, enterCalls);
     assert.equal(calls.includes('paste'), paste);
     assert.equal(calls.includes('copy'), !paste);
@@ -195,7 +194,7 @@ test('pending clipboard reads are discarded after disable, privacy transitions o
   for (const kind of ['_queryClipboard', '_queryPrimaryClipboard']) {
     for (const change of ['disable', 'privacy', 'newer']) {
       const pending = [], processed = [];
-      const [owner] = instance([kind, '_shouldAbortClipboardQuery'], {
+      const [owner] = instance([kind], {
         PRIVATE_MODE: false, PROCESS_PRIMARY_SELECTION: true,
         St: {ClipboardType: {CLIPBOARD: 1, PRIMARY: 2}},
         Clipboard: {get_text: (_, fn) => pending.push(fn)},
@@ -258,7 +257,7 @@ test('paste restores custom-set and numeric selections while retaining explicit 
         _quickPasteKeysAreHeld: () => false,
         _suspendQuickPasteInput: noop, _resumeQuickPasteInput: noop,
         _deferHistoryMove: noop, _flushDeferredHistoryMoves: noop, _moveEntryFirst: noop,
-        _selectEntry: noop, _sendPostPasteAction: noop,
+        _setCurrentClipboardEntry: noop, _sendPostPasteAction: noop,
         _sendQuickPasteKeys(close) {pasted = clipboard; if (close) this.menu.isOpen = false;},
       });
       const text = '\nbody\n\n';
@@ -290,11 +289,11 @@ function commandFixture() {
   return {owner, context, resolve, reject, paste, errors, launches, cancelled: () => cancelled};
 }
 
-test('legacy commands retain direct execution and explicit Bash items retain Bash', async () => {
-  for (const mode of [undefined, 'direct', 'bash']) {
+test('command items forward their normalized execution mode unchanged', async () => {
+  for (const mode of ['direct', 'bash']) {
     const {owner, resolve, launches} = commandFixture();
     owner._quickPasteCommand({command: 'date', executionMode: mode}, false, false);
-    assert.equal(launches[0][1].executionMode, mode || 'direct');
+    assert.equal(launches[0][1].executionMode, mode);
     resolve('date output');
     await new Promise(resolve => setImmediate(resolve));
   }
@@ -519,7 +518,7 @@ test('fixed history paste preserves the clipboard and order on paste or close', 
   });
   Object.assign(owner, {menu: {isOpen: true}, _keepMenuOpen: true,
     _quickPasteKeysAreHeld: () => false, _suspendQuickPasteInput: noop,
-    _sendQuickPasteKeys: noop, _moveEntryFirst: entry => moves.push(entry), _selectEntry: noop,
+    _sendQuickPasteKeys: noop, _moveEntryFirst: entry => moves.push(entry), _setCurrentClipboardEntry: noop,
     _stopPasteDragFeedback: noop, _cancelPasteCommand: noop, _updatePasteActionChooser: noop,
     _hideModeHint: noop, _quickPasteKeysHeld: new Set()});
   owner._quickPaste({type: 1, text: 'chosen'}, false, false, true);
@@ -543,8 +542,8 @@ test('command copy-only results use clipboard copy without a paste key', async (
   assert.deepEqual(paste, []);
 });
 
-test('clearing all history always requires confirmation even with a legacy disabled setting', () => {
-  const [owner] = instance(['_removeAll'], {CONFIRM_ON_CLEAR: false});
+test('clearing all history always requires confirmation', () => {
+  const [owner] = instance(['_removeAll']);
   let confirmations = 0;
   owner._confirmRemoveAll = () => confirmations++;
   owner._clearHistory = () => assert.fail('cleared without confirmation');
@@ -554,8 +553,8 @@ test('clearing all history always requires confirmation even with a legacy disab
 
 test('history load finishing after disable cannot initialize UI or listeners', async () => {
   const context = vm.createContext({});
-  const loaded = callback('      async (entries, favoriteEntries, nextId, nextDiskId) => {',
-    '\n      },\n    );', 'entries, favoriteEntries, nextId, nextDiskId', context);
+  const loaded = callback('      async (entries, archivedEntries, nextId, nextDiskId) => {',
+    '\n      },\n    );', 'entries, archivedEntries, nextId, nextDiskId', context);
   let ready;
   const owner = {_destroyed: false, _prepareHistorySession: () => new Promise(resolve => {ready = resolve;})};
   const pending = loaded.call(owner, {}, {}, 1, 1);
@@ -570,7 +569,7 @@ test('row activation retains the panel until asynchronous paste handles closing'
   for (const pinned of [false, true]) for (const custom of [false, true]) {
     let stopped = false;
     const row = {entry: {text: 'chosen', pasteSetItem: custom}};
-    const [owner] = instance(['_onMenuItemSelectedAndMenuClose'], {
+    const [owner] = instance(['_activateHistoryRow'], {
       GObject: {signal_stop_emission_by_name: (item, signal) => {
         assert.equal(item, row); assert.equal(signal, 'activate'); stopped = true;
       }},
@@ -582,7 +581,7 @@ test('row activation retains the panel until asynchronous paste handles closing'
       const activate = callback("        row.connect('activate', () => {", '\n        });', '',
         vm.createContext({row, GObject: {signal_stop_emission_by_name: () => {stopped = true;}}}));
       activate.call(owner);
-    } else owner._onMenuItemSelectedAndMenuClose(row);
+    } else owner._activateHistoryRow(row);
     assert.equal(stopped, true);
   }
 });
@@ -616,10 +615,10 @@ function historyFixture(options = {}) {
   const DS = vm.runInContext(dsSource + '\n({LLNode, LinkedList, TYPE_TEXT})', dsContext);
   let clipboard = '', nextDiskId = 1;
   const disk = [], rows = [];
-  const [owner, context] = instance(['_processClipboardContent', '_moveEntryFirst', '_selectEntry',
-    '_copyPasteEntry', '_setClipboardText', '_resetSelectedMenuItem', '_queryPrimaryClipboard',
+  const [owner, context] = instance(['_processClipboardContent', '_moveEntryFirst', '_setCurrentClipboardEntry',
+    '_copyPasteEntry', '_setClipboardText', '_clearCurrentClipboardEntry', '_queryPrimaryClipboard',
     '_pruneOldestEntries', '_removeEntry', '_deleteEntryAndRestoreLatest', '_clearHistory'], {
-    DS, STRIP_TEXT: false, NOTIFY_ON_COPY: false, CACHE_ONLY_FAVORITES: false,
+    DS, STRIP_TEXT: false, COPY_FEEDBACK: 0,
     MAX_REGISTRY_LENGTH: options.limit || 50, MAX_BYTES: Infinity, PASTE_ON_SELECTION: false,
     PROCESS_PRIMARY_SELECTION: true, PRIVATE_MODE: false,
     St: {ClipboardType: {CLIPBOARD: 1, PRIMARY: 2}},
@@ -628,20 +627,20 @@ function historyFixture(options = {}) {
     Store: {storeTextEntry: text => disk.push({id: nextDiskId++, text}),
       moveEntryToEnd: id => {const index = disk.findIndex(item => item.id === id); assert.ok(index >= 0); disk.push(...disk.splice(index, 1));},
       deleteTextEntry: id => {const index = disk.findIndex(item => item.id === id); assert.ok(index >= 0); disk.splice(index, 1);},
-      getFavoriteName: () => '', maybePerformLogCompaction: noop,
+      maybePerformLogCompaction: noop,
       resetDatabase: () => {disk.length = 0;}},
   });
-  Object.assign(owner, {entries: new DS.LinkedList(), favoriteEntries: new DS.LinkedList(),
+  Object.assign(owner, {entries: new DS.LinkedList(), _archivedHistoryEntries: new DS.LinkedList(),
     _pasteSets: {}, nextId: 1, nextDiskId: 1,
     menu: {close: noop}, _updateButtonText: noop, _updateCandidateNumbers: noop,
-    _maybeRestoreMenuPages: noop, _shouldAbortClipboardQuery: () => false,
+    _maybeRestoreMenuPages: noop,
     _currentStateBuilder: noop,
     historySection: {moveMenuItem: (row, index) => {rows.splice(rows.indexOf(row), 1); rows.splice(index, 0, row);},
       removeAll: () => {rows.length = 0;}},
     _addEntry(entry, selected, update, index = rows.length) {
       const row = {entry, destroy: () => {rows.splice(rows.indexOf(row), 1); delete entry.menuItem;}};
       entry.menuItem = row; rows.splice(index, 0, row);
-      if (selected) this._selectEntry(entry, update);
+      if (selected) this._setCurrentClipboardEntry(entry, update);
     },
   });
   return {owner, context, rows, disk, clipboard: () => clipboard,
@@ -731,8 +730,8 @@ test('startup restores saved first text only into an empty text-only clipboard',
         Clipboard: {get_text: (_, fn) => fn(null, text)},
       });
       Object.assign(owner, {entries: {last: () => entry},
-        selection: {get_mimetypes: () => mimetypes}, _shouldAbortClipboardQuery: () => false,
-        _selectEntry: (item, update) => {assert.equal(item, entry); assert.equal(update, true); restored.push(item.text);},
+        selection: {get_mimetypes: () => mimetypes},
+        _setCurrentClipboardEntry: (item, update) => {assert.equal(item, entry); assert.equal(update, true); restored.push(item.text);},
         _processClipboardContent: value => processed.push(value)});
       owner._queryClipboard(true, restoreEmpty);
       const shouldRestore = !text && restoreEmpty && !mimetypes.includes('image/png');

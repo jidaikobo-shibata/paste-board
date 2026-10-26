@@ -2,7 +2,7 @@ import {_, format} from './i18n.js';
 import GLib from 'gi://GLib';
 
 export class PasteSets {
-  constructor(directory, favorites = []) {
+  constructor(directory) {
     this.path = GLib.build_filenamev([directory, 'paste-sets.json']);
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
       throw new Error(_("Could not create the paste set directory."));
@@ -11,12 +11,18 @@ export class PasteSets {
       if (!ok || bytes.length > 16 * 1024 * 1024)
         throw new Error(_("Could not read paste sets."));
       this.data = JSON.parse(new TextDecoder().decode(bytes));
+      // Omitted discriminators mean plain text and direct command execution.
+      // Normalize the persisted format once at the input boundary.
+      if (Array.isArray(this.data?.sets)) for (const set of this.data.sets) {
+        if (Array.isArray(set?.items)) for (const item of set.items) {
+          if (!item || typeof item !== 'object') continue;
+          item.kind ??= 'text';
+          if (item.kind === 'command') item.executionMode ??= 'direct';
+        }
+      }
       this._validate(this.data);
     } else {
-      this.data = {version: 1, sets: favorites.length ? [{
-        id: GLib.uuid_string_random(), name: _("Favorites"),
-        items: favorites.map(item => ({id: GLib.uuid_string_random(), name: item.name || '', text: item.text})),
-      }] : []};
+      this.data = {version: 1, sets: []};
       this._save(this.data);
     }
   }
@@ -37,14 +43,14 @@ export class PasteSets {
       for (const item of set.items) {
         if (typeof item.id !== 'string' || ids.has(item.id) ||
             typeof item.name !== 'string' || item.name.length > 200 ||
-            !['text', 'command'].includes(item.kind || 'text') ||
+            !['text', 'command'].includes(item.kind) ||
             typeof item.text !== 'string' || item.text.includes('\0') ||
-            ((item.kind || 'text') === 'text' && !item.text))
+            (item.kind === 'text' && !item.text))
           throw new Error(_("Invalid paste item format."));
         if (item.kind === 'command' &&
             (typeof item.command !== 'string' || !item.command.trim() ||
              item.command.length > 8192 || item.command.includes('\0') ||
-             !['direct', 'bash'].includes(item.executionMode ?? 'direct') ||
+             !['direct', 'bash'].includes(item.executionMode) ||
              typeof item.trimTrailingNewlines !== 'boolean'))
           throw new Error(_("Invalid command item format."));
         ids.add(item.id);
