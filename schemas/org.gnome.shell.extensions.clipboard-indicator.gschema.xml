@@ -10,8 +10,8 @@
     </key>
     <key type="i" name="copy-feedback">
       <default>2</default>
-      <range min="0" max="4" />
-      <summary>Copy feedback: none, icon, icon and bubble, top bar, notification</summary>
+      <range min="0" max="5" />
+      <summary>Copy feedback: none, icon, icon and bubble, top bar, notification, top bar and bubble</summary>
     </key>
     <key type="b" name="keep-menu-open">
       <default>false</default>

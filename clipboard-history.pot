@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Clipboard History (Development) 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-26 18:31+0900\n"
+"POT-Creation-Date: 2026-10-26 18:37+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -93,7 +93,7 @@ msgstr ""
 msgid "Could not prepare history cleanup on logout"
 msgstr ""
 
-#: extension.js:409 extension.js:2551
+#: extension.js:409 extension.js:2563
 msgid "Could not save session metadata"
 msgstr ""
 
@@ -269,11 +269,11 @@ msgstr ""
 msgid "Clear"
 msgstr ""
 
-#: extension.js:2281
+#: extension.js:2285
 msgid "Copied"
 msgstr ""
 
-#: extension.js:2298
+#: extension.js:2311
 msgid "Copied!"
 msgstr ""
 
@@ -469,6 +469,10 @@ msgstr ""
 
 #: prefs.js:65
 msgid "System notification"
+msgstr ""
+
+#: prefs.js:65
+msgid "Highlight the entire top bar and show a bubble"
 msgstr ""
 
 #: prefs.js:75

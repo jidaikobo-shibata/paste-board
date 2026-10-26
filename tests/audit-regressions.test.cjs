@@ -741,3 +741,73 @@ test('startup restores saved first text only into an empty text-only clipboard',
     }
   }
 });
+
+function feedbackFixture({iconVisible = true, animated = true, mode = 5} = {}) {
+  const actors = [], timers = new Map(), notifications = [];
+  let nextTimer = 0;
+  class Actor {
+    constructor(props) {Object.assign(this, props); actors.push(this);}
+    ease(props) {this.animation = props;}
+    destroy() {assert.notEqual(this.destroyed, true); this.destroyed = true;}
+    get_preferred_width() {return [80, 80];}
+    get_preferred_height() {return [24, 24];}
+    set_position(x, y) {Object.assign(this, {x, y});}
+    set_size(width, height) {Object.assign(this, {width, height});}
+  }
+  const panel = {mapped: true, get_transformed_position: () => [0, 0], get_transformed_size: () => [1280, 32]};
+  const icon = {visible: iconVisible, mapped: iconVisible,
+    get_transformed_position: () => [1000, 4], get_transformed_size: () => [20, 24],
+    add_style_class_name: noop, remove_style_class_name: noop};
+  const [owner, context] = instance(['_highlightCopy', '_clearCopyHighlight'], {
+    PRIVATE_MODE: false, COPY_FEEDBACK: mode,
+    Main: {panel, uiGroup: {add_child: noop},
+      layoutManager: {findMonitorForActor: () => ({x: 0, y: 0, width: 1280, height: 720})}},
+    St: {Widget: Actor, Label: Actor, Settings: {get: () => ({enable_animations: animated})}},
+    Clutter: {AnimationMode: {EASE_OUT_QUAD: 1}},
+    GLib: {PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false,
+      timeout_add: (_, delay, fn) => {const id = ++nextTimer; timers.set(id, {delay, fn}); return id;},
+      Source: {remove: id => timers.delete(id)}},
+  });
+  Object.assign(owner, {icon, _showNotification: (...args) => notifications.push(args)});
+  return {owner, context, actors, timers, notifications};
+}
+
+test('top-bar plus bubble anchors below icon or panel center and cleans each effect on time', () => {
+  for (const iconVisible of [true, false]) for (const animated of [true, false]) {
+    const {owner, timers} = feedbackFixture({iconVisible, animated});
+    owner._highlightCopy();
+    const flash = owner._copyPanelFlash, bubble = owner._copyBubble;
+    assert.deepEqual([bubble.x, bubble.y], iconVisible ? [970, 42] : [600, 46]);
+    assert.equal(bubble.reactive, false); assert.equal(bubble.can_focus, false);
+    assert.equal(flash.reactive, false); assert.equal(flash.can_focus, false);
+    assert.equal(Boolean(flash.animation), animated);
+    assert.equal(timers.get(owner._copyPanelFlashTimer).delay, 350);
+    assert.equal(timers.get(owner._copyHighlightTimer).delay, 800);
+    timers.get(owner._copyPanelFlashTimer).fn();
+    assert.equal(flash.destroyed, true); assert.equal(bubble.destroyed, undefined);
+    timers.get(owner._copyHighlightTimer).fn();
+    assert.equal(bubble.destroyed, true);
+    assert.equal(owner._copyPanelFlash, undefined); assert.equal(owner._copyBubble, undefined);
+  }
+});
+
+test('repeated copy cancels previous feedback timers and mode changes remove effects', () => {
+  const {owner, context, timers} = feedbackFixture();
+  owner._highlightCopy();
+  const previous = [owner._copyPanelFlash, owner._copyBubble];
+  const previousTimers = [...timers.keys()];
+  owner._highlightCopy();
+  assert.ok(previous.every(actor => actor.destroyed));
+  assert.ok(previousTimers.every(id => !timers.has(id)));
+  assert.equal(timers.size, 2);
+  context.COPY_FEEDBACK = 0;
+  owner._highlightCopy();
+  assert.equal(timers.size, 0); assert.equal(owner._copyBubble, undefined);
+});
+
+test('existing copy-feedback notification keeps mode 4 without visual overlays', () => {
+  const {owner, actors, notifications} = feedbackFixture({mode: 4});
+  owner._highlightCopy();
+  assert.deepEqual(notifications, [['Copied', '']]);
+  assert.equal(actors.length, 0);
+});

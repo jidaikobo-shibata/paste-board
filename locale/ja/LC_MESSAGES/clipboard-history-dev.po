@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-26 18:29+0900\n"
+"POT-Creation-Date: 2026-10-26 18:37+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -98,7 +98,7 @@ msgstr "ログインセッションを識別できません。"
 msgid "Could not prepare history cleanup on logout"
 msgstr "ログアウト時の履歴消去を準備できません"
 
-#: extension.js:409 extension.js:2551
+#: extension.js:409 extension.js:2563
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
@@ -274,11 +274,11 @@ msgstr "削除した履歴は復元できません"
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:2281
+#: extension.js:2285
 msgid "Copied"
 msgstr "コピーしました"
 
-#: extension.js:2298
+#: extension.js:2311
 msgid "Copied!"
 msgstr "Copied!"
 
@@ -480,6 +480,10 @@ msgstr "トップバー全体を強調"
 #: prefs.js:65
 msgid "System notification"
 msgstr "OSの通知"
+
+#: prefs.js:65
+msgid "Highlight the entire top bar and show a bubble"
+msgstr "トップバー全体を強調＋吹き出し"
 
 #: prefs.js:75
 msgid "Open the panel"

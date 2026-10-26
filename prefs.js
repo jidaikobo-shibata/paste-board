@@ -62,7 +62,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const field_disable_down_arrow = new Gtk.Switch();
     const field_cache_disable = new Gtk.Switch();
     const field_notification_toggle = new Gtk.ComboBoxText();
-    for (const label of [_("Do not show"), _("Highlight the icon"), _("Highlight the icon and show a bubble"), _("Highlight the entire top bar"), _("System notification")])
+    for (const label of [_("Do not show"), _("Highlight the icon"), _("Highlight the icon and show a bubble"), _("Highlight the entire top bar"), _("System notification"), _("Highlight the entire top bar and show a bubble")])
       field_notification_toggle.append_text(label);
     const field_strip_text = new Gtk.Switch();
     const field_paste_on_selection = new Gtk.Switch();

@@ -128,7 +128,10 @@ Number shortcuts always paste. The pin controls panel closure for both paste and
 selection. Enabling whitespace trimming normalizes both captured clipboard text and
 history; PRIMARY capture never changes the clipboard.
 
-Copy feedback choices are off, icon, icon plus bubble, whole top bar, and OS notification.
+Copy feedback choices are off, icon, icon plus bubble, whole top bar, OS notification,
+and whole top bar plus bubble. Bubbles appear below the extension icon when visible,
+or below the center of the top bar when the icon is hidden. The bar flashes for
+350 ms and the bubble lasts 800 ms, including when animations are disabled.
 OS notifications say only “Copied” (localized), never the copied text, and honor notification policy.
 Full history deletion always requires confirmation; there is no preference to skip it.
 

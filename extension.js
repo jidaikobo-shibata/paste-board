@@ -2258,6 +2258,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _clearCopyHighlight() {
+    if (this._copyPanelFlashTimer) {
+      GLib.Source.remove(this._copyPanelFlashTimer);
+      this._copyPanelFlashTimer = undefined;
+    }
     if (this._copyHighlightTimer) {
       GLib.Source.remove(this._copyHighlightTimer);
       this._copyHighlightTimer = undefined;
@@ -2283,7 +2287,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     if (mode === 1 || mode === 2)
       this.icon.add_style_class_name('copy-highlight');
-    if (mode === 3) {
+    if (mode === 3 || mode === 5) {
       const [x, y] = Main.panel.get_transformed_position();
       const [width, height] = Main.panel.get_transformed_size();
       this._copyPanelFlash = new St.Widget({style_class: 'ci-copy-panel-flash',
@@ -2291,9 +2295,18 @@ class ClipboardIndicator extends PanelMenu.Button {
       Main.uiGroup.add_child(this._copyPanelFlash);
       if (St.Settings.get().enable_animations)
         this._copyPanelFlash.ease({opacity: 0, duration: 350, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+      if (mode === 5) {
+        this._copyPanelFlashTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 350, () => {
+          this._copyPanelFlashTimer = undefined;
+          this._copyPanelFlash?.destroy();
+          this._copyPanelFlash = undefined;
+          return GLib.SOURCE_REMOVE;
+        });
+      }
     }
-    const monitor = Main.layoutManager.findMonitorForActor(this);
-    if (mode === 2 && monitor && this.mapped) {
+    const anchor = this.icon.visible && this.icon.mapped ? this.icon : Main.panel;
+    const monitor = Main.layoutManager.findMonitorForActor(anchor);
+    if ((mode === 2 || mode === 5) && monitor && anchor.mapped) {
       this._copyBubble = new St.Label({
         text: _('Copied!'),
         style_class: 'ci-copy-bubble',
@@ -2303,7 +2316,6 @@ class ClipboardIndicator extends PanelMenu.Button {
       Main.uiGroup.add_child(this._copyBubble);
       const [, width] = this._copyBubble.get_preferred_width(-1);
       const [, height] = this._copyBubble.get_preferred_height(width);
-      const anchor = this.icon.mapped ? this.icon : this;
       const [iconX, iconY] = anchor.get_transformed_position();
       const [iconWidth, iconHeight] = anchor.get_transformed_size();
       const margin = 6;
