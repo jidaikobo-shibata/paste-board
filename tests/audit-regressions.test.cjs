@@ -26,7 +26,7 @@ function callback(begin, end, args, context) {
   assert.ok(start >= begin.length);
   const finish = source.indexOf(end, start);
   assert.ok(finish > start);
-  return vm.runInContext(`(function(${args}) {${source.slice(start, finish)}})`, context);
+  return vm.runInContext(`(${begin.includes('async ') ? 'async ' : ''}function(${args}) {${source.slice(start, finish)}})`, context);
 }
 const noop = () => {};
 
@@ -75,15 +75,15 @@ test('rebuilding visible history does not write the selected item to clipboard',
   assert.deepEqual(writes, []);
 });
 
-test('history-loading callback ignores an indicator disabled before completion', () => {
+test('history-loading callback ignores an indicator disabled before completion', async () => {
   const context = vm.createContext({});
-  const loaded = callback('      (entries, favoriteEntries, nextId, nextDiskId) => {',
+  const loaded = callback('      async (entries, favoriteEntries, nextId, nextDiskId) => {',
     '\n      },\n    );', 'entries, favoriteEntries, nextId, nextDiskId', context);
   const owner = new Proxy({_destroyed: true}, {
     get(target, key) {assert.equal(key, '_destroyed'); return target[key];},
     set() {assert.fail('disabled indicator was changed');},
   });
-  loaded.call(owner, {}, {}, 1, 1);
+  await loaded.call(owner, {}, {}, 1, 1);
 });
 
 test('recycling rows clears old ownership without erasing a newly assigned row', () => {
@@ -165,7 +165,7 @@ test('grab-transition flag is cleared even when a Shell handler throws', () => {
 test('Enter and click on history respect paste-on-selection, with or without pin', () => {
   for (const paste of [false, true]) for (const pinned of [false, true]) {
     const calls = [];
-    const [owner] = instance(['_captureQuickPasteKey', '_activateHistoryEntry', '_onMenuItemSelectedAndMenuClose'], {
+    const [owner] = instance(['_captureQuickPasteKey', '_activatePasteEntry', '_onMenuItemSelectedAndMenuClose'], {
       PASTE_ON_SELECTION: paste, modifierBits: () => 0,
       GObject: {signal_stop_emission_by_name: noop},
       St: {Button: class {}}, global: {stage: {get_key_focus: () => row}},
@@ -177,7 +177,7 @@ test('Enter and click on history respect paste-on-selection, with or without pin
       _keepMenuOpen: pinned, _quickPasteKeysHeld: new Set(),
       _handleCtrlSelectKeyEvent: () => false, _isSearchActor: () => false,
       _visiblePasteCandidates: () => [row],
-      _quickPaste: () => calls.push('paste'), _selectEntry: () => calls.push('copy'),
+      _quickPaste: () => calls.push('paste'), _copyPasteEntry: () => calls.push('copy'),
       _moveEntryFirst: noop, _flushDeferredHistoryMoves: noop, _deferHistoryMove: noop,
     });
     owner._captureQuickPasteKey({type: () => 1, get_key_code: () => 36,
@@ -456,4 +456,112 @@ test('dropping into tab space creates one copy and defers activation until drag 
   while (timers.length) timers.shift()();
   assert.deepEqual(switches, ['created']);
   assert.equal(owner._pasteDropNewTab, undefined);
+});
+
+test('pin click immediately enables keep-open with no post-paste key, second click disables it', () => {
+  class Button {
+    constructor() {this.handlers = {};}
+    connect(name, fn) {this.handlers[name] = fn;}
+  }
+  const [owner] = instance(['_createModeButton'], {
+    St: {Button, Icon: class {}}, Atk: {Role: {TOGGLE_BUTTON: 1}},
+    SettingsFields: {KEEP_MENU_OPEN: 'keep-menu-open'},
+  });
+  const writes = [];
+  Object.assign(owner, {_keepMenuOpen: false, _pasteAfterAction: 'tab',
+    settings: {set_boolean(key, value) {writes.push([key, value]); owner._keepMenuOpen = value;}}});
+  const button = owner._createModeButton('pin', 'keep menu', 'keep-menu-open');
+  button.handlers.clicked();
+  assert.equal(owner._keepMenuOpen, true);
+  assert.equal(owner._pasteAfterAction, 'none');
+  assert.equal(owner._choosingPasteAction, false);
+  button.handlers.clicked();
+  assert.equal(owner._keepMenuOpen, false);
+  owner._quickPasteBusy = true;
+  button.handlers.clicked();
+  assert.deepEqual(writes, [['keep-menu-open', true], ['keep-menu-open', false]]);
+});
+
+test('copy-only mode applies to every tab and command, respecting pin and leaving history order stable', () => {
+  for (const pinned of [false, true]) for (const custom of [false, true]) for (const command of [false, true]) {
+    if (!custom && command) continue;
+    const copied = [], moved = [], commands = [], closed = [];
+    const [owner] = instance(['_activatePasteEntry', '_copyPasteEntry'], {
+      PASTE_ON_SELECTION: false, St: {ClipboardType: {CLIPBOARD: 1}},
+      Clipboard: {set_text: (_, text) => copied.push(text)},
+    });
+    Object.assign(owner, {_keepMenuOpen: pinned,
+      menu: {close: () => closed.push(true)},
+      _moveEntryFirst: entry => moved.push(entry), _selectEntry: noop, _resetSelectedMenuItem: noop,
+      _quickPaste: () => assert.fail('copy-only injected paste'),
+      _quickPasteCommand: (...args) => commands.push(args)});
+    const entry = {text: 'chosen', kind: command ? 'command' : 'text', pasteSetItem: custom};
+    owner._activatePasteEntry(entry);
+    if (command) {
+      assert.equal(commands[0][3], true);
+      assert.deepEqual(copied, []);
+    } else {
+      assert.deepEqual(copied, ['chosen']);
+      assert.equal(moved.length, !custom && !pinned ? 1 : 0);
+      assert.equal(closed.length, pinned ? 0 : 1);
+    }
+  }
+});
+
+test('fixed history paste updates the clipboard selection without reordering on paste or close', () => {
+  const copied = [], timers = [], moves = [];
+  const target = {};
+  const [owner, context] = instance(['_quickPaste'], {
+    DS: {TYPE_TEXT: 1}, global: {display: {focus_window: target}},
+    St: {ClipboardType: {CLIPBOARD: 1}},
+    Clipboard: {get_text: (_, fn) => fn(null, 'original'), set_text: (_, value) => copied.push(value)},
+    GLib: {PRIORITY_DEFAULT: 0, SOURCE_REMOVE: false, timeout_add: (_, ms, fn) => {timers.push(fn); return timers.length;}, Source: {remove: noop}},
+  });
+  Object.assign(owner, {menu: {isOpen: true}, _keepMenuOpen: true,
+    _quickPasteKeysAreHeld: () => false, _suspendQuickPasteInput: noop,
+    _sendQuickPasteKeys: noop, _moveEntryFirst: entry => moves.push(entry), _selectEntry: noop,
+    _stopPasteDragFeedback: noop, _cancelPasteCommand: noop, _updatePasteActionChooser: noop,
+    _hideModeHint: noop, _quickPasteKeysHeld: new Set()});
+  owner._quickPaste({type: 1, text: 'chosen'}, false, false, true, true);
+  timers.shift()();
+  assert.deepEqual(copied, ['chosen']);
+  assert.deepEqual(moves, []);
+  const listener = callback("    this.menu.connect('open-state-changed', (self, open) => {", '\n    });', 'self, open', context);
+  owner.menu.isOpen = false;
+  listener.call(owner, owner.menu, false);
+  assert.deepEqual(moves, []);
+});
+
+test('command copy-only results use clipboard copy without a paste key', async () => {
+  const {owner, resolve, paste} = commandFixture();
+  const copied = [];
+  owner._copyPasteEntry = entry => copied.push(entry.text);
+  owner._quickPasteCommand({command: 'date', pasteSetItem: true}, false, false, true);
+  resolve('generated');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(copied, ['generated']);
+  assert.deepEqual(paste, []);
+});
+
+test('clearing all history always requires confirmation even with a legacy disabled setting', () => {
+  const [owner] = instance(['_removeAll'], {CONFIRM_ON_CLEAR: false});
+  let confirmations = 0;
+  owner._confirmRemoveAll = () => confirmations++;
+  owner._clearHistory = () => assert.fail('cleared without confirmation');
+  owner._removeAll();
+  assert.equal(confirmations, 1);
+});
+
+test('history load finishing after disable cannot initialize UI or listeners', async () => {
+  const context = vm.createContext({});
+  const loaded = callback('      async (entries, favoriteEntries, nextId, nextDiskId) => {',
+    '\n      },\n    );', 'entries, favoriteEntries, nextId, nextDiskId', context);
+  let ready;
+  const owner = {_destroyed: false, _prepareHistorySession: () => new Promise(resolve => {ready = resolve;})};
+  const pending = loaded.call(owner, {}, {}, 1, 1);
+  owner._destroyed = true;
+  ready(false);
+  await pending;
+  assert.equal(owner.entries, undefined);
+  assert.equal(owner._settingsChangedId, undefined);
 });

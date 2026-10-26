@@ -1,6 +1,7 @@
 import Clutter from 'gi://Clutter';
 import GObject from 'gi://GObject';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
@@ -11,6 +12,7 @@ import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
 import * as PanelMenu from 'resource:///org/gnome/shell/ui/panelMenu.js';
 import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as DND from 'resource:///org/gnome/shell/ui/dnd.js';
+import * as LoginManager from 'resource:///org/gnome/shell/misc/loginManager.js';
 
 import {
   Extension,
@@ -26,7 +28,8 @@ import { FavoriteNameDialog } from './favoriteNameDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
-import SettingsFields from './settingsFields.js';
+import { HistorySession } from './historySession.js';
+import SettingsFields, {migrateSettings} from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
 const Clipboard = St.Clipboard.get_default();
@@ -56,7 +59,8 @@ let MOVE_ITEM_FIRST;
 let ENABLE_KEYBINDING;
 let PRIVATE_MODE;
 let NOTIFY_ON_COPY;
-let CONFIRM_ON_CLEAR;
+let COPY_FEEDBACK;
+let CLEAR_ON_LOGOUT;
 let MAX_TOPBAR_LENGTH;
 let TOPBAR_DISPLAY_MODE; // 0 - only icon, 1 - only clipboard content, 2 - both, 3 - none
 let DISABLE_DOWN_ARROW;
@@ -71,6 +75,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     this.extension = extension;
     this.settings = extension.getSettings();
+    migrateSettings(this.settings);
 
     this._shortcutsBindingIds = [];
 
@@ -98,6 +103,10 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    if (this._sessionOverSignal) {
+      Gio.DBus.session.signal_unsubscribe(this._sessionOverSignal);
+      this._sessionOverSignal = undefined;
+    }
     this._stopPasteDragFeedback();
     this._pasteInsertionLine?.destroy();
     this._pasteInsertionLine = undefined;
@@ -176,7 +185,6 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
         this._updatePasteActionChooser();
-        this._flushDeferredHistoryMoves();
         this._quickPasteKeysHeld?.clear();
         this._hideModeHint();
       }
@@ -276,7 +284,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       SettingsFields.PRIVATE_MODE,
     );
     this.keepMenuOpenItem = this._createModeButton(
-      'view-pin-symbolic', 'メニューを維持', SettingsFields.KEEP_MENU_OPEN,
+      'view-pin-symbolic', 'パネルを固定', SettingsFields.KEEP_MENU_OPEN,
     );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
@@ -317,9 +325,12 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
 
     Store.buildClipboardStateFromLog(
-      (entries, favoriteEntries, nextId, nextDiskId) => {
+      async (entries, favoriteEntries, nextId, nextDiskId) => {
         if (this._destroyed)
           return;
+        const discard = await this._prepareHistorySession();
+        if (this._destroyed) return;
+        if (discard) entries = new DS.LinkedList();
         /**
          * This field stores the number of items in the historySection to avoid calling _getMenuItems
          * since that method is slow.
@@ -344,6 +355,7 @@ class ClipboardIndicator extends PanelMenu.Button {
          */
         this.entries = entries;
         this.favoriteEntries = favoriteEntries;
+        if (discard) this._saveClearedSessionHistory();
 
         this.currentlySelectedEntry = undefined;
         this._restoreFavoritedEntries();
@@ -364,6 +376,48 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._queryClipboard(true);
       },
     );
+  }
+
+  async _prepareHistorySession() {
+    try {
+      const session = await LoginManager.getLoginManager().getCurrentSessionProxy();
+      if (this._destroyed) return false;
+      if (!session?.Id) throw new Error('ログインセッションを識別できません。');
+      const [, bytes] = GLib.file_get_contents('/proc/sys/kernel/random/boot_id');
+      const identity = `${new TextDecoder().decode(bytes).trim()}:${session.Id}`;
+      this._historySession = new HistorySession(
+        GLib.build_filenamev([GLib.get_user_cache_dir(), this.extension.uuid]), identity,
+        this.settings.get_boolean(SettingsFields.CLEAR_ON_LOGOUT));
+      this._sessionOverSignal = Gio.DBus.session.signal_subscribe(
+        'org.gnome.SessionManager', 'org.gnome.SessionManager', 'SessionOver',
+        '/org/gnome/SessionManager', null, Gio.DBusSignalFlags.NONE, () => this._onSessionOver());
+      return this._historySession.discardHistory;
+    } catch (error) {
+      if (!this._destroyed)
+        this._showNotification('ログアウト時の履歴消去を準備できません', error.message);
+      return false;
+    }
+  }
+
+  _saveClearedSessionHistory() {
+    const session = this._historySession;
+    Store.resetDatabase(this._currentStateBuilder.bind(this), () => {
+      if (this._destroyed || this._historySession !== session) return;
+      try {session?.cleared();}
+      catch (error) {this._showNotification('セッション情報を保存できません', error.message);}
+    });
+  }
+
+  _onSessionOver() {
+    if (this._destroyed || !CLEAR_ON_LOGOUT || !this.entries) return;
+    this._loggingOut = true;
+    this._cancelPasteCommand();
+    try {this._historySession?.end();}
+    catch (error) {console.error(this.extension.uuid, error);}
+    this._resetSelectedMenuItem(false);
+    this.entries = new DS.LinkedList();
+    this.historySection.removeAll();
+    this._saveClearedSessionHistory();
   }
 
   _setupPasteSets() {
@@ -717,7 +771,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         row.connect('activate', () => {
           if (this._keepMenuOpen) GObject.signal_stop_emission_by_name(row, 'activate');
           if (!this._quickPasteBusy && !this._draggingPasteItem)
-            this._quickPaste(row.entry, !this._keepMenuOpen);
+            this._activatePasteEntry(row.entry);
         });
         for (const [icon, label, action, enabled] of [
           ['go-up-symbolic', '上へ移動', () => this._changePasteSet(() => this._pasteSets.move(set.id, item.id, -1)), set.items.indexOf(item) > 0],
@@ -872,8 +926,9 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._choosingPasteAction = false;
           this.settings.set_boolean(key, false);
         } else {
-          this._choosingPasteAction = !this._choosingPasteAction;
-          this._updatePasteActionChooser();
+          this._pasteAfterAction = 'none';
+          this._choosingPasteAction = false;
+          this.settings.set_boolean(key, true);
         }
       } else {
         this.settings.set_boolean(key, !this.settings.get_boolean(key));
@@ -1035,10 +1090,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       const candidates = this._visiblePasteCandidates();
       const candidate = candidates.find(item => item === focused);
       if (candidate) {
-        if (candidate.entry.pasteSetItem)
-          this._quickPaste(candidate.entry, !this._keepMenuOpen);
-        else
-          this._activateHistoryEntry(candidate.entry);
+        this._activatePasteEntry(candidate.entry);
         return Clutter.EVENT_STOP;
       }
       // Preserve Enter activation for action buttons, rather than closing.
@@ -1199,7 +1251,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _quickPaste(entry, closeAfterPaste = false, allowClosedMenu = false, commitSelection = false,
-    deferHistoryMove = false) {
+    preserveOrder = false) {
     if (entry.pasteSetItem && entry.kind === 'command') {
       this._quickPasteCommand(entry, closeAfterPaste, allowClosedMenu);
       return;
@@ -1242,12 +1294,8 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._suspendQuickPasteInput();
         Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
         if (commitSelection && !entry.pasteSetItem) {
-          if (deferHistoryMove)
-            this._deferHistoryMove(entry);
-          else {
-            this._flushDeferredHistoryMoves();
+          if (!preserveOrder)
             this._moveEntryFirst(entry);
-          }
           this._selectEntry(entry, false);
         }
         this._sendQuickPasteKeys(closeAfterPaste);
@@ -1275,7 +1323,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._endQuickPasteTracking();
   }
 
-  _quickPasteCommand(entry, closeAfterPaste, allowClosedMenu) {
+  _quickPasteCommand(entry, closeAfterPaste, allowClosedMenu, copyOnly = false) {
     if (this._quickPasteBusy || this._destroyed || !global.display.focus_window)
       return;
     const target = global.display.focus_window;
@@ -1294,7 +1342,9 @@ class ClipboardIndicator extends PanelMenu.Button {
           epoch !== (this._clipboardQueryEpoch || 0))
         return;
       // Output is temporary; never save it as a history item or a set edit.
-      this._quickPaste({...entry, kind: 'text', text}, closeAfterPaste, allowClosedMenu);
+      const output = {...entry, kind: 'text', text};
+      if (copyOnly) this._copyPasteEntry(output);
+      else this._quickPaste(output, closeAfterPaste, allowClosedMenu);
     }).catch(error => {
       if (this._pasteCommandRun !== running) return;
       this._pasteCommandRun = undefined;
@@ -1736,11 +1786,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _removeAll() {
-    if (CONFIRM_ON_CLEAR) {
-      this._confirmRemoveAll();
-    } else {
-      this._clearHistory();
-    }
+    this._confirmRemoveAll();
   }
 
   _confirmRemoveAll() {
@@ -1880,42 +1926,32 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     if (this._keepMenuOpen || this._draggingPasteItem)
       GObject.signal_stop_emission_by_name(menuItem, 'activate');
-    this._activateHistoryEntry(menuItem.entry);
+    this._activatePasteEntry(menuItem.entry);
   }
 
-  _activateHistoryEntry(entry) {
+  _activatePasteEntry(entry) {
     if (this._quickPasteBusy)
       return;
     if (PASTE_ON_SELECTION) {
-      this._quickPaste(entry, !this._keepMenuOpen, false, true, this._keepMenuOpen);
+      this._quickPaste(entry, !this._keepMenuOpen, false, !entry.pasteSetItem, this._keepMenuOpen);
       return;
     }
-    if (this._keepMenuOpen)
-      this._deferHistoryMove(entry);
+    if (entry.pasteSetItem && entry.kind === 'command')
+      this._quickPasteCommand(entry, !this._keepMenuOpen, false, true);
+    else this._copyPasteEntry(entry);
+  }
+
+  _copyPasteEntry(entry) {
+    // This explicit copy changes CLIPBOARD but does not record set/command output.
+    this._quickPasteRestoring = true;
+    try {Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);}
+    finally {this._quickPasteRestoring = false;}
+    if (entry.pasteSetItem) this._resetSelectedMenuItem(false);
     else {
-      this._flushDeferredHistoryMoves();
-      this._moveEntryFirst(entry);
+      if (!this._keepMenuOpen) this._moveEntryFirst(entry);
+      this._selectEntry(entry, false);
     }
-    this._selectEntry(entry, true, true);
-    if (!this._keepMenuOpen)
-      this.menu.close();
-  }
-
-  _deferHistoryMove(entry) {
-    if (!MOVE_ITEM_FIRST || entry.favorite)
-      return;
-    this._deferredHistoryMoves ??= new Set();
-    this._deferredHistoryMoves.delete(entry);
-    this._deferredHistoryMoves.add(entry);
-  }
-
-  _flushDeferredHistoryMoves() {
-    const pending = this._deferredHistoryMoves;
-    this._deferredHistoryMoves = undefined;
-    for (const entry of pending || []) {
-      if (entry.list === this.entries && !entry.favorite)
-        this._moveEntryFirst(entry);
-    }
+    if (!this._keepMenuOpen) this.menu.close();
   }
 
   _resetSelectedMenuItem(resetClipboard) {
@@ -2157,6 +2193,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _processClipboardContent(text, selectEntry, externalCopy = false) {
+    if (this._loggingOut || this._destroyed) return;
     if (this._quickPasteBusy || this._quickPasteRestoring) {
       if (externalCopy)
         this._pendingClipboardCopy = true;
@@ -2219,15 +2256,33 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._copyBubble.destroy();
       this._copyBubble = undefined;
     }
+    this._copyPanelFlash?.destroy();
+    this._copyPanelFlash = undefined;
   }
 
   _highlightCopy() {
     if (this._destroyed || PRIVATE_MODE || this._quickPasteBusy || this._quickPasteRestoring)
       return;
     this._clearCopyHighlight();
-    this.icon.add_style_class_name('copy-highlight');
+    const mode = COPY_FEEDBACK;
+    if (mode === 0) return;
+    if (mode === 4) {
+      this._showNotification('コピーしました', '');
+      return;
+    }
+    if (mode === 1 || mode === 2)
+      this.icon.add_style_class_name('copy-highlight');
+    if (mode === 3) {
+      const [x, y] = Main.panel.get_transformed_position();
+      const [width, height] = Main.panel.get_transformed_size();
+      this._copyPanelFlash = new St.Widget({style_class: 'ci-copy-panel-flash',
+        reactive: false, can_focus: false, width, height, x, y});
+      Main.uiGroup.add_child(this._copyPanelFlash);
+      if (St.Settings.get().enable_animations)
+        this._copyPanelFlash.ease({opacity: 0, duration: 350, mode: Clutter.AnimationMode.EASE_OUT_QUAD});
+    }
     const monitor = Main.layoutManager.findMonitorForActor(this);
-    if (monitor && this.mapped) {
+    if (mode === 2 && monitor && this.mapped) {
       this._copyBubble = new St.Label({
         text: 'Copied!',
         style_class: 'ci-copy-bubble',
@@ -2237,8 +2292,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       Main.uiGroup.add_child(this._copyBubble);
       const [, width] = this._copyBubble.get_preferred_width(-1);
       const [, height] = this._copyBubble.get_preferred_height(width);
-      const [iconX, iconY] = this.icon.get_transformed_position();
-      const [iconWidth, iconHeight] = this.icon.get_transformed_size();
+      const anchor = this.icon.mapped ? this.icon : this;
+      const [iconX, iconY] = anchor.get_transformed_position();
+      const [iconWidth, iconHeight] = anchor.get_transformed_size();
       const margin = 6;
       const x = Math.max(monitor.x + margin, Math.min(
         iconX + iconWidth / 2 - width / 2,
@@ -2249,7 +2305,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._copyBubble.set_position(Math.round(x), Math.round(y));
       this._copyBubble.set_size(width, height);
     }
-    this._copyHighlightTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+    this._copyHighlightTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, mode === 3 ? 350 : 800, () => {
       this._copyHighlightTimer = undefined;
       this._clearCopyHighlight();
       return GLib.SOURCE_REMOVE;
@@ -2446,10 +2502,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       SettingsFields.CACHE_ONLY_FAVORITES,
     );
     MOVE_ITEM_FIRST = this.settings.get_boolean(SettingsFields.MOVE_ITEM_FIRST);
-    NOTIFY_ON_COPY = this.settings.get_boolean(SettingsFields.NOTIFY_ON_COPY);
-    CONFIRM_ON_CLEAR = this.settings.get_boolean(
-      SettingsFields.CONFIRM_ON_CLEAR,
-    );
+    COPY_FEEDBACK = this.settings.get_int(SettingsFields.COPY_FEEDBACK);
+    NOTIFY_ON_COPY = COPY_FEEDBACK !== 0;
+    CLEAR_ON_LOGOUT = this.settings.get_boolean(SettingsFields.CLEAR_ON_LOGOUT);
     ENABLE_KEYBINDING = this.settings.get_boolean(
       SettingsFields.ENABLE_KEYBINDING,
     );
@@ -2478,8 +2533,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   _onSettingsChange() {
     const prevCacheOnlyFavorites = CACHE_ONLY_FAVORITES;
     const prevPrivateMode = PRIVATE_MODE;
+    const prevClearOnLogout = CLEAR_ON_LOGOUT;
 
     this._fetchSettings();
+    if (prevClearOnLogout !== CLEAR_ON_LOGOUT) {
+      try {this._historySession?.setEnabled(CLEAR_ON_LOGOUT);}
+      catch (error) {this._showNotification('セッション情報を保存できません', error.message);}
+    }
     this._updateCandidateNumbers();
     this._syncModeButtons();
     if (!NOTIFY_ON_COPY || PRIVATE_MODE)

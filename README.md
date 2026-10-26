@@ -15,7 +15,7 @@ Existing favorites are copied once, in their original visible order, into a set 
 「お気に入り」. Original favorites and the history log remain intact for rollback.
 Sets are stored separately in `paste-sets.json` under the extension UUID's directory
 in the XDG configuration home. They persist independently of the history cache.
-Opening the menu always selects History. Pasting while the menu is pinned preserves
+Opening the panel always selects History. Pasting while the panel is pinned preserves
 the active tab and search filter. Left/Right outside search switches tabs and focuses the first item.
 Number shortcuts always refer to the visible tab; only the item numbers are shown.
 
@@ -51,7 +51,7 @@ can still proceed. Execution is asynchronous, limited to 3 seconds and 64 KiB of
 combined stdout/stderr; failures, empty output, NUL characters, and invalid UTF-8 are not pasted.
 The optional 「末尾の改行を削除する」 setting defaults to on; it removes trailing LF/CRLF only,
 preserving leading whitespace, internal newlines, and spaces.
-Closing the menu or disabling the extension cancels the running command. A changed target window,
+Closing the panel or disabling the extension cancels the running command. A changed target window,
 clipboard, or privacy state prevents a late result from being pasted. A bundled supervisor uses
 Ubuntu's `/usr/bin/python3` standard library (no third-party Python packages) to own a new session
 and process group. Cancellation, timeout, or output overflow terminates the supervisor and normal
@@ -62,18 +62,49 @@ directory; Bash uses the home directory.
 
 ## Development quick paste: plain text only
 
-Number shortcuts in the open menu paste from the active history or paste-set tab and restore the
+Number shortcuts in the open panel paste from the active history or paste-set tab and restore the
 previous clipboard **as plain text**. Formatting, images, and application-specific
 clipboard metadata are not preserved. If the previous clipboard cannot be read
 as text, quick paste is cancelled without replacing it.
 
-Number shortcuts close the history menu after paste by default. Enable the
-“メニューを維持” switch at the bottom to keep it open for repeated pastes.
-Enter and clicks also honor this switch; Esc closes the menu.
+Number shortcuts close the history panel after paste by default. Enable the
+“パネルを固定” switch at the bottom to keep it open for repeated pastes.
+Clicking the pin enables this immediately, initially with no extra key after paste;
+the displayed options can then select Enter or Tab as the post-paste action.
+Enter and clicks also honor this switch; Esc closes the panel.
 Their modifiers are configurable in preferences. This implementation uses the
 GNOME Shell clipboard and virtual keyboard directly, without an Xwayland helper.
 Clipboard restoration currently waits 100 ms; application-level paste completion
 is not acknowledged, so unusually slow applications require manual verification.
+
+## Preference behavior
+
+The popup is called the paste panel (貼り付けパネル). Its width setting is パネルの幅（%）.
+The opener shortcut and in-panel number modifier are independent; disabling the opener
+shortcut does not disable number-key paste inside an already open panel.
+
+「選んだ履歴を先頭に移す」 applies only to unpinned Enter/click selection in History.
+Pinned selection never reorders history, including after the panel closes. Actual copies
+from other applications still move to the top. PRIMARY-selection capture remains optional.
+
+「Enter・クリックで貼り付ける」 applies to all tabs. When off, Enter/click copies only;
+command items run and copy their output. Number shortcuts always paste. Copies from paste
+sets change CLIPBOARD but are not automatically added to ordinary history.
+The pin controls whether the panel closes for both paste and copy-only selection.
+
+Copy feedback choices are off, icon, icon plus bubble, whole top bar, and OS notification.
+OS notifications say only 「コピーしました」, never the copied text, and honor notification policy.
+Full history deletion always requires confirmation; there is no preference to skip it.
+
+「ログアウト時に履歴を消去する」 removes ordinary history and preserves paste sets.
+History remains available across locks and extension reloads within the same login session.
+While enabled, the extension listens for SessionOver. It also records boot/login identity
+and a pending-cleanup marker so interrupted cleanup or logout while the extension is disabled
+cannot restore the previous session's history on next activation in a new session.
+If the extension is disabled at logout, physical cleanup occurs at next activation.
+This is ordinary file replacement, not a secure disk-erasure guarantee.
+Legacy memory-only history settings migrate to this logout policy; legacy copy feedback
+on/off settings migrate to icon-plus-bubble/off, preserving their existing choice.
 
 # Gnome Clipboard History
 

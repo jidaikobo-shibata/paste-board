@@ -330,7 +330,7 @@ export function maybePerformLogCompaction(currentStateBuilder) {
   }
 }
 
-export function resetDatabase(currentStateBuilder) {
+export function resetDatabase(currentStateBuilder, onComplete = null) {
   uselessOpCount = 0;
 
   const state = currentStateBuilder();
@@ -354,6 +354,7 @@ export function resetDatabase(currentStateBuilder) {
           stream.close_async(priority, null, (src, res) => {
             src.close_finish(res);
             resolve();
+            onComplete?.();
           });
         };
 

@@ -4,6 +4,15 @@
       path="/org/gnome/shell/extensions/clipboard-history-dev/">
 
     <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
+    <key type="b" name="clear-history-on-logout">
+      <default>false</default>
+      <summary>Clear ordinary history at logout, preserving paste sets</summary>
+    </key>
+    <key type="i" name="copy-feedback">
+      <default>2</default>
+      <range min="0" max="4" />
+      <summary>Copy feedback: none, icon, icon and bubble, top bar, notification</summary>
+    </key>
     <key type="b" name="keep-menu-open">
       <default>false</default>
       <summary>Keep the history menu open after number shortcut paste</summary>

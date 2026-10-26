@@ -6,6 +6,10 @@
   color: #f9d86e;
 }
 
+.ci-copy-panel-flash {
+  background-color: rgba(249, 216, 110, 0.3);
+}
+
 .ci-copy-bubble {
   color: #ffffff;
   background-color: rgba(35, 35, 35, 0.95);
