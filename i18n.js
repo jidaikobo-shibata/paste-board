@@ -2,7 +2,10 @@ import Gettext from 'gettext';
 import Gio from 'gi://Gio';
 
 export const DOMAIN = 'paste-board';
-const directory = Gio.File.new_for_uri(import.meta.url).get_parent().get_child('locale').get_path();
+const directory = Gio.File.new_for_uri(import.meta.url)
+  .get_parent()
+  .get_child('locale')
+  .get_path();
 Gettext.bindtextdomain(DOMAIN, directory);
 
 // Shared by Shell, preferences, and standalone GJS modules/tests.

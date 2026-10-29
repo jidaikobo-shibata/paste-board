@@ -1,6 +1,7 @@
 {
   "name": "paste-board",
   "scripts": {
+    "format:check": "prettier --check .",
     "test": "LC_ALL=C.utf8 node tests/audit-regressions.test.cjs && LC_ALL=C.utf8 gjs -m tests/command-output.test.mjs && LC_ALL=C.utf8 gjs -m tests/history-session.test.mjs && LC_ALL=C.utf8 gjs -m tests/localization.test.mjs en && LC_ALL=ja_JP.utf8 gjs -m tests/localization.test.mjs ja && bash tests/run-store-test.sh"
   },
   "devDependencies": {

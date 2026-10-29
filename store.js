@@ -1,7 +1,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as DS from './dataStructures.js';
-import {_} from './i18n.js';
+import { _ } from './i18n.js';
 
 let EXTENSION_UUID;
 let CACHE_DIR;
@@ -137,7 +137,9 @@ function _consumeStream(stream, state, callback) {
       uselessOpCount += 2;
       parseAvailableAware(4, () => {
         const id = stream.read_uint32(null);
-        (state.entries.findById(id) || state.archivedEntries.findById(id)).detach();
+        (
+          state.entries.findById(id) || state.archivedEntries.findById(id)
+        ).detach();
       });
     } else if (opType === OP_TYPE_ARCHIVE_ENTRY) {
       parseAvailableAware(4, () => {
@@ -323,7 +325,7 @@ function _deleteTextOp(id) {
 
 // Archived records remain part of the on-disk log, without a separate user interface.
 function _archiveEntryOp(id) {
-  return dataStream => {
+  return (dataStream) => {
     dataStream.put_byte(OP_TYPE_ARCHIVE_ENTRY, null);
     dataStream.put_uint32(id, null);
     return true;
@@ -379,12 +381,7 @@ function _writeToStream(stream, priority, resolve, callback) {
  * DataOutputStream only offers synchronous encoding methods. Encode into an auto-growing
  * memory buffer and flush completed batches asynchronously, keeping disk I/O off the Shell thread.
  */
-function _writeBufferedBatch(
-  dataCallback,
-  stream,
-  priority,
-  callback,
-) {
+function _writeBufferedBatch(dataCallback, stream, priority, callback) {
   if (dataCallback(stream)) {
     callback();
   } else {

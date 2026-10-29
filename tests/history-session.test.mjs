@@ -1,9 +1,10 @@
 import GLib from 'gi://GLib';
-import {HistorySession} from '../historySession.js';
+import { HistorySession } from '../historySession.js';
 const directory = GLib.dir_make_tmp('clipboard-history-session-XXXXXX');
 let count = 0;
 function equal(actual, expected) {
-  if (actual !== expected) throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
+  if (actual !== expected)
+    throw new Error(`${JSON.stringify(actual)} != ${JSON.stringify(expected)}`);
   count++;
 }
 try {

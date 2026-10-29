@@ -1,12 +1,10 @@
-import {_, format} from './i18n.js';
+import { _, format } from './i18n.js';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
 import Adw from 'gi://Adw';
 
-import {
-  ExtensionPreferences,
-} from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
+import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
 import Fields from './settingsFields.js';
 import { modifierLabel } from './shortcutModifiers.js';
@@ -61,7 +59,14 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const field_disable_down_arrow = new Gtk.Switch();
     const field_cache_disable = new Gtk.Switch();
     const field_notification_toggle = new Gtk.ComboBoxText();
-    for (const label of [_("Do not show"), _("Highlight the icon"), _("Highlight the icon and show a bubble"), _("Highlight the entire top bar"), _("System notification"), _("Highlight the entire top bar and show a bubble")])
+    for (const label of [
+      _('Do not show'),
+      _('Highlight the icon'),
+      _('Highlight the icon and show a bubble'),
+      _('Highlight the entire top bar'),
+      _('System notification'),
+      _('Highlight the entire top bar and show a bubble'),
+    ])
       field_notification_toggle.append_text(label);
     const field_strip_text = new Gtk.Switch();
     const field_paste_on_selection = new Gtk.Switch();
@@ -71,7 +76,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       field_keybinding.model,
       settings,
       'toggle-menu',
-      _("Open the panel"),
+      _('Open the panel'),
     );
 
     const field_keybinding_activation = new Gtk.Switch();
@@ -85,22 +90,22 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const windowWidthPercentageLabel = new Gtk.Label({
-      label: _("Panel width (%)"),
+      label: _('Panel width (%)'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const cacheDisableLabel = new Gtk.Label({
-      label: _("Clear history on logout\n(Paste sets are kept)"),
+      label: _('Clear history on logout\n(Paste sets are kept)'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const notificationLabel = new Gtk.Label({
-      label: _("Copy feedback"),
+      label: _('Copy feedback'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const keybindingLabel = new Gtk.Label({
-      label: _("Panel opening shortcut"),
+      label: _('Panel opening shortcut'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -120,17 +125,17 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       halign: Gtk.Align.START,
     });
     const stripTextLabel = new Gtk.Label({
-      label: _("Trim leading and trailing whitespace"),
+      label: _('Trim leading and trailing whitespace'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const pasteOnSelectionLabel = new Gtk.Label({
-      label: _("Paste on Enter or click"),
+      label: _('Paste on Enter or click'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
     const processPrimarySelection = new Gtk.Label({
-      label: _("Also save selected text to history"),
+      label: _('Also save selected text to history'),
       hexpand: true,
       halign: Gtk.Align.START,
     });
@@ -167,18 +172,20 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const modifierSelectors = [];
     let updatingModifiers = false;
     for (const [key, title] of [
-      [Fields.QUICK_PASTE_MODIFIERS, _("Modifiers for number-key paste")],
+      [Fields.QUICK_PASTE_MODIFIERS, _('Modifiers for number-key paste')],
     ]) {
       const selector = new Gtk.ComboBoxText();
       for (let value = 1; value <= 15; value++)
-        selector.append(String(value), format(_('%s+number'), modifierLabel(value)));
-      const label = new Gtk.Label({label: title, xalign: 0, hexpand: true});
+        selector.append(
+          String(value),
+          format(_('%s+number'), modifierLabel(value)),
+        );
+      const label = new Gtk.Label({ label: title, xalign: 0, hexpand: true });
       label.set_mnemonic_widget(selector);
       addRow(label, selector);
       modifierSelectors.push([key, selector]);
       selector.connect('changed', () => {
-        if (updatingModifiers)
-          return;
+        if (updatingModifiers) return;
         const value = Number(selector.get_active_id());
         settings.set_int(key, value);
       });
@@ -193,7 +200,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addRow(keybindingLabel, field_keybinding_activation);
     addRow(null, field_keybinding);
 
-
     const syncModifiers = () => {
       updatingModifiers = true;
       for (const [key, selector] of modifierSelectors)
@@ -202,9 +208,10 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     };
     syncModifiers();
     const modifierSignals = modifierSelectors.map(([key]) =>
-      settings.connect(`changed::${key}`, syncModifiers));
+      settings.connect(`changed::${key}`, syncModifiers),
+    );
     window.connect('close-request', () => {
-      modifierSignals.forEach(id => settings.disconnect(id));
+      modifierSignals.forEach((id) => settings.disconnect(id));
       return false;
     });
 

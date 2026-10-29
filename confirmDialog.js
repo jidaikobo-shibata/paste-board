@@ -24,11 +24,9 @@ export function openConfirmDialog(
     );
     _openDialog = dialog;
     dialog.connect('destroy', () => {
-      if (_openDialog === dialog)
-        _openDialog = null;
+      if (_openDialog === dialog) _openDialog = null;
     });
-    if (!dialog.open())
-      dialog.destroy();
+    if (!dialog.open()) dialog.destroy();
   }
 }
 
