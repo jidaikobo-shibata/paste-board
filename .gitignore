@@ -3,3 +3,8 @@
 node_modules/
 gschemas.compiled
 *.mo
+
+# Local instructions, work records, and private history backups
+AGENTS.md
+.codex/
+.codex-private/
