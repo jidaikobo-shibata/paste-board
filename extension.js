@@ -77,7 +77,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       style_class: 'panel-status-menu-box clipboard-indicator-hbox',
     });
     this.icon = new St.Icon({
-      icon_name: INDICATOR_ICON,
+      gicon: new Gio.FileIcon({file: this.extension.dir.get_child('icons').get_child('paste-board-symbolic.svg')}),
       style_class: 'system-status-icon clipboard-indicator-icon',
     });
     hbox.add_child(this.icon);

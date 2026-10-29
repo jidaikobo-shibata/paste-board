@@ -1,6 +1,6 @@
 .PHONY: all compile-settings compile-locales update-pot update-po-files install bundle
 
-MODULES = metadata.json extension.js store.js dataStructures.js confirmDialog.js pasteSets.js pasteSetDialog.js commandOutput.js commandSupervisor.py historySession.js i18n.js prefs.js settingsFields.js shortcutModifiers.js stylesheet.css LICENSE README.md schemas/
+MODULES = metadata.json extension.js store.js dataStructures.js confirmDialog.js pasteSets.js pasteSetDialog.js commandOutput.js commandSupervisor.py historySession.js i18n.js prefs.js settingsFields.js shortcutModifiers.js stylesheet.css LICENSE README.md schemas/ icons/
 INSTALLPATH = $(HOME)/.local/share/gnome-shell/extensions/paste-board@jidaikobo.shibata
 
 all: compile-locales compile-settings
