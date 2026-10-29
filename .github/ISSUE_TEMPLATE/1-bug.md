@@ -4,40 +4,37 @@ about: Crashes or incorrect behavior
 labels: bug
 ---
 
-### Describe the bug
+### What happened?
 
-A clear and concise description of what the bug is.
+Describe what happened and what you expected instead.
 
-### How To Reproduce
+### How can we reproduce it?
 
-#### Versions
+List the steps. If text is needed to reproduce the issue, use a short, made-up
+example without personal or confidential information.
 
-<!--
-Run this command to get debugging info and paste it below:
+### Versions and environment
+
+- Distribution and version:
+- GNOME Shell version:
+- Paste Board version:
+- Affected application, if any:
+
+These commands show the Shell and extension versions:
+
 ```sh
-gnome-shell --version; echo -n "GCH "; gnome-extensions show clipboard-history@alexsaveau.dev | grep Version; gsettings --schemadir ~/.local/share/gnome-shell/extensions/clipboard-history@alexsaveau.dev/schemas list-recursively org.gnome.shell.extensions.clipboard-history
-```
--->
-
-PASTE_OUTPUT_HERE
-
-#### Steps to repro
-
-What causes the crash/bug?
-
-### Additional context (if a crash, provide stack trace)
-
-Add any other context about the problem here.
-
-<!--
-If the issue may be a crash, run this command to get relevant logs:
-```sh
-journalctl -n 1000000 | grep -B 10 -A 10 'clipboard-history'
+gnome-shell --version
+gnome-extensions info paste-board@jidaikobo.shibata
 ```
 
-If the issue could be database corruption, run this command to encrypt your clipboard history:
+### Relevant errors (optional)
+
+You can look for related messages with:
+
 ```sh
-curl -L alexsaveau.dev/gpg -o supercilex.key && gpg --output database.enc --encrypt --recipient-file supercilex.key ~/.cache/clipboard-history@alexsaveau.dev/database.log && rm supercilex.key
+journalctl --user -b -g 'paste-board' -n 100 --no-pager
 ```
-Upload database.enc to send me your encrypted clipboard history.
--->
+
+Review and redact the output before posting it. Include only the relevant error
+and stack trace. **Do not upload your clipboard history, paste sets, passwords,
+or other private data.**

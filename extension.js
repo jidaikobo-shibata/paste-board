@@ -29,18 +29,16 @@ import { HistorySession } from './historySession.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
-const Clipboard = St.Clipboard.get_default();
-const VirtualKeyboard = (() => {
-  let VirtualKeyboard;
-  return () => {
-    if (!VirtualKeyboard) {
-      VirtualKeyboard = Clutter.get_default_backend()
-        .get_default_seat()
-        .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
-    }
-    return VirtualKeyboard;
-  };
-})();
+// Session resources are acquired in enable() and released in disable().
+let Clipboard;
+let virtualKeyboard;
+function VirtualKeyboard() {
+  if (!virtualKeyboard)
+    virtualKeyboard = Clutter.get_default_backend()
+      .get_default_seat()
+      .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+  return virtualKeyboard;
+}
 
 const SETTING_KEY_TOGGLE_MENU = 'toggle-menu';
 const INDICATOR_ICON = 'edit-paste-symbolic';
@@ -115,6 +113,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._pasteDragEndTimer = undefined;
     }
     this._clearCopyHighlight();
+    this._notifSource?.destroy();
+    this._notifSource = undefined;
     if (this._quickPasteInputTimer) {
       GLib.Source.remove(this._quickPasteInputTimer);
       this._quickPasteInputTimer = undefined;
@@ -244,6 +244,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._footerActions = actionsBox;
     this.menu.addMenuItem(actionsSection);
     const prevPage = new PopupMenu.PopupBaseMenuItem();
+    prevPage.accessible_name = _('Previous page');
     prevPage.add_child(
       new St.Icon({
         icon_name: 'go-previous-symbolic',
@@ -255,6 +256,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     actionsBox.add_child(prevPage);
 
     const nextPage = new PopupMenu.PopupBaseMenuItem();
+    nextPage.accessible_name = _('Next page');
     nextPage.add_child(
       new St.Icon({
         icon_name: 'go-next-symbolic',
@@ -296,6 +298,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._updatePrivateModeState();
 
     const clearMenuItem = new PopupMenu.PopupBaseMenuItem();
+    clearMenuItem.accessible_name = _('Clear history');
     clearMenuItem.add_child(
       new St.Icon({
         icon_name: 'edit-delete-symbolic',
@@ -305,6 +308,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     actionsBox.add_child(clearMenuItem);
 
     const settingsMenuItem = new PopupMenu.PopupBaseMenuItem();
+    settingsMenuItem.accessible_name = _('Preferences');
     settingsMenuItem.add_child(
       new St.Icon({
         icon_name: 'emblem-system-symbolic',
@@ -1038,6 +1042,7 @@ class ClipboardIndicator extends PanelMenu.Button {
                         {
                           id: GLib.uuid_string_random(),
                           name: '',
+                          kind: 'text',
                           text: initialText,
                         },
                       ],
@@ -1288,9 +1293,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_PROPAGATE;
     const code = event.get_key_code();
     if (type === Clutter.EventType.KEY_RELEASE) {
-      const tracked = this._quickPasteKeysHeld.delete(code);
-      if (tracked && this._quickPasteBusy)
-        console.log(this.extension.uuid, 'Quick paste: tracked key released');
+      this._quickPasteKeysHeld.delete(code);
       return this._quickPasteBusy
         ? Clutter.EVENT_STOP
         : Clutter.EVENT_PROPAGATE;
@@ -1473,10 +1476,6 @@ class ClipboardIndicator extends PanelMenu.Button {
   _suspendQuickPasteInput() {
     this._quickPasteFocusedCandidate = this._focusedHistoryCandidate();
     this._quickPasteInputReleased = true;
-    console.log(
-      this.extension.uuid,
-      'Quick paste: keys released, injecting paste',
-    );
     this._emitPasteGrabState(false);
     global.stage.set_key_focus(null);
   }
@@ -1511,7 +1510,6 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._visiblePasteCandidates()[0] || this.searchEntry,
         );
       }
-      console.log(this.extension.uuid, 'Quick paste: keyboard capture resumed');
     }
     this._quickPasteFocusedCandidate = undefined;
   }
@@ -1549,7 +1547,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     this._quickPasteKeysHeld.add(event.get_key_code());
-    console.log(this.extension.uuid, 'Quick paste: shortcut pressed', digit);
     this._quickPaste(items[index - 1].entry, !this._keepMenuOpen);
     return true;
   }
@@ -2211,20 +2208,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     query = query.toLowerCase();
-    let searchExp;
-    try {
-      searchExp = new RegExp(query, 'i');
-    } catch {}
     if (!this.searchEntryFront) return;
     const start = forward ? this.searchEntryFront : this.searchEntryBack;
     let entry = start;
 
     while (this.activeHistoryMenuItems < PAGE_SIZE) {
       if (entry.type === DS.TYPE_TEXT) {
-        let match = entry.text.toLowerCase().indexOf(query);
-        if (searchExp && match < 0) {
-          match = entry.text.search(searchExp);
-        }
+        const match = entry.text.toLowerCase().indexOf(query);
         if (match >= 0) {
           this._addEntry(
             entry,
@@ -2861,9 +2851,32 @@ export default class PasteBoardExtension extends Extension {
   enable() {
     this.indicatorName = `${this.metadata.name} Indicator`;
 
-    Store.init(this.uuid);
+    Clipboard = St.Clipboard.get_default();
+    let indicator;
+    Store.init(this.uuid, {
+      currentStateBuilder: () => indicator._currentStateBuilder(),
+      onError: (error, backup, recovered) => {
+        const indicator = this.clipboardIndicator;
+        if (!indicator || indicator._destroyed) return;
+        indicator._showNotification(
+          recovered
+            ? _('Clipboard history was recovered')
+            : _('Could not save or load clipboard history'),
+          backup
+            ? format(
+                _(
+                  'The readable history was kept. The original file was preserved at: %s',
+                ),
+                backup,
+              )
+            : _(
+                'Check the storage location and available disk space. Some clipboard history may not have been saved or loaded.',
+              ),
+        );
+      },
+    });
 
-    this.clipboardIndicator = new ClipboardIndicatorObj(this);
+    indicator = this.clipboardIndicator = new ClipboardIndicatorObj(this);
     Main.panel.addToStatusArea(this.indicatorName, this.clipboardIndicator, 1);
   }
 
@@ -2872,5 +2885,7 @@ export default class PasteBoardExtension extends Extension {
     this.clipboardIndicator = undefined;
 
     Store.destroy();
+    virtualKeyboard = null;
+    Clipboard = null;
   }
 }

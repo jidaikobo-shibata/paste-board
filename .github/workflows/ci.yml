@@ -3,17 +3,27 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  lint:
-    runs-on: ubuntu-latest
+  check:
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
       - name: Install node
         uses: actions/setup-node@v5
         with:
-          node-version: 'latest'
+          node-version: '24'
           cache: 'npm'
       - name: Install dependencies
         run: npm ci --ignore-scripts
       - name: Check style
         run: npm run format:check
+      - name: Install test tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            gjs gettext libglib2.0-bin locales python3
+          sudo locale-gen ja_JP.UTF-8
+      - name: Build translations and schema
+        run: make
+      - name: Run regression tests
+        run: npm test

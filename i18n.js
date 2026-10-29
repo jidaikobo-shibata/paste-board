@@ -1,11 +1,11 @@
 import Gettext from 'gettext';
-import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 
 export const DOMAIN = 'paste-board';
-const directory = Gio.File.new_for_uri(import.meta.url)
-  .get_parent()
-  .get_child('locale')
-  .get_path();
+const directory = GLib.build_filenamev([
+  GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]),
+  'locale',
+]);
 Gettext.bindtextdomain(DOMAIN, directory);
 
 // Shared by Shell, preferences, and standalone GJS modules/tests.

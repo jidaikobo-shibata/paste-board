@@ -3,6 +3,11 @@
 
 Only JSON results are written to our stdout. Command output has separate pipes.
 SIGTERM cancels this owned process group, including normal pipeline children.
+The helper establishes group ownership before launching user commands, so GJS can
+cancel a live supervisor rather than signal a potentially recycled numeric PGID.
+Python isolated mode and its standard library provide this POSIX process control;
+no third-party packages, terminal, or interactive authentication are involved.
+This is process cleanup, not a sandbox for the explicitly registered command.
 """
 import json
 import os

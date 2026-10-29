@@ -90,7 +90,9 @@ supply passwords. Failed commands and empty output are not pasted.
 Use private mode to pause history collection. Preferences let you adjust the
 history limit, panel width, whitespace trimming, and copy feedback.
 **Clear history on logout** clears history between login sessions while keeping
-paste sets. It does not securely erase data from disk.
+paste sets. Recovery backups are kept when history is cleared; their location is
+shown in the recovery notification. Clearing history does not securely erase data
+from disk.
 
 ## Origins and license
 

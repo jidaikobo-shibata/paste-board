@@ -156,6 +156,8 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         }
 
         if (label) {
+          // GTK exposes this association as LABELLED_BY to assistive tools.
+          label.set_mnemonic_widget(input);
           main.attach(label, 0, row, 1, 1);
           main.attach(inputWidget, 1, row, 1, 1);
         } else {

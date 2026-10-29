@@ -1394,3 +1394,48 @@ test('existing copy-feedback notification keeps mode 4 without visual overlays',
   assert.deepEqual(notifications, [['Copied', '']]);
   assert.equal(actors.length, 0);
 });
+
+test('history search treats regex metacharacters as literal text without blocking', () => {
+  const [owner, context] = instance(['populateSearchResults'], {
+    DS: { TYPE_TEXT: 'text' },
+    PAGE_SIZE: 50,
+    MAX_VISIBLE_CHARS: 200,
+  });
+  const text = 'a'.repeat(28) + '!';
+  const entry = {
+    type: 'text',
+    text,
+    prevCyclic() {
+      return this;
+    },
+    nextCyclic() {
+      return this;
+    },
+  };
+  const matches = [];
+  Object.assign(owner, {
+    historySection: {
+      removeAll() {
+        owner.activeHistoryMenuItems = 0;
+      },
+    },
+    searchEntryFront: entry,
+    searchEntryBack: entry,
+    _addEntry(item) {
+      matches.push(item);
+      this.activeHistoryMenuItems++;
+      item.menuItem = { label: { set_text: noop } };
+    },
+    _truncated: (value) => value,
+  });
+  context.owner = owner;
+  vm.runInContext("owner.populateSearchResults('(a+)+$')", context, {
+    timeout: 200,
+  });
+  assert.equal(matches.length, 0);
+  entry.text = 'A literal (a+)+$ example';
+  vm.runInContext("owner.populateSearchResults('(a+)+$')", context, {
+    timeout: 200,
+  });
+  assert.equal(matches.length, 1);
+});

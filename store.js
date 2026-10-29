@@ -1,426 +1,402 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as DS from './dataStructures.js';
-import { _ } from './i18n.js';
 
-let EXTENSION_UUID;
-let CACHE_DIR;
-/**
- * Stores our compacting log implementation. Here are its key ideas:
- * - We only ever append to the log.
- * - This means there will be operations that cancel each other out. These are wasted/useless ops
- *   that must be occasionally pruned. MAX_WASTED_OPS limits the number of useless ops.
- * - The available operations are listed in the OP_TYPE_* constants.
- * - An add op never moves (until compaction), allowing us to derive globally unique entry IDs based
- *   on the order in which these add ops are discovered.
- */
-let DATABASE_FILE;
-const BYTE_ORDER = Gio.DataStreamByteOrder.LITTLE_ENDIAN;
-
-// Don't use zero b/c DataInputStream uses 0 as its error value
-const OP_TYPE_SAVE_TEXT = 1;
-const OP_TYPE_DELETE_TEXT = 2;
-// Record numbers are stable: existing logs keep their archived text and IDs.
-const OP_TYPE_ARCHIVE_ENTRY = 3;
-const OP_TYPE_RESTORE_ENTRY = 4;
-const OP_TYPE_MOVE_ITEM_TO_END = 5;
-
+// Record numbers are stable: existing logs retain their text, archives and IDs.
+const SAVE = 1;
+const DELETE = 2;
+const ARCHIVE = 3;
+const RESTORE = 4;
+const MOVE = 5;
 const MAX_WASTED_OPS = 500;
-let uselessOpCount;
+const encoder = new TextEncoder();
+let activeStore;
+let previousClose = Promise.resolve();
 
-let opQueue = new DS.LinkedList();
-let opInProgress = false;
-let writeStream;
+function io(object, begin, finish, ...args) {
+  return new Promise((resolve, reject) => {
+    object[begin](...args, (source, result) => {
+      try {
+        resolve(source[finish](result));
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
 
-export function init(uuid) {
-  EXTENSION_UUID = uuid;
-  CACHE_DIR = GLib.build_filenamev([GLib.get_user_cache_dir(), EXTENSION_UUID]);
-  DATABASE_FILE = GLib.build_filenamev([CACHE_DIR, 'database.log']);
-  if (GLib.mkdir_with_parents(CACHE_DIR, 0o775) !== 0) {
-    console.log(
-      EXTENSION_UUID,
-      "Failed to create cache dir, extension likely won't work",
-      CACHE_DIR,
+function textRecord(text) {
+  if (typeof text !== 'string' || text.includes('\0'))
+    throw new Error('Invalid history text');
+  const encoded = encoder.encode(text);
+  const bytes = new Uint8Array(encoded.length + 2);
+  bytes[0] = SAVE;
+  bytes.set(encoded, 1);
+  return bytes;
+}
+
+function idRecord(type, id) {
+  const bytes = new Uint8Array(5);
+  bytes[0] = type;
+  new DataView(bytes.buffer).setUint32(1, id, true);
+  return bytes;
+}
+
+function snapshot(entries) {
+  // Freeze queued snapshots: later compaction can reassign the live nodes' IDs.
+  return entries.map((entry, index) => {
+    entry.diskId = index + 1;
+    return {
+      text: entry.text,
+      archived: Boolean(entry.archived),
+      diskId: index + 1,
+    };
+  });
+}
+
+function encodeSnapshot(entries) {
+  const records = [];
+  let size = 0;
+  for (const entry of entries) {
+    const text = textRecord(entry.text);
+    records.push(text);
+    size += text.length;
+    if (entry.archived) {
+      const archive = idRecord(ARCHIVE, entry.diskId);
+      records.push(archive);
+      size += archive.length;
+    }
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const record of records) {
+    bytes.set(record, offset);
+    offset += record.length;
+  }
+  return bytes;
+}
+
+class HistoryStore {
+  constructor(uuid, options, ready) {
+    this.directory = GLib.build_filenamev([GLib.get_user_cache_dir(), uuid]);
+    this.file = Gio.File.new_for_path(this.directory + '/database.log');
+    this.options = options;
+    this.ready = ready;
+    this.queue = [];
+    this.revision = this.persistedRevision = this.wasted = 0;
+    GLib.mkdir_with_parents(this.directory, 0o700);
+  }
+
+  report(error, backup = null, recovered = false) {
+    // A persistent I/O failure should not create one notification per copy.
+    if (this.reported && !backup) return;
+    this.reported = true;
+    console.error(error);
+    try {
+      this.options.onError?.(error, backup, recovered);
+    } catch (notificationError) {
+      console.error(notificationError);
+    }
+  }
+
+  enqueue(task) {
+    return new Promise((resolve) => {
+      this.queue.push({ task, resolve });
+      this.drain();
+    });
+  }
+
+  async drain() {
+    if (this.running) return;
+    this.running = true;
+    try {
+      await this.ready;
+      while (this.queue.length) {
+        const { task, resolve } = this.queue.shift();
+        try {
+          await task();
+          resolve(true);
+        } catch (error) {
+          this.needsSnapshot = true;
+          await this.closeStream();
+          this.report(error);
+          resolve(false);
+        }
+      }
+    } finally {
+      this.running = false;
+    }
+  }
+
+  async closeStream() {
+    const stream = this.stream;
+    this.stream = null;
+    if (stream) {
+      try {
+        await io(stream, 'close_async', 'close_finish', 0, null);
+      } catch (error) {
+        this.report(error);
+      }
+    }
+  }
+
+  async replace(entries) {
+    await this.closeStream();
+    await io(
+      this.file,
+      'replace_contents_bytes_async',
+      'replace_contents_finish',
+      new GLib.Bytes(encodeSnapshot(entries)),
+      null,
+      false,
+      Gio.FileCreateFlags.PRIVATE,
+      null,
     );
   }
+
+  mutation(write, onComplete = null) {
+    const revision = ++this.revision;
+    return this.enqueue(async () => {
+      if (this.readBlocked)
+        throw new Error('History is read-only after a load failure.');
+      if (revision > this.persistedRevision) {
+        if (this.needsSnapshot) {
+          const build = this.options.currentStateBuilder;
+          if (!build)
+            throw new Error(
+              'History must be rebuilt before saving can resume.',
+            );
+          // Includes all mutations queued so far. Skip their obsolete append records
+          // after this snapshot; their old disk IDs may no longer be valid.
+          const covered = this.revision;
+          const state = snapshot(build());
+          await this.replace(state);
+          this.persistedRevision = covered;
+          this.needsSnapshot = false;
+        } else {
+          await write();
+          this.persistedRevision = revision;
+        }
+        this.reported = false;
+      }
+      onComplete?.();
+    });
+  }
+
+  append(bytes) {
+    return this.mutation(async () => {
+      if (!this.stream)
+        this.stream = await io(
+          this.file,
+          'append_to_async',
+          'append_to_finish',
+          Gio.FileCreateFlags.PRIVATE,
+          0,
+          null,
+        );
+      // GLib.Bytes owns the buffer until asynchronous I/O completes. Passing
+      // a temporary marshalled Uint8Array to write_all_async can free it early.
+      let offset = 0;
+      while (offset < bytes.length) {
+        const written = await io(
+          this.stream,
+          'write_bytes_async',
+          'write_bytes_finish',
+          new GLib.Bytes(bytes.subarray(offset)),
+          0,
+          null,
+        );
+        if (written <= 0) throw new Error('Incomplete history write');
+        offset += written;
+      }
+    });
+  }
+
+  reset(build, onComplete) {
+    this.options.currentStateBuilder = build;
+    const state = snapshot(build());
+    this.wasted = 0;
+    return this.mutation(() => this.replace(state), onComplete);
+  }
+
+  read(callback) {
+    return this.enqueue(async () => {
+      const state = {
+        entries: new DS.LinkedList(),
+        archived: new DS.LinkedList(),
+        nextId: 1,
+      };
+      let stream;
+      try {
+        const input = await io(this.file, 'read_async', 'read_finish', 0, null);
+        stream = Gio.DataInputStream.new(input);
+        stream.set_byte_order(Gio.DataStreamByteOrder.LITTLE_ENDIAN);
+      } catch (error) {
+        if (!error.matches?.(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
+          // Never replace unreadable data with an empty in-memory history.
+          this.readBlocked = true;
+          this.report(error);
+        }
+        await callback(state.entries, state.archived, state.nextId);
+        return;
+      }
+      let damaged;
+      try {
+        const requireBytes = async (count, eofAllowed = false) => {
+          while (stream.get_available() < count) {
+            const filled = await io(
+              stream,
+              'fill_async',
+              'fill_finish',
+              -1,
+              0,
+              null,
+            );
+            if (!filled) {
+              if (eofAllowed && stream.get_available() === 0) return false;
+              throw new Error('Truncated history record');
+            }
+          }
+          return true;
+        };
+        while (await requireBytes(1, true)) {
+          const type = stream.read_byte(null);
+          if (type === SAVE) {
+            const [text] = await io(
+              stream,
+              'read_upto_async',
+              'read_upto_finish',
+              '\0',
+              1,
+              0,
+              null,
+            );
+            if (stream.read_byte(null) !== 0)
+              throw new Error('Invalid history terminator');
+            const entry = new DS.LLNode();
+            entry.id = entry.diskId = state.nextId++;
+            entry.type = DS.TYPE_TEXT;
+            entry.text = text || '';
+            entry.archived = false;
+            state.entries.append(entry);
+          } else {
+            if (![DELETE, ARCHIVE, RESTORE, MOVE].includes(type))
+              throw new Error('Unknown history record');
+            await requireBytes(4);
+            const id = stream.read_uint32(null);
+            const entry =
+              state.entries.findById(id) || state.archived.findById(id);
+            if (
+              !entry ||
+              (type === ARCHIVE && entry.archived) ||
+              (type === RESTORE && !entry.archived)
+            )
+              throw new Error('Invalid history record reference');
+            if (type === DELETE) {
+              entry.detach();
+              this.wasted += 2;
+            } else if (type === ARCHIVE || type === RESTORE) {
+              entry.archived = type === ARCHIVE;
+              (entry.archived ? state.archived : state.entries).append(entry);
+            } else {
+              (entry.archived ? state.archived : state.entries).append(entry);
+              this.wasted++;
+            }
+          }
+        }
+      } catch (error) {
+        damaged = error;
+      } finally {
+        await io(stream, 'close_async', 'close_finish', 0, null).catch(
+          () => {},
+        );
+      }
+      let nextDiskId = state.nextId;
+      if (damaged) {
+        const backup =
+          this.directory + '/corrupted-' + GLib.uuid_string_random() + '.log';
+        try {
+          // Keep every damaged log under a distinct name, then repair only the
+          // readable prefix. Never insert diagnostic messages into the clipboard.
+          await io(
+            this.file,
+            'copy_async',
+            'copy_finish',
+            Gio.File.new_for_path(backup),
+            Gio.FileCopyFlags.NONE,
+            0,
+            null,
+            null,
+          );
+          const recovered = snapshot([...state.archived, ...state.entries]);
+          nextDiskId = recovered.length + 1;
+          await this.replace(recovered);
+          this.report(damaged, backup, true);
+        } catch (error) {
+          this.readBlocked = true;
+          this.report(error);
+        }
+      }
+      await callback(state.entries, state.archived, state.nextId, nextDiskId);
+    });
+  }
+
+  close() {
+    this.options.onError = null;
+    return this.enqueue(async () => {
+      try {
+        if (
+          this.needsSnapshot &&
+          !this.readBlocked &&
+          this.options.currentStateBuilder
+        ) {
+          await this.replace(snapshot(this.options.currentStateBuilder()));
+          this.needsSnapshot = false;
+        }
+      } finally {
+        await this.closeStream();
+        this.options.currentStateBuilder = null;
+      }
+    });
+  }
+}
+
+export function init(uuid, options = {}) {
+  activeStore = new HistoryStore(uuid, options, previousClose);
 }
 
 export function destroy() {
-  _pushToOpQueue((resolve) => {
-    if (writeStream) {
-      writeStream.close_async(0, null, (src, res) => {
-        src.close_finish(res);
-        resolve();
-      });
-      writeStream = undefined;
-    } else {
-      resolve();
-    }
-  });
+  if (activeStore) {
+    previousClose = activeStore.close();
+    activeStore = null;
+  }
+  return previousClose;
 }
 
 export function buildClipboardStateFromLog(callback) {
-  if (typeof callback !== 'function') {
-    throw TypeError('`callback` must be a function');
-  }
-  uselessOpCount = 0;
-
-  Gio.File.new_for_path(DATABASE_FILE).read_async(0, null, (src, res) => {
-    try {
-      _parseLog(src.read_finish(res), callback);
-    } catch (e) {
-      if (e.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.NOT_FOUND)) {
-        callback(new DS.LinkedList(), new DS.LinkedList(), 1);
-      } else {
-        throw e;
-      }
-    }
-  });
+  if (typeof callback !== 'function')
+    throw new TypeError('callback must be a function');
+  return activeStore.read(callback);
 }
 
-function _parseLog(stream, callback) {
-  stream = Gio.DataInputStream.new(stream);
-  stream.set_byte_order(BYTE_ORDER);
-
-  const state = {
-    entries: new DS.LinkedList(),
-    archivedEntries: new DS.LinkedList(),
-    nextId: 1,
-  };
-  _consumeStream(stream, state, callback);
-}
-
-function _consumeStream(stream, state, callback) {
-  const finish = () => {
-    callback(state.entries, state.archivedEntries, state.nextId);
-  };
-  const forceFill = (minBytes, fillCallback) => {
-    stream.fill_async(/*count=*/ -1, 0, null, (src, res) => {
-      if (src.fill_finish(res) < minBytes) {
-        finish();
-      } else {
-        fillCallback();
-      }
-    });
-  };
-
-  let parseAvailableAware;
-
-  function loop() {
-    if (stream.get_available() === 0) {
-      forceFill(1, loop);
-      return;
-    }
-
-    const opType = stream.read_byte(null);
-    if (opType === OP_TYPE_SAVE_TEXT) {
-      stream.read_upto_async(
-        /*stop_chars=*/ '\0',
-        /*stop_chars_len=*/ 1,
-        0,
-        null,
-        (src, res) => {
-          const [text] = src.read_upto_finish(res);
-          src.read_byte(null);
-
-          const node = new DS.LLNode();
-          node.diskId = node.id = state.nextId++;
-          node.type = DS.TYPE_TEXT;
-          node.text = text || '';
-          node.archived = false;
-          state.entries.append(node);
-
-          loop();
-        },
-      );
-    } else if (opType === OP_TYPE_DELETE_TEXT) {
-      uselessOpCount += 2;
-      parseAvailableAware(4, () => {
-        const id = stream.read_uint32(null);
-        (
-          state.entries.findById(id) || state.archivedEntries.findById(id)
-        ).detach();
-      });
-    } else if (opType === OP_TYPE_ARCHIVE_ENTRY) {
-      parseAvailableAware(4, () => {
-        const id = stream.read_uint32(null);
-        const entry = state.entries.findById(id);
-
-        entry.archived = true;
-        state.archivedEntries.append(entry);
-      });
-    } else if (opType === OP_TYPE_RESTORE_ENTRY) {
-      uselessOpCount += 2;
-      parseAvailableAware(4, () => {
-        const id = stream.read_uint32(null);
-        const entry = state.archivedEntries.findById(id);
-
-        entry.archived = false;
-        state.entries.append(entry);
-      });
-    } else if (opType === OP_TYPE_MOVE_ITEM_TO_END) {
-      uselessOpCount++;
-      parseAvailableAware(4, () => {
-        const id = stream.read_uint32(null);
-        const entry =
-          state.entries.findById(id) || state.archivedEntries.findById(id);
-
-        if (entry.archived) {
-          state.archivedEntries.append(entry);
-        } else {
-          state.entries.append(entry);
-        }
-      });
-    } else {
-      console.log(EXTENSION_UUID, 'Unknown op type, aborting load.', opType);
-      finish();
-    }
-  }
-
-  parseAvailableAware = (minBytes, parse) => {
-    const safeParse = (cont) => {
-      try {
-        parse();
-        cont();
-      } catch (e) {
-        console.log(EXTENSION_UUID, 'Parsing error');
-        console.error(e);
-
-        const entries = new DS.LinkedList();
-        let nextId = 1;
-        const addEntry = (text) => {
-          const node = new DS.LLNode();
-          node.id = nextId++;
-          node.type = DS.TYPE_TEXT;
-          node.text = text;
-          node.archived = false;
-          entries.prepend(node);
-        };
-
-        addEntry(_('Your clipboard data has been corrupted and was moved to:'));
-        addEntry(GLib.build_filenamev([CACHE_DIR, 'corrupted.log']));
-
-        try {
-          if (
-            !Gio.File.new_for_path(DATABASE_FILE).move(
-              Gio.File.new_for_path(
-                GLib.build_filenamev([CACHE_DIR, 'corrupted.log']),
-              ),
-              Gio.FileCopyFlags.OVERWRITE,
-              null,
-              null,
-            )
-          ) {
-            console.log(EXTENSION_UUID, 'Failed to move database file');
-          }
-        } catch (e) {
-          console.log(EXTENSION_UUID, 'Crash moving database file');
-          console.error(e);
-        }
-        callback(entries, new DS.LinkedList(), nextId, 1);
-      }
-    };
-
-    if (stream.get_available() < minBytes) {
-      forceFill(minBytes, () => {
-        safeParse(loop);
-      });
-    } else {
-      safeParse(loop);
-    }
-  };
-
-  loop();
-}
-
-export function maybePerformLogCompaction(currentStateBuilder) {
-  if (uselessOpCount >= MAX_WASTED_OPS) {
-    resetDatabase(currentStateBuilder);
-  }
-}
-
-export function resetDatabase(currentStateBuilder, onComplete = null) {
-  uselessOpCount = 0;
-
-  const state = currentStateBuilder();
-  _pushToOpQueue((resolve) => {
-    // Sigh, can't use truncate because it doesn't have an async variant. Instead, nuke the stream
-    // and let the next append re-create it. Note that we can't use this stream because it tries to
-    // apply our operations atomically and therefore writes to a temporary file instead of the one
-    // we asked for.
-    writeStream = undefined;
-
-    const priority = -10;
-    Gio.File.new_for_path(DATABASE_FILE).replace_async(
-      /*etag=*/ null,
-      /*make_backup=*/ false,
-      Gio.FileCreateFlags.PRIVATE,
-      priority,
-      null,
-      (src, res) => {
-        const stream = _createBufferedDataStream(src.replace_finish(res));
-        const finish = () => {
-          stream.close_async(priority, null, (src, res) => {
-            src.close_finish(res);
-            resolve();
-            onComplete?.();
-          });
-        };
-
-        if (state.length === 0) {
-          finish();
-          return;
-        }
-
-        let i = 0;
-        _writeToStream(stream, priority, finish, (dataStream) => {
-          do {
-            const entry = state[i];
-
-            if (entry.type === DS.TYPE_TEXT) {
-              _storeTextOp(entry.text)(dataStream);
-            } else {
-              throw new TypeError('Unknown type: ' + entry.type);
-            }
-            if (entry.archived) {
-              _archiveEntryOp(entry.diskId)(dataStream);
-            }
-
-            i++;
-          } while (i % 1000 !== 0 && i < state.length);
-
-          // Flush the buffer every 1000 entries
-          return i >= state.length;
-        });
-      },
-    );
-  });
+export function resetDatabase(build, onComplete = null) {
+  return activeStore.reset(build, onComplete);
 }
 
 export function storeTextEntry(text) {
-  _appendBytesToLog(_storeTextOp(text), -5);
-}
-
-function _storeTextOp(text) {
-  return (dataStream) => {
-    dataStream.put_byte(OP_TYPE_SAVE_TEXT, null);
-    dataStream.put_string(text, null);
-    dataStream.put_byte(0, null); // NUL terminator
-    return true;
-  };
+  return activeStore.append(textRecord(text));
 }
 
 export function deleteTextEntry(id) {
-  _appendBytesToLog(_deleteTextOp(id), 5);
-  uselessOpCount += 2;
-}
-
-function _deleteTextOp(id) {
-  return (dataStream) => {
-    dataStream.put_byte(OP_TYPE_DELETE_TEXT, null);
-    dataStream.put_uint32(id, null);
-    return true;
-  };
-}
-
-// Archived records remain part of the on-disk log, without a separate user interface.
-function _archiveEntryOp(id) {
-  return (dataStream) => {
-    dataStream.put_byte(OP_TYPE_ARCHIVE_ENTRY, null);
-    dataStream.put_uint32(id, null);
-    return true;
-  };
+  activeStore.wasted += 2;
+  return activeStore.append(idRecord(DELETE, id));
 }
 
 export function moveEntryToEnd(id) {
-  _appendBytesToLog(_moveToEndOp(id));
-  uselessOpCount++;
+  activeStore.wasted++;
+  return activeStore.append(idRecord(MOVE, id));
 }
 
-function _moveToEndOp(id) {
-  return (dataStream) => {
-    dataStream.put_byte(OP_TYPE_MOVE_ITEM_TO_END, null);
-    dataStream.put_uint32(id, null);
-    return true;
-  };
-}
-
-function _appendBytesToLog(callback, priority) {
-  priority = priority || 0;
-  _pushToOpQueue((resolve) => {
-    const runUnsafe = () => {
-      _writeToStream(writeStream, priority, resolve, callback);
-    };
-
-    if (writeStream === undefined) {
-      Gio.File.new_for_path(DATABASE_FILE).append_to_async(
-        Gio.FileCreateFlags.PRIVATE,
-        priority,
-        null,
-        (src, res) => {
-          writeStream = _createBufferedDataStream(src.append_to_finish(res));
-          runUnsafe();
-        },
-      );
-    } else {
-      runUnsafe();
-    }
-  });
-}
-
-function _writeToStream(stream, priority, resolve, callback) {
-  _writeBufferedBatch(callback, stream, priority, () => {
-    stream.flush_async(priority, null, (src, res) => {
-      src.flush_finish(res);
-      resolve();
-    });
-  });
-}
-
-/**
- * DataOutputStream only offers synchronous encoding methods. Encode into an auto-growing
- * memory buffer and flush completed batches asynchronously, keeping disk I/O off the Shell thread.
- */
-function _writeBufferedBatch(dataCallback, stream, priority, callback) {
-  if (dataCallback(stream)) {
-    callback();
-  } else {
-    stream.flush_async(priority, null, (src, res) => {
-      src.flush_finish(res);
-      _writeBufferedBatch(dataCallback, stream, priority, callback);
-    });
-  }
-}
-
-function _createBufferedDataStream(stream) {
-  const bufStream = Gio.BufferedOutputStream.new(stream);
-  bufStream.set_auto_grow(true); // Blocks flushing, needed for hack
-  const ioStream = Gio.DataOutputStream.new(bufStream);
-  ioStream.set_byte_order(BYTE_ORDER);
-  return ioStream;
-}
-
-function _pushToOpQueue(op) {
-  const consumeOp = () => {
-    const resolve = () => {
-      opInProgress = false;
-
-      const next = opQueue.head;
-      if (next) {
-        next.detach();
-        next.op();
-      }
-    };
-
-    opInProgress = true;
-    op(resolve);
-  };
-
-  if (opInProgress) {
-    const node = new DS.LLNode();
-    node.op = consumeOp;
-    opQueue.append(node);
-  } else {
-    consumeOp();
-  }
+export function maybePerformLogCompaction(build) {
+  if (activeStore.wasted >= MAX_WASTED_OPS) return activeStore.reset(build);
 }
