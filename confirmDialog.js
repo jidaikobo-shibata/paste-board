@@ -26,8 +26,13 @@ export function openConfirmDialog(
     dialog.connect('destroy', () => {
       if (_openDialog === dialog) _openDialog = null;
     });
-    if (!dialog.open()) dialog.destroy();
+    if (!dialog.open()) {
+      dialog.destroy();
+      return null;
+    }
+    return dialog;
   }
+  return null;
 }
 
 export function closeConfirmDialog() {

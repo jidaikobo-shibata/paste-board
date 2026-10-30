@@ -1253,11 +1253,70 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
   }
 
+  _confirmPanelAction(
+    title,
+    message,
+    detail,
+    accept,
+    cancel,
+    action,
+    candidateId = null,
+  ) {
+    if (this._destroyed || this._quickPasteBusy) return;
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
+    }
+    const candidates = this._visiblePasteCandidates();
+    const selected = candidateId ?? this._focusedHistoryCandidate()?.entry.id;
+    const index = Math.max(
+      0,
+      candidates.findIndex((row) => row.entry.id === selected),
+    );
+    // Keep only this popup's system-modal handler from closing it while our
+    // confirmation opens. Other system dialogs and other panels keep their policy.
+    const handler = this.menu.isOpen ? this.menu._systemModalOpenedId : 0;
+    if (handler) GObject.signal_handler_block(Main.layoutManager, handler);
+    let dialog;
+    try {
+      dialog = openConfirmDialog(
+        title,
+        message,
+        detail,
+        accept,
+        cancel,
+        action,
+      );
+    } finally {
+      if (
+        handler &&
+        GObject.signal_handler_is_connected(Main.layoutManager, handler)
+      )
+        GObject.signal_handler_unblock(Main.layoutManager, handler);
+    }
+    if (dialog && this.menu.actor) {
+      const parent = this.menu.actor.get_parent();
+      const modalGroup = Main.layoutManager.modalDialogGroup;
+      if (parent === modalGroup.get_parent())
+        parent.set_child_below_sibling(this.menu.actor, modalGroup);
+    }
+    dialog?.connect('closed', () => {
+      if (this._destroyed || !this.menu.isOpen) return;
+      this.menu.actor
+        ?.get_parent()
+        ?.set_child_above_sibling(this.menu.actor, null);
+      const remaining = this._visiblePasteCandidates();
+      const next =
+        remaining.find((row) => row.entry.id === selected) ||
+        remaining[Math.min(index, remaining.length - 1)];
+      global.stage.set_key_focus(next || this.searchEntry);
+    });
+  }
+
   _confirmPasteSetDelete(setId, item = null) {
     const set = this._pasteSets.data.sets.find((entry) => entry.id === setId);
     if (!set) return;
-    this.menu.close();
-    openConfirmDialog(
+    this._confirmPanelAction(
       item ? _('Delete this item?') : _('Delete this paste set?'),
       item ? item.name || _('Selected item') : set.name,
       item
@@ -1273,6 +1332,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             : this._pasteSets.remove(setId),
         );
       },
+      item?.id,
     );
   }
 
@@ -2216,7 +2276,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const message = _('Are you sure you want to delete all clipboard items?');
     const sub_message = _('This operation cannot be undone.');
 
-    openConfirmDialog(
+    this._confirmPanelAction(
       title,
       message,
       sub_message,

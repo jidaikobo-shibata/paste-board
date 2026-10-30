@@ -2055,3 +2055,160 @@ test('dragged command items retain their preview opt-in', () => {
   owner._makePasteItemDraggable(row);
   assert.equal(row.getPasteDragContent().previewOnOpen, true);
 });
+
+test('delete confirmations preserve the panel and focus the next surviving candidate', () => {
+  const rows = [
+    { entry: { id: 'a' } },
+    { entry: { id: 'b' } },
+    { entry: { id: 'c' } },
+  ];
+  let closed, action, focus;
+  const [owner] = instance(['_confirmPanelAction'], {
+    Shell: { ActionMode: { POPUP: 1 } },
+    openConfirmDialog: (title, message, detail, accept, cancel, callback) => {
+      action = callback;
+      return {
+        connect: (signal, fn) => {
+          assert.equal(signal, 'closed');
+          closed = fn;
+        },
+      };
+    },
+    global: {
+      stage: {
+        set_key_focus: (actor) => {
+          focus = actor;
+        },
+      },
+    },
+  });
+  owner.menu = { isOpen: true };
+  owner.searchEntry = {};
+  owner._visiblePasteCandidates = () => rows;
+  owner._focusedHistoryCandidate = () => rows[1];
+  owner._confirmPanelAction(
+    'Delete?',
+    'item',
+    'detail',
+    'Delete',
+    'Cancel',
+    () => rows.splice(1, 1),
+    'b',
+  );
+  assert.equal(owner.menu.isOpen, true);
+  action();
+  closed();
+  assert.equal(focus.entry.id, 'c');
+  assert.equal(owner.menu.isOpen, true);
+});
+
+test('cancelled confirmations retain the candidate and disabling prevents focus restoration', () => {
+  const row = { entry: { id: 'a' } };
+  let closed,
+    focus,
+    opens = 0;
+  const [owner] = instance(['_confirmPanelAction'], {
+    Shell: { ActionMode: { POPUP: 1 } },
+    openConfirmDialog: () => {
+      opens++;
+      return {
+        connect: (signal, fn) => {
+          closed = fn;
+        },
+      };
+    },
+    global: {
+      stage: {
+        set_key_focus: (actor) => {
+          focus = actor;
+        },
+      },
+    },
+  });
+  owner.menu = { isOpen: true };
+  owner.searchEntry = {};
+  owner._visiblePasteCandidates = () => [row];
+  owner._focusedHistoryCandidate = () => row;
+  owner._confirmPanelAction('', '', '', '', '', () =>
+    assert.fail('cancel deleted'),
+  );
+  closed();
+  assert.equal(focus, row);
+  focus = null;
+  owner._destroyed = true;
+  closed();
+  assert.equal(focus, null);
+  owner._confirmPanelAction('', '', '', '', '', () => {});
+  assert.equal(opens, 1);
+});
+
+test('confirmation blocks only its own close handler temporarily and cancels deferred panel focus', () => {
+  let blocked = false,
+    removed = false;
+  const layout = {};
+  const [owner] = instance(['_confirmPanelAction'], {
+    Main: { layoutManager: layout },
+    GObject: {
+      signal_handler_block: (object, id) => {
+        assert.equal(object, layout);
+        assert.equal(id, 7);
+        blocked = true;
+      },
+      signal_handler_is_connected: () => true,
+      signal_handler_unblock: () => {
+        blocked = false;
+      },
+    },
+    GLib: {
+      Source: {
+        remove: (id) => {
+          assert.equal(id, 42);
+          removed = true;
+        },
+      },
+    },
+    openConfirmDialog: () => {
+      assert.equal(blocked, true);
+      assert.equal(removed, true);
+      throw Error('open failure');
+    },
+  });
+  owner.menu = { isOpen: true, _systemModalOpenedId: 7 };
+  owner._initialFocusCallbackId = 42;
+  owner._visiblePasteCandidates = () => [];
+  owner._focusedHistoryCandidate = () => null;
+  assert.throws(
+    () => owner._confirmPanelAction('', '', '', '', '', () => {}),
+    /open failure/,
+  );
+  assert.equal(blocked, false);
+  assert.equal(owner._initialFocusCallbackId, undefined);
+});
+
+test('a wide retained panel stays behind the modal and returns to the front afterward', () => {
+  const operations = [];
+  let closed;
+  const panel = { get_parent: () => parent },
+    modal = { get_parent: () => parent };
+  const parent = {
+    set_child_below_sibling: (a, b) => operations.push(['below', a, b]),
+    set_child_above_sibling: (a, b) => operations.push(['above', a, b]),
+  };
+  const [owner] = instance(['_confirmPanelAction'], {
+    Main: { layoutManager: { modalDialogGroup: modal } },
+    openConfirmDialog: () => ({
+      connect: (signal, fn) => {
+        closed = fn;
+      },
+    }),
+    global: { stage: { set_key_focus: () => {} } },
+  });
+  owner.menu = { isOpen: true, actor: panel };
+  owner.searchEntry = {};
+  owner._visiblePasteCandidates = () => [];
+  owner._focusedHistoryCandidate = () => null;
+  owner._confirmPanelAction('', '', '', '', '', () => {});
+  assert.deepEqual(operations, [['below', panel, modal]]);
+  closed();
+  assert.deepEqual(operations[1], ['above', panel, null]);
+});
