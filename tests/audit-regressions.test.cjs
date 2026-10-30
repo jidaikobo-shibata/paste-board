@@ -27,7 +27,14 @@ function instance(names, globals = {}) {
     `(class {${names.map(method).join('\n')}})`,
     context,
   );
-  return [new Class(), context];
+  const owner = new Class();
+  if (!owner._capturePasteShortcut)
+    owner._capturePasteShortcut = () => ({
+      keyval: 118,
+      modifiers: 1,
+      custom: false,
+    });
+  return [owner, context];
 }
 function callback(begin, end, args, context) {
   const start = source.indexOf(begin) + begin.length;
@@ -1694,4 +1701,101 @@ test('indicator retains privacy and paste suppression before invoking feedback',
   context.PRIVATE_MODE = true;
   owner._highlightCopy();
   assert.deepEqual(calls, [2]);
+});
+
+test('paste captures application keys before asynchronous clipboard reads', () => {
+  const target = {},
+    timers = [],
+    sent = [];
+  let callback;
+  const [owner] = instance(['_quickPaste'], {
+    DS: { TYPE_TEXT: 1 },
+    global: { display: { focus_window: target } },
+    St: { ClipboardType: { CLIPBOARD: 1 } },
+    Clipboard: { get_text: (_, cb) => (callback = cb), set_text: noop },
+    GLib: {
+      PRIORITY_DEFAULT: 0,
+      SOURCE_REMOVE: false,
+      timeout_add: (_, ms, fn) => {
+        timers.push(fn);
+        return timers.length;
+      },
+    },
+  });
+  let selected = { keyval: 118, modifiers: 1, custom: true };
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _capturePasteShortcut: () => ({ ...selected }),
+    _quickPasteKeysAreHeld: () => false,
+    _suspendQuickPasteInput: noop,
+    _sendQuickPasteKeys: (close, shortcut) => sent.push(shortcut),
+    _endQuickPasteTracking: noop,
+  });
+  owner._quickPaste({ type: 1, text: 'text' });
+  selected = { keyval: 121, modifiers: 1, custom: true };
+  callback(null, 'original');
+  timers[0]();
+  assert.equal(sent[0].keyval, 118);
+});
+
+test('command output uses the application keys captured before execution', async () => {
+  const { owner, resolve, paste } = commandFixture();
+  owner._capturePasteShortcut = () => ({
+    keyval: 121,
+    modifiers: 1,
+    custom: true,
+  });
+  owner._quickPasteCommand({ command: 'date' });
+  owner._capturePasteShortcut = () => ({
+    keyval: 118,
+    modifiers: 5,
+    custom: true,
+  });
+  resolve('generated');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(paste[0][1].pasteShortcut.keyval, 121);
+});
+
+test('shortcut injection failure restores the clipboard and releases paste state', () => {
+  const writes = [],
+    timers = [],
+    notifications = [],
+    target = {};
+  const [owner] = instance(
+    ['_quickPaste', '_finishQuickPaste', '_endQuickPasteTracking'],
+    {
+      DS: { TYPE_TEXT: 1 },
+      global: { display: { focus_window: target } },
+      St: { ClipboardType: { CLIPBOARD: 1 } },
+      Clipboard: {
+        get_text: (_, cb) => cb(null, 'original'),
+        set_text: (_, text) => writes.push(text),
+      },
+      GLib: {
+        PRIORITY_DEFAULT: 0,
+        SOURCE_REMOVE: false,
+        timeout_add: (_, ms, fn) => {
+          timers.push(fn);
+          return timers.length;
+        },
+      },
+    },
+  );
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _quickPasteKeysAreHeld: () => false,
+    _suspendQuickPasteInput: noop,
+    _resumeQuickPasteInput: noop,
+    _sendQuickPasteKeys: () => {
+      throw new Error('injection failed');
+    },
+    _showNotification: (...args) => notifications.push(args),
+  });
+  owner._quickPaste({ type: 1, text: 'chosen' });
+  timers.shift()();
+  assert.deepEqual(writes, ['chosen', 'original']);
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(owner._quickPasteState, undefined);
+  assert.equal(timers.length, 0);
+  assert.deepEqual(notifications, [['Could not paste', 'injection failed']]);
 });

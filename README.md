@@ -42,6 +42,10 @@ You can change the panel shortcut and the modifier keys for number shortcuts in
 preferences. If you turn off **Paste on Enter or click**, those actions copy the
 item instead; number shortcuts still paste.
 
+Use **Application paste shortcuts** in preferences to override the keys sent to
+each target app. Choose a preset or record a modifier plus one key. Set the same
+shortcut in the target app; removing an override restores automatic behavior.
+
 Choosing a history item with Enter or a click makes it the current clipboard and
 moves it to the top. Number shortcuts, pinned pastes, and pastes from sets preserve
 the previous clipboard and history order.

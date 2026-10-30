@@ -26,6 +26,11 @@ import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { CopyFeedback } from './copyFeedback.js';
+import {
+  readOverrides,
+  resolveShortcut,
+  sendShortcut,
+} from './pasteShortcuts.js';
 import { HistorySession } from './historySession.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
@@ -1584,7 +1589,11 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _quickPaste(
     entry,
-    { closeAfterPaste = false, commitSelection = false } = {},
+    {
+      closeAfterPaste = false,
+      commitSelection = false,
+      pasteShortcut = null,
+    } = {},
   ) {
     if (PRIVATE_MODE || this._destroyed) return;
     const epoch = this._clipboardQueryEpoch || 0;
@@ -1602,11 +1611,12 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
     const target = global.display.focus_window;
+    const shortcut = pasteShortcut || this._capturePasteShortcut();
     const afterAction =
       !closeAfterPaste && this._keepMenuOpen ? this._pasteAfterAction : 'none';
     const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
-    Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
+    Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_clipboard, original) => {
       if (
         this._destroyed ||
         PRIVATE_MODE ||
@@ -1656,7 +1666,13 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._moveEntryFirst(entry);
             this._setCurrentClipboardEntry(entry, false);
           }
-          this._sendQuickPasteKeys(closeAfterPaste);
+          try {
+            this._sendQuickPasteKeys(closeAfterPaste, shortcut);
+          } catch (error) {
+            this._finishQuickPaste(true);
+            this._showNotification(_('Could not paste'), error.message);
+            return GLib.SOURCE_REMOVE;
+          }
           // Experimental delay: application clipboard reads are asynchronous.
           this._quickPasteTimer = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT,
@@ -1705,6 +1721,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     )
       return;
     const target = global.display.focus_window;
+    const pasteShortcut = this._capturePasteShortcut();
     const generation = this._clipboardGeneration || 0;
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
@@ -1730,7 +1747,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         // Pasting is temporary; explicit copy-only actions also enter history.
         const output = { ...entry, kind: 'text', text };
         if (copyOnly) this._copyPasteEntry(output);
-        else this._quickPaste(output, { closeAfterPaste });
+        else this._quickPaste(output, { closeAfterPaste, pasteShortcut });
       })
       .catch((error) => {
         if (this._pasteCommandRun !== running) return;
@@ -1766,19 +1783,31 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
   }
 
-  _sendQuickPasteKeys(closeAfterPaste = false) {
+  _capturePasteShortcut() {
+    const appId =
+      Shell.WindowTracker.get_default().get_focus_app()?.get_id() || '';
+    return resolveShortcut(readOverrides(this.settings), appId);
+  }
+
+  _sendQuickPasteKeys(
+    closeAfterPaste = false,
+    shortcut = this._capturePasteShortcut(),
+  ) {
     const keyboard = VirtualKeyboard();
     const time = GLib.get_monotonic_time();
-    const terminal =
-      /terminal|console|kitty|alacritty|wezterm|ghostty|foot|konsole|xterm|tilix|terminator/i.test(
-        Shell.WindowTracker.get_default().get_focus_app()?.get_id() || '',
-      );
-    keyboard.notify_key(time, 29, Clutter.KeyState.PRESSED);
-    if (terminal) keyboard.notify_key(time, 42, Clutter.KeyState.PRESSED);
-    keyboard.notify_key(time, 47, Clutter.KeyState.PRESSED);
-    keyboard.notify_key(time, 47, Clutter.KeyState.RELEASED);
-    if (terminal) keyboard.notify_key(time, 42, Clutter.KeyState.RELEASED);
-    keyboard.notify_key(time, 29, Clutter.KeyState.RELEASED);
+    if (shortcut.custom) {
+      sendShortcut(keyboard, shortcut, time, Clutter.KeyState);
+    } else {
+      // Preserve the existing key-code path for applications without an override.
+      keyboard.notify_key(time, 29, Clutter.KeyState.PRESSED);
+      if (shortcut.modifiers & 4)
+        keyboard.notify_key(time, 42, Clutter.KeyState.PRESSED);
+      keyboard.notify_key(time, 47, Clutter.KeyState.PRESSED);
+      keyboard.notify_key(time, 47, Clutter.KeyState.RELEASED);
+      if (shortcut.modifiers & 4)
+        keyboard.notify_key(time, 42, Clutter.KeyState.RELEASED);
+      keyboard.notify_key(time, 29, Clutter.KeyState.RELEASED);
+    }
     if (closeAfterPaste) {
       this._quickPasteInputReleased = false;
       this.menu.close();

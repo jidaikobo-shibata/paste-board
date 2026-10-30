@@ -3,6 +3,11 @@
       id="org.gnome.shell.extensions.paste-board"
       path="/org/gnome/shell/extensions/paste-board/">
 
+    <key type="a{s(uu)}" name="application-paste-shortcuts">
+      <default>{}</default>
+      <summary>Application-specific paste keys (key value and portable modifier bits)</summary>
+    </key>
+
     <!-- Bits: Ctrl=1, Alt=2, Shift=4, Super=8. -->
     <key type="b" name="clear-history-on-logout">
       <default>false</default>
