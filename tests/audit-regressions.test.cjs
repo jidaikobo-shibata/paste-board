@@ -606,6 +606,16 @@ test('command errors release busy state without pasting or modifying clipboard',
 });
 
 function insertionFixture() {
+  const menuActor = {};
+  const actors = [menuActor];
+  const uiGroup = {
+    add_child: (actor) => actors.push(actor),
+    set_child_above_sibling(actor, sibling) {
+      assert.equal(sibling, null);
+      actors.splice(actors.indexOf(actor), 1);
+      actors.push(actor);
+    },
+  };
   class Line {
     hide() {
       this.visible = false;
@@ -628,7 +638,7 @@ function insertionFixture() {
     ],
     {
       St: { Widget: Line },
-      Main: { uiGroup: { add_child: noop } },
+      Main: { uiGroup },
     },
   );
   const rows = [100, 138, 176].map((y) => ({
@@ -645,7 +655,7 @@ function insertionFixture() {
       get_transformed_size: () => [210, 150],
     },
   });
-  return { owner, rows };
+  return { owner, rows, actors, menuActor, uiGroup };
 }
 
 test('insertion line marks the same gap from either adjacent row without changing rows', () => {
@@ -2014,4 +2024,34 @@ test('missing or failed previews never silently run the command on paste', async
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(owner._quickPasteBusy, false);
   assert.equal(errors, 2);
+});
+
+test('a reused insertion line is raised above the panel after reopening', () => {
+  const { owner, rows, actors, menuActor, uiGroup } = insertionFixture();
+  owner._showPasteInsertionLine(rows[0], true);
+  const line = owner._pasteInsertionLine;
+  owner._clearPasteDropHighlight();
+  uiGroup.set_child_above_sibling(menuActor, null);
+  assert.ok(actors.indexOf(line) < actors.indexOf(menuActor));
+  owner._showPasteInsertionLine(rows[1], false);
+  assert.equal(owner._pasteInsertionLine, line);
+  assert.equal(line.visible, true);
+  assert.ok(actors.indexOf(line) > actors.indexOf(menuActor));
+});
+
+test('dragged command items retain their preview opt-in', () => {
+  const [owner] = instance(['_makePasteItemDraggable'], {
+    DND: { makeDraggable: () => ({ connect: () => {} }) },
+  });
+  const row = {
+    entry: {
+      id: 'command',
+      kind: 'command',
+      command: 'date',
+      previewOnOpen: true,
+      sourceSetId: 'set',
+    },
+  };
+  owner._makePasteItemDraggable(row);
+  assert.equal(row.getPasteDragContent().previewOnOpen, true);
 });

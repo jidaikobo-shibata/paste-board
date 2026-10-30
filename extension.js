@@ -587,6 +587,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       command: row.entry.command,
       executionMode: row.entry.executionMode || 'direct',
       trimTrailingNewlines: row.entry.trimTrailingNewlines,
+      previewOnOpen: row.entry.previewOnOpen,
     });
     row.getDragActor = () =>
       new St.Label({
@@ -671,6 +672,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       });
       Main.uiGroup.add_child(this._pasteInsertionLine);
     }
+    // PopupMenu raises its actor every time it opens; the reused overlay must
+    // be raised again too, otherwise it remains hidden behind the panel.
+    Main.uiGroup.set_child_above_sibling(this._pasteInsertionLine, null);
     this._pasteDropPlacement = { row, after };
     this._updatePasteInsertionLine();
   }
