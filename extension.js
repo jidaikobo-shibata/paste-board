@@ -865,37 +865,49 @@ class ClipboardIndicator extends PanelMenu.Button {
       !sets.some((set) => set.id === this._activePasteTab)
     )
       this._activePasteTab = 'history';
-    this._tabsBox.get_children().forEach((actor) => actor.destroy());
-    for (const [id, name] of [
+    const tabs = [
       ['history', this._pasteSets.data.historyName || _('History')],
       ...sets.map((set) => [set.id, set.name]),
-    ]) {
-      const button = new St.Button({
-        can_focus: true,
-        accessible_role: Atk.Role.PAGE_TAB,
-        accessible_name: name,
-        style_class: 'ci-paste-tab',
-      });
-      const tabContent = new St.BoxLayout({
-        style_class: 'ci-paste-tab-content',
-      });
-      tabContent.set_vertical(true);
-      tabContent.add_child(new St.Label({ text: name }));
-      tabContent.add_child(
-        new St.Widget({ style_class: 'ci-tab-underline', x_expand: true }),
-      );
-      button.set_child(tabContent);
+    ];
+    const signature = JSON.stringify(tabs);
+    if (signature !== this._pasteTabsSignature) {
+      this._tabsBox.get_children().forEach((actor) => actor.destroy());
+      this._pasteTabButtons = new Map();
+      for (const [id, name] of tabs) {
+        const button = new St.Button({
+          can_focus: true,
+          accessible_role: Atk.Role.PAGE_TAB,
+          accessible_name: name,
+          style_class: 'ci-paste-tab',
+        });
+        const tabContent = new St.BoxLayout({
+          style_class: 'ci-paste-tab-content',
+        });
+        tabContent.set_vertical(true);
+        tabContent.add_child(new St.Label({ text: name }));
+        tabContent.add_child(
+          new St.Widget({ style_class: 'ci-tab-underline', x_expand: true }),
+        );
+        button.set_child(tabContent);
+        this._makePasteTabDropTarget(button, id);
+        button.connect('clicked', () => this._switchPasteTab(id));
+        this._tabsBox.add_child(button);
+        this._pasteTabButtons.set(id, button);
+      }
+      this._pasteTabsSignature = signature;
+    }
+    for (const [id, button] of this._pasteTabButtons) {
       if (id === this._activePasteTab) {
         button.add_style_pseudo_class('checked');
         button.add_accessible_state(Atk.StateType.SELECTED);
+      } else {
+        button.remove_style_pseudo_class('checked');
+        button.remove_accessible_state(Atk.StateType.SELECTED);
       }
-      this._makePasteTabDropTarget(button, id);
-      button.connect('clicked', () => this._switchPasteTab(id));
-      this._tabsBox.add_child(button);
     }
-    this._pasteSetSection.removeAll();
     const set = sets.find((item) => item.id === this._activePasteTab);
     const query = this.searchEntry.get_text().toLowerCase();
+    const previous = new Map();
     if (set) {
       const items = set.items.filter(
         (item) =>
@@ -905,7 +917,45 @@ class ClipboardIndicator extends PanelMenu.Button {
             .toLowerCase()
             .includes(query),
       );
+      const positions = new Map(
+        set.items.map((item, index) => [item.id, index]),
+      );
+      const matched = new Map(items.map((item) => [item.id, item]));
+      for (const row of this._pasteSetSection._getMenuItems()) {
+        const item = row.entry && matched.get(row.entry.id);
+        if (
+          item &&
+          row.entry.sourceSetId === set.id &&
+          [
+            'name',
+            'text',
+            'kind',
+            'command',
+            'executionMode',
+            'trimTrailingNewlines',
+          ].every((key) => row.entry[key] === item[key])
+        )
+          previous.set(item.id, row);
+        else row.destroy();
+      }
+      const orderedRows = this._pasteSetSection._getMenuItems();
       items.forEach((item, index) => {
+        const position = positions.get(item.id);
+        const existing = previous.get(item.id);
+        if (existing) {
+          existing._moveButtons.forEach((button, direction) => {
+            const enabled =
+              direction === 0 ? position > 0 : position < set.items.length - 1;
+            button.reactive = button.can_focus = enabled;
+            button.opacity = enabled ? 255 : 80;
+          });
+          if (orderedRows[index] !== existing) {
+            this._pasteSetSection.moveMenuItem(existing, index);
+            orderedRows.splice(orderedRows.indexOf(existing), 1);
+            orderedRows.splice(index, 0, existing);
+          }
+          return;
+        }
         const row = new PopupMenu.PopupMenuItem(
           item.name ||
             this._truncated(
@@ -947,6 +997,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           if (!this._quickPasteBusy && !this._draggingPasteItem)
             this._activatePasteEntry(row.entry);
         });
+        row._moveButtons = [];
         for (const [icon, label, action, enabled] of [
           [
             'go-up-symbolic',
@@ -955,7 +1006,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               this._changePasteSet(() =>
                 this._pasteSets.move(set.id, item.id, -1),
               ),
-            set.items.indexOf(item) > 0,
+            position > 0,
           ],
           [
             'go-down-symbolic',
@@ -964,7 +1015,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               this._changePasteSet(() =>
                 this._pasteSets.move(set.id, item.id, 1),
               ),
-            set.items.indexOf(item) < set.items.length - 1,
+            position < set.items.length - 1,
           ],
           [
             'document-edit-symbolic',
@@ -984,8 +1035,11 @@ class ClipboardIndicator extends PanelMenu.Button {
           button.reactive = button.can_focus = enabled;
           button.opacity = enabled ? 255 : 80;
           row.add_child(button);
+          if (icon === 'go-up-symbolic' || icon === 'go-down-symbolic')
+            row._moveButtons.push(button);
         }
-        this._pasteSetSection.addMenuItem(row);
+        this._pasteSetSection.addMenuItem(row, index);
+        orderedRows.splice(index, 0, row);
       });
       if (!items.length) {
         const empty = new PopupMenu.PopupMenuItem(
@@ -997,6 +1051,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._pasteSetSection.addMenuItem(empty);
       }
     }
+    if (!set) this._pasteSetSection.removeAll();
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
