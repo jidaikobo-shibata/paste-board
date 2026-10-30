@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-30 09:53+0900\n"
+"POT-Creation-Date: 2026-10-30 10:10+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -558,101 +558,101 @@ msgstr ""
 msgid "Invalid paste shortcut."
 msgstr ""
 
-#: prefs.js:64
+#: prefs.js:65
 msgid "Do not show"
 msgstr ""
 
-#: prefs.js:65
+#: prefs.js:66
 msgid "Highlight the icon"
 msgstr ""
 
-#: prefs.js:66
+#: prefs.js:67
 msgid "Highlight the icon and show a bubble"
 msgstr ""
 
-#: prefs.js:67
+#: prefs.js:68
 msgid "Highlight the entire top bar"
 msgstr ""
 
-#: prefs.js:68
+#: prefs.js:69
 msgid "System notification"
 msgstr ""
 
-#: prefs.js:69
+#: prefs.js:70
 msgid "Highlight the entire top bar and show a bubble"
 msgstr ""
 
-#: prefs.js:80
+#: prefs.js:81
 msgid "Open the panel"
 msgstr ""
 
-#: prefs.js:89
+#: prefs.js:90
 msgid "Max number of items"
 msgstr ""
 
-#: prefs.js:94
+#: prefs.js:95
 msgid "Panel width (%)"
 msgstr ""
 
-#: prefs.js:99
+#: prefs.js:100
 msgid ""
 "Clear history on logout\n"
 "(Paste sets are kept)"
 msgstr ""
 
-#: prefs.js:104
+#: prefs.js:105
 msgid "Copy feedback"
 msgstr ""
 
-#: prefs.js:109
+#: prefs.js:110
 msgid "Panel opening shortcut"
 msgstr ""
 
-#: prefs.js:114
+#: prefs.js:115
 msgid "Number of characters in status bar"
 msgstr ""
 
-#: prefs.js:119
+#: prefs.js:120
 msgid "What to show in status bar"
 msgstr ""
 
-#: prefs.js:124
+#: prefs.js:125
 msgid "Remove down arrow in status bar"
 msgstr ""
 
-#: prefs.js:129
+#: prefs.js:130
 msgid "Trim leading and trailing whitespace"
 msgstr ""
 
-#: prefs.js:134
+#: prefs.js:135
 msgid "Paste on Enter or click"
 msgstr ""
 
-#: prefs.js:139
+#: prefs.js:140
 msgid "Also save selected text to history"
 msgstr ""
 
-#: prefs.js:178
+#: prefs.js:192
 msgid "Modifiers for number-key paste"
 msgstr ""
 
-#: prefs.js:184
+#: prefs.js:198
 #, javascript-format
 msgid "%s+number"
 msgstr ""
 
-#: prefs.js:300
+#: prefs.js:314
 msgid "Icon"
 msgstr ""
 
-#: prefs.js:301
+#: prefs.js:315
 msgid "Clipboard contents"
 msgstr ""
 
-#: prefs.js:302
+#: prefs.js:316
 msgid "Both"
 msgstr ""
 
-#: prefs.js:303
+#: prefs.js:317
 msgid "Neither"
 msgstr ""

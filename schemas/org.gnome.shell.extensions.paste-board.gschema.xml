@@ -20,12 +20,12 @@
     </key>
     <key type="b" name="keep-menu-open">
       <default>false</default>
-      <summary>Keep the history menu open after number shortcut paste</summary>
+      <summary>Keep the paste panel open after pasting with Enter, a click, or a number shortcut</summary>
     </key>
     <key type="i" name="quick-paste-modifiers">
       <default>8</default>
       <range min="1" max="15" />
-      <summary>Modifiers for history number shortcuts</summary>
+      <summary>Modifiers for number-key paste in the visible tab</summary>
     </key>
     <key type="i" name="history-size">
       <default>1000</default>
@@ -102,11 +102,11 @@
 
     <key name="enable-keybindings" type="b">
       <default>true</default>
-      <summary>Enable keyboard shortcuts</summary>
+      <summary>Enable the shortcut that opens the paste panel</summary>
     </key>
     <key name="toggle-menu" type="as">
       <default><![CDATA[['<Super>F1']]]></default>
-      <summary>Shortcut to open the clipboard history</summary>
+      <summary>Shortcut to open the paste panel</summary>
     </key>
 
   </schema>

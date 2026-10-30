@@ -5,5 +5,5 @@
   "gettext-domain": "paste-board",
   "settings-schema": "org.gnome.shell.extensions.paste-board",
   "description": "A plain-text clipboard history and paste-set manager with keyboard navigation, continuous pasting, and command output.",
-  "shell-version": ["46", "47", "48", "49", "50", "51"]
+  "shell-version": ["50"]
 }

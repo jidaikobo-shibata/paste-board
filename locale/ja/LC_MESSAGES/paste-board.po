@@ -6,9 +6,9 @@
 #
 msgid ""
 msgstr ""
-"Project-Id-Version: \n"
+"Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-30 09:53+0900\n"
+"POT-Creation-Date: 2026-10-30 10:10+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -573,43 +573,43 @@ msgstr "アプリ別の貼り付けキーは100件まで保存できます。"
 msgid "Invalid paste shortcut."
 msgstr "貼り付けキーの指定が無効です。"
 
-#: prefs.js:64
+#: prefs.js:65
 msgid "Do not show"
 msgstr "表示しない"
 
-#: prefs.js:65
+#: prefs.js:66
 msgid "Highlight the icon"
 msgstr "アイコンを強調"
 
-#: prefs.js:66
+#: prefs.js:67
 msgid "Highlight the icon and show a bubble"
 msgstr "アイコンを強調＋吹き出し"
 
-#: prefs.js:67
+#: prefs.js:68
 msgid "Highlight the entire top bar"
 msgstr "トップバー全体を強調"
 
-#: prefs.js:68
+#: prefs.js:69
 msgid "System notification"
 msgstr "OSの通知"
 
-#: prefs.js:69
+#: prefs.js:70
 msgid "Highlight the entire top bar and show a bubble"
 msgstr "トップバー全体を強調＋吹き出し"
 
-#: prefs.js:80
+#: prefs.js:81
 msgid "Open the panel"
 msgstr "パネルを開く"
 
-#: prefs.js:89
+#: prefs.js:90
 msgid "Max number of items"
 msgstr "保存する履歴の数"
 
-#: prefs.js:94
+#: prefs.js:95
 msgid "Panel width (%)"
 msgstr "パネルの幅（%）"
 
-#: prefs.js:99
+#: prefs.js:100
 msgid ""
 "Clear history on logout\n"
 "(Paste sets are kept)"
@@ -617,178 +617,59 @@ msgstr ""
 "ログアウト時に履歴を消去する\n"
 "（ペーストセットは消去しません）"
 
-#: prefs.js:104
+#: prefs.js:105
 msgid "Copy feedback"
 msgstr "コピーしたことを表示する"
 
-#: prefs.js:109
+#: prefs.js:110
 msgid "Panel opening shortcut"
 msgstr "パネルを開くショートカット"
 
-#: prefs.js:114
+#: prefs.js:115
 msgid "Number of characters in status bar"
 msgstr "トップバーに表示するクリップボードの内容の文字数"
 
-#: prefs.js:119
+#: prefs.js:120
 msgid "What to show in status bar"
 msgstr "トップバーの表示内容"
 
-#: prefs.js:124
+#: prefs.js:125
 msgid "Remove down arrow in status bar"
 msgstr "トップバーの下矢印を非表示"
 
-#: prefs.js:129
+#: prefs.js:130
 msgid "Trim leading and trailing whitespace"
 msgstr "前後の空白・改行を削除する"
 
-#: prefs.js:134
+#: prefs.js:135
 msgid "Paste on Enter or click"
 msgstr "Enter・クリックで貼り付ける"
 
-#: prefs.js:139
+#: prefs.js:140
 msgid "Also save selected text to history"
 msgstr "選択した文字も履歴に保存する"
 
-#: prefs.js:178
+#: prefs.js:192
 msgid "Modifiers for number-key paste"
 msgstr "数字キーで貼り付けるときの修飾キー"
 
-#: prefs.js:184
+#: prefs.js:198
 #, javascript-format
 msgid "%s+number"
 msgstr "%s+数字"
 
-#: prefs.js:300
+#: prefs.js:314
 msgid "Icon"
 msgstr "アイコン"
 
-#: prefs.js:301
+#: prefs.js:315
 msgid "Clipboard contents"
 msgstr "クリップボードの内容"
 
-#: prefs.js:302
+#: prefs.js:316
 msgid "Both"
 msgstr "両方"
 
-#: prefs.js:303
+#: prefs.js:317
 msgid "Neither"
 msgstr "表示しない"
-
-#~ msgid "Your clipboard data has been corrupted and was moved to:"
-#~ msgstr "クリップボード履歴が破損したため、次の場所へ移動しました："
-
-#~ msgid "Move favorite up"
-#~ msgstr "お気に入りを上へ移動"
-
-#~ msgid "Move favorite down"
-#~ msgstr "お気に入りを下へ移動"
-
-#~ msgid "Edit favorite name"
-#~ msgstr "お気に入りの名前を編集"
-
-#~ msgid "Favorite name"
-#~ msgstr "お気に入りの名前"
-
-#~ msgid "Leave empty to show the text"
-#~ msgstr "空欄にすると本文を表示します"
-
-#~ msgid "Save status"
-#~ msgstr "保存結果"
-
-#~ msgid "Could not save. You can cancel without changing the name."
-#~ msgstr "保存できませんでした。名前を変更せずにキャンセルできます。"
-
-#~ msgid "Favorites"
-#~ msgstr "お気に入り"
-
-#~ msgid "Please file a bug report at:"
-#~ msgstr "次の場所へ不具合をご報告ください："
-
-#~ msgid ""
-#~ "Move selected history to the top\n"
-#~ "(Except while pinned, number shortcuts, and paste sets)"
-#~ msgstr ""
-#~ "選んだ履歴を先頭に移す\n"
-#~ "（固定中の操作・数字キー・ペーストセットは対象外）"
-
-#~ msgid "Search clipboard history…"
-#~ msgstr "クリップボードの履歴を検索…"
-
-#~ msgid "Private mode"
-#~ msgstr "プライベートモード"
-
-#~ msgid "Copied to clipboard"
-#~ msgstr "クリップボードにコピーしました"
-
-#~ msgid "Toggle the menu"
-#~ msgstr "メニュー"
-
-#~ msgid "Previous entry"
-#~ msgstr "一つ前の履歴をコピー"
-
-#~ msgid "Next entry"
-#~ msgstr "次の履歴をコピー"
-
-#~ msgid "Toggle private mode"
-#~ msgstr "プライベートモードの切り替え"
-
-#~ msgid "Window width (%)"
-#~ msgstr "ウィンドウの横幅(%)"
-
-#~ msgid "Max clipboard history size (MiB)"
-#~ msgstr "保存するデータ量 (MiB)"
-
-#~ msgid "Only save favorites to disk"
-#~ msgstr "お気に入り以外の履歴をシャットダウン時に削除"
-
-#~ msgid "Show notification on copy"
-#~ msgstr "コピー時に通知を表示"
-
-#~ msgid "Ask for confirmation before clearing history"
-#~ msgstr "すべての履歴を削除するときに警告を表示"
-
-#~ msgid "Move previously copied items to the top"
-#~ msgstr "クリックした履歴を一番上に表示"
-
-#~ msgid "Keyboard shortcuts"
-#~ msgstr "キーボードショートカット"
-
-#~ msgid "Remove whitespace around text"
-#~ msgstr "テキストの周りの余白を小さくする"
-
-#~ msgid "Paste on selection"
-#~ msgstr "履歴をクリックしたときに貼り付ける"
-
-#~ msgid "Save selected text to history"
-#~ msgstr "マウスでドラックするなどして選択した文字も保存"
-
-#~ msgid "Type here to search…"
-#~ msgstr "検索ワードを入力…"
-
-#, fuzzy
-#~ msgid "Item preview size (characters)"
-#~ msgstr "プレビュー文字数"
-
-#~ msgid "Settings"
-#~ msgstr "設定"
-
-#~ msgid "Text will be here"
-#~ msgstr "ここにテキストを入力"
-
-#~ msgid "History Size"
-#~ msgstr "保存件数"
-
-#~ msgid "Refresh Interval (ms)"
-#~ msgstr "更新間隔（ミリ秒）"
-
-#~ msgid "Max cache file size (kb)"
-#~ msgstr "最大キャッシュサイズ（KB）"
-
-#~ msgid "Cache only favorites"
-#~ msgstr "お気に入りのみをキャッシュ"
-
-#~ msgid "Move item to the top after selection"
-#~ msgstr "選択後にアイテムをトップに移動"
-
-#~ msgid "Disable cache file"
-#~ msgstr "キャッシュを無効化"
