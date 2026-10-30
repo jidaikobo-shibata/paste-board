@@ -107,6 +107,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._pasteSets?.close().catch((error) => console.error(error));
     if (this._sessionOverSignal) {
       Gio.DBus.session.signal_unsubscribe(this._sessionOverSignal);
       this._sessionOverSignal = undefined;
@@ -373,7 +374,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
         this._currentClipboardEntry = undefined;
         this._maybeRestoreMenuPages();
-        this._setupPasteSets();
+        await this._setupPasteSets();
+        if (this._destroyed) return;
 
         this._settingsChangedId = this.settings.connect(
           'changed',
@@ -481,10 +483,22 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._saveClearedSessionHistory();
   }
 
-  _setupPasteSets() {
+  async _setupPasteSets() {
     try {
+      // A previous disabled instance may still be finishing its atomic write.
+      await PasteSets.waitForWrites();
+      if (this._destroyed) return;
       this._pasteSets = new PasteSets(
         GLib.build_filenamev([GLib.get_user_config_dir(), this.extension.uuid]),
+        {
+          onError: (error) => {
+            if (!this._destroyed)
+              this._showNotification(
+                _('Could not save paste sets.'),
+                error.message,
+              );
+          },
+        },
       );
       this._renderPasteSets();
     } catch (error) {

@@ -146,6 +146,7 @@ async function main() {
     let item = store.data.sets[0].items[1];
     equal(item.trimTrailingNewlines, true);
     equal(item.executionMode, 'direct');
+    await store.flush();
     // Simulate a file written before executionMode existed.
     delete store.data.sets[0].items[1].executionMode;
     store.data.sets[0].items[1].command = "printf '%s' $HOME";
@@ -171,6 +172,7 @@ async function main() {
     const marker = GLib.build_filenamev([directory, 'must-not-execute']);
     const complex = `value=$(printf test); printf '%s' "$value" > '${marker}'`;
     store.put(id, { ...item, command: complex, executionMode: 'bash' });
+    await store.flush();
     equal(new PasteSets(directory).data.sets[0].items[1].command, complex);
     equal(new PasteSets(directory).data.sets[0].items[1].executionMode, 'bash');
     equal(GLib.file_test(marker, GLib.FileTest.EXISTS), false);
@@ -205,6 +207,7 @@ async function main() {
     equal(created.items[0].command, sourceItem.command);
     equal(created.items[0].id === sourceItem.id, false);
     equal(JSON.stringify(store.data.sets[1].items[0]), sourceSnapshot);
+    await store.flush();
     equal(
       new PasteSets(directory).data.sets.find((set) => set.id === createdId)
         .name,
@@ -222,6 +225,7 @@ async function main() {
     }
     equal(invalidRejected, true);
     equal(JSON.stringify(store.data), beforeInvalid);
+    await store.close();
     equal(JSON.stringify(new PasteSets(directory).data), beforeInvalid);
   } finally {
     GLib.unlink(GLib.build_filenamev([directory, 'paste-sets.json']));

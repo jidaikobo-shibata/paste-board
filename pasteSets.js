@@ -1,8 +1,16 @@
 import { _, format } from './i18n.js';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
+
+const pendingWrites = new Set();
 
 export class PasteSets {
-  constructor(directory) {
+  static async waitForWrites() {
+    while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
+  }
+
+  constructor(directory, { onError = null } = {}) {
+    this._onError = onError;
     this.path = GLib.build_filenamev([directory, 'paste-sets.json']);
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
       throw new Error(_('Could not create the paste set directory.'));
@@ -86,14 +94,86 @@ export class PasteSets {
   _save(data) {
     this._validate(data);
     const json = JSON.stringify(data);
-    if (new TextEncoder().encode(json).length > 16 * 1024 * 1024)
+    const bytes = new TextEncoder().encode(json);
+    if (bytes.length > 16 * 1024 * 1024)
       throw new Error(_('Paste sets exceed the storage limit.'));
-    if (!GLib.file_set_contents(this.path, json))
-      throw new Error(_('Could not save paste sets.'));
+    if (this._closed) throw new Error(_('Could not save paste sets.'));
+    this._pendingBytes = bytes;
+    this._startWrite();
+  }
+
+  _writeBytes(bytes) {
+    return new Promise((resolve, reject) => {
+      Gio.File.new_for_path(this.path).replace_contents_bytes_async(
+        new GLib.Bytes(bytes),
+        null,
+        false,
+        Gio.FileCreateFlags.PRIVATE,
+        null,
+        (file, result) => {
+          try {
+            file.replace_contents_finish(result);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        },
+      );
+    });
+  }
+
+  _startWrite() {
+    if (this._writing || !this._pendingBytes) return;
+    const operation = this._drainWrites();
+    this._writing = operation;
+    pendingWrites.add(operation);
+    const finished = () => {
+      pendingWrites.delete(operation);
+      this._writing = null;
+    };
+    // Handle rejection here even when the UI does not explicitly await saving.
+    operation.then(finished, finished);
+  }
+
+  async _drainWrites() {
+    while (this._pendingBytes) {
+      const bytes = this._pendingBytes;
+      this._pendingBytes = null;
+      try {
+        await this._writeBytes(bytes);
+      } catch (error) {
+        // Retain the newest edit for a subsequent edit/flush to retry.
+        this._pendingBytes ??= bytes;
+        try {
+          this._onError?.(error);
+        } catch (notificationError) {
+          console.error(notificationError);
+        }
+        throw error;
+      }
+    }
+  }
+
+  flush() {
+    this._startWrite();
+    return this._writing || Promise.resolve();
+  }
+
+  close() {
+    this._closed = true;
+    return this.flush();
   }
 
   change(update) {
-    const next = JSON.parse(JSON.stringify(this.data));
+    // Persisted fields are scalars, so copying containers isolates edits without
+    // repeatedly serializing all text just to make a working copy.
+    const next = {
+      ...this.data,
+      sets: this.data.sets.map((set) => ({
+        ...set,
+        items: set.items.map((item) => ({ ...item })),
+      })),
+    };
     update(next.sets);
     this._save(next);
     this.data = next;

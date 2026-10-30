@@ -2,6 +2,7 @@ import GLib from 'gi://GLib';
 import { _, format } from '../i18n.js';
 import { runCommand } from '../commandOutput.js';
 import { PasteSets } from '../pasteSets.js';
+import { flushSets } from './flush-paste-sets.js';
 
 const japanese = ARGV[0] === 'ja';
 let checks = 0;
@@ -27,6 +28,7 @@ const directory = GLib.dir_make_tmp('clipboard-localization-XXXXXX');
 try {
   const sets = new PasteSets(directory);
   sets.create('利用者の名前 $HOME');
+  flushSets(sets);
   equal(new PasteSets(directory).data.sets[0].name, '利用者の名前 $HOME');
 } finally {
   GLib.unlink(GLib.build_filenamev([directory, 'paste-sets.json']));

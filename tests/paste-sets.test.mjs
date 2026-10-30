@@ -1,5 +1,6 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
+import { flushSets } from './flush-paste-sets.js';
 import { PasteSets } from '../pasteSets.js';
 
 // Exercise the actual UI callback against the real validator and file writer.
@@ -34,6 +35,7 @@ try {
   owner._renderPasteSets = () => {};
   owner._editPasteSetName(null, 'first\ntext\n');
   save('First set');
+  flushSets(owner._pasteSets);
   let loaded = new PasteSets(directory);
   equal(loaded.data.sets.length, 1);
   equal(loaded.data.sets[0].name, 'First set');
@@ -42,10 +44,12 @@ try {
   equal(owner._activePasteTab, loaded.data.sets[0].id);
   owner._editPasteSetName();
   save('Empty set');
+  flushSets(owner._pasteSets);
   loaded = new PasteSets(directory);
   equal(loaded.data.sets[1].items, []);
   owner._editPasteSetName(loaded.data.sets[0].id);
   save('Renamed');
+  flushSets(owner._pasteSets);
   equal(new PasteSets(directory).data.sets[0].name, 'Renamed');
 } finally {
   GLib.unlink(directory + '/paste-sets.json');
