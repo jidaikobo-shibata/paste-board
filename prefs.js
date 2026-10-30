@@ -3,6 +3,7 @@ import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
 import Adw from 'gi://Adw';
+import Pango from 'gi://Pango';
 
 import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/extensions/prefs.js';
 
@@ -157,6 +158,19 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         }
 
         if (label) {
+          // Let translated labels wrap instead of widening the whole page.
+          label.wrap = true;
+          label.width_chars = 18;
+          label.max_width_chars = 28;
+          label.xalign = 0;
+          if (input instanceof Gtk.ComboBox) {
+            for (const renderer of input.get_cells()) {
+              if (renderer instanceof Gtk.CellRendererText) {
+                renderer.ellipsize = Pango.EllipsizeMode.END;
+                renderer.max_width_chars = 24;
+              }
+            }
+          }
           // GTK exposes this association as LABELLED_BY to assistive tools.
           label.set_mnemonic_widget(input);
           main.attach(label, 0, row, 1, 1);
