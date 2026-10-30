@@ -381,6 +381,29 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   async _prepareHistorySession() {
+    const clearOnLogout = this.settings.get_boolean(
+      SettingsFields.CLEAR_ON_LOGOUT,
+    );
+    // Cleanup at logout must remain connected even if metadata or login lookup fails.
+    try {
+      if (!this._sessionOverSignal) {
+        this._sessionOverSignal = Gio.DBus.session.signal_subscribe(
+          'org.gnome.SessionManager',
+          'org.gnome.SessionManager',
+          'SessionOver',
+          '/org/gnome/SessionManager',
+          null,
+          Gio.DBusSignalFlags.NONE,
+          () => this._onSessionOver(),
+        );
+      }
+    } catch (error) {
+      if (!this._destroyed)
+        this._showNotification(
+          _('Could not prepare history cleanup on logout'),
+          error.message,
+        );
+    }
     try {
       const session =
         await LoginManager.getLoginManager().getCurrentSessionProxy();
@@ -398,15 +421,14 @@ class ClipboardIndicator extends PanelMenu.Button {
         identity,
         this.settings.get_boolean(SettingsFields.CLEAR_ON_LOGOUT),
       );
-      this._sessionOverSignal = Gio.DBus.session.signal_subscribe(
-        'org.gnome.SessionManager',
-        'org.gnome.SessionManager',
-        'SessionOver',
-        '/org/gnome/SessionManager',
-        null,
-        Gio.DBusSignalFlags.NONE,
-        () => this._onSessionOver(),
-      );
+      if (this._historySession.recoveredFrom)
+        this._showNotification(
+          _('Session information was recovered'),
+          format(
+            _('The original session information was preserved at: %s'),
+            this._historySession.recoveredFrom,
+          ),
+        );
       return this._historySession.discardHistory;
     } catch (error) {
       if (!this._destroyed)
@@ -414,7 +436,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           _('Could not prepare history cleanup on logout'),
           error.message,
         );
-      return false;
+      return clearOnLogout;
     }
   }
 
@@ -461,6 +483,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _visiblePasteCandidates() {
+    if (PRIVATE_MODE) return [];
     return (
       this._pasteSets && this._activePasteTab !== 'history'
         ? this._pasteSetSection
@@ -1557,6 +1580,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     allowClosedMenu = false,
     commitSelection = false,
   ) {
+    if (PRIVATE_MODE || this._destroyed) return;
+    const epoch = this._clipboardQueryEpoch || 0;
     commitSelection =
       commitSelection && !this._keepMenuOpen && !entry.pasteSetItem;
     if (entry.pasteSetItem && entry.kind === 'command') {
@@ -1578,6 +1603,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, original) => {
       if (
         this._destroyed ||
+        PRIVATE_MODE ||
+        epoch !== (this._clipboardQueryEpoch || 0) ||
         (!allowClosedMenu && !this.menu.isOpen) ||
         generation !== (this._clipboardGeneration || 0)
       ) {
@@ -1601,6 +1628,9 @@ class ClipboardIndicator extends PanelMenu.Button {
           }
           this._quickPasteTimer = undefined;
           if (
+            this._destroyed ||
+            PRIVATE_MODE ||
+            epoch !== (this._clipboardQueryEpoch || 0) ||
             (!allowClosedMenu && !this.menu.isOpen) ||
             global.display.focus_window !== target ||
             generation !== (this._clipboardGeneration || 0)
@@ -1631,6 +1661,8 @@ class ClipboardIndicator extends PanelMenu.Button {
               this._finishQuickPaste(true);
               if (
                 !changed &&
+                !PRIVATE_MODE &&
+                epoch === (this._clipboardQueryEpoch || 0) &&
                 !this._destroyed &&
                 this.menu.isOpen &&
                 global.display.focus_window === target &&
@@ -1661,7 +1693,12 @@ class ClipboardIndicator extends PanelMenu.Button {
     allowClosedMenu,
     copyOnly = false,
   ) {
-    if (this._quickPasteBusy || this._destroyed || !global.display.focus_window)
+    if (
+      PRIVATE_MODE ||
+      this._quickPasteBusy ||
+      this._destroyed ||
+      !global.display.focus_window
+    )
       return;
     const target = global.display.focus_window;
     const generation = this._clipboardGeneration || 0;
@@ -1704,6 +1741,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _sendPostPasteAction(action) {
+    if (PRIVATE_MODE || this._destroyed) return;
     const code = action === 'enter' ? 28 : action === 'tab' ? 15 : null;
     if (code === null) return;
     this._quickPasteBusy = true;
@@ -1997,7 +2035,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     Store.resetDatabase(this._currentStateBuilder.bind(this));
   }
 
-  _removeEntry(entry, fullyDelete, humanGenerated) {
+  _removeEntry(entry, fullyDelete, humanGenerated, deferRefresh = false) {
     if (fullyDelete) {
       entry.detach();
 
@@ -2011,22 +2049,32 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     entry.menuItem?.destroy();
     this._updateCandidateNumbers();
-    if (fullyDelete) {
-      this._maybeRestoreMenuPages();
-    }
+    if (fullyDelete && !deferRefresh) this._refreshHistoryAfterRemoval();
+  }
+
+  _refreshHistoryAfterRemoval() {
+    const query = this.searchEntry.get_text();
+    if (query) {
+      this.searchEntryFront = this.searchEntryBack = this.entries.last();
+      this.populateSearchResults(query);
+    } else this._maybeRestoreMenuPages();
   }
 
   _pruneOldestEntries() {
     let entry = this.entries.head;
+    let removed = false;
     while (
       entry &&
       (this.entries.length > MAX_REGISTRY_LENGTH ||
         this.entries.bytes > MAX_BYTES)
     ) {
       const next = entry.next;
-      this._removeEntry(entry, true);
+      this._removeEntry(entry, true, false, true);
+      removed = true;
       entry = next;
     }
+
+    if (removed) this._refreshHistoryAfterRemoval();
 
     Store.maybePerformLogCompaction(this._currentStateBuilder.bind(this));
   }
@@ -2067,6 +2115,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _activatePasteEntry(entry) {
+    if (PRIVATE_MODE || this._destroyed) return;
     if (this._quickPasteBusy) return;
     if (PASTE_ON_SELECTION) {
       this._quickPaste(
@@ -2083,6 +2132,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _copyPasteEntry(entry) {
+    if (PRIVATE_MODE || this._destroyed) return;
     // Copy-only is an explicit clipboard change, including sets and command output.
     const text = STRIP_TEXT ? entry.text.trim() : entry.text;
     this._quickPasteRestoring = true;
@@ -2208,7 +2258,15 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     query = query.toLowerCase();
-    if (!this.searchEntryFront) return;
+    if (!this.entries.last()) {
+      this.searchEntryFront = this.searchEntryBack = undefined;
+      return;
+    }
+    if (
+      this.searchEntryFront?.list !== this.entries ||
+      this.searchEntryBack?.list !== this.entries
+    )
+      this.searchEntryFront = this.searchEntryBack = this.entries.last();
     const start = forward ? this.searchEntryFront : this.searchEntryBack;
     let entry = start;
 
@@ -2645,6 +2703,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
 
     if (PRIVATE_MODE) {
+      this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
       this.icon.add_style_class_name('private-mode');
       this._updateButtonText();

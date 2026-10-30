@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-29 21:45+0900\n"
+"POT-Creation-Date: 2026-10-30 09:08+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -101,200 +101,209 @@ msgstr ""
 msgid "Preferences"
 msgstr ""
 
-#: extension.js:389 historySession.js:7
-msgid "Cannot identify the login session."
-msgstr ""
-
-#: extension.js:414
+#: extension.js:403 extension.js:436
 msgid "Could not prepare history cleanup on logout"
 msgstr ""
 
-#: extension.js:429 extension.js:2709
+#: extension.js:412 historySession.js:7
+msgid "Cannot identify the login session."
+msgstr ""
+
+#: extension.js:426
+msgid "Session information was recovered"
+msgstr ""
+
+#: extension.js:428
+#, javascript-format
+msgid "The original session information was preserved at: %s"
+msgstr ""
+
+#: extension.js:451 extension.js:2768
 msgid "Could not save session metadata"
 msgstr ""
 
-#: extension.js:458
+#: extension.js:480
 msgid "Could not load paste sets"
 msgstr ""
 
-#: extension.js:693
+#: extension.js:716
 msgid "Could not move the item"
 msgstr ""
 
-#: extension.js:732
+#: extension.js:755
 msgid "Could not add to the paste set"
 msgstr ""
 
-#: extension.js:800
+#: extension.js:823
 msgid "Could not create the paste set"
 msgstr ""
 
-#: extension.js:836 extension.js:1001 pasteSets.js:112
+#: extension.js:859 extension.js:1024 pasteSets.js:112
 msgid "History"
 msgstr ""
 
-#: extension.js:919
+#: extension.js:942
 msgid "Move up"
 msgstr ""
 
-#: extension.js:928
+#: extension.js:951
 msgid "Move down"
 msgstr ""
 
-#: extension.js:937
+#: extension.js:960
 msgid "Edit name and content"
 msgstr ""
 
-#: extension.js:943
+#: extension.js:966
 msgid "Delete item"
 msgstr ""
 
-#: extension.js:959
+#: extension.js:982
 msgid "No matching items"
 msgstr ""
 
-#: extension.js:960
+#: extension.js:983
 msgid "Drag a history item onto this tab to add it"
 msgstr ""
 
-#: extension.js:977
+#: extension.js:1000
 msgid "Could not save paste sets"
 msgstr ""
 
-#: extension.js:1006
+#: extension.js:1029
 msgid "Edit tab"
 msgstr ""
 
-#: extension.js:1025
+#: extension.js:1048
 msgid "Rename paste set"
 msgstr ""
 
-#: extension.js:1025
+#: extension.js:1048
 msgid "Create paste set"
 msgstr ""
 
-#: extension.js:1062
+#: extension.js:1085
 msgid "Edit paste item"
 msgstr ""
 
-#: extension.js:1062
+#: extension.js:1085
 msgid "Add paste item"
 msgstr ""
 
-#: extension.js:1106
+#: extension.js:1129
 msgid "Delete this item?"
 msgstr ""
 
-#: extension.js:1106
+#: extension.js:1129
 msgid "Delete this paste set?"
 msgstr ""
 
-#: extension.js:1107
+#: extension.js:1130
 msgid "Selected item"
 msgstr ""
 
-#: extension.js:1109
+#: extension.js:1132
 msgid "This item will be removed from the paste set."
 msgstr ""
 
-#: extension.js:1110
+#: extension.js:1133
 msgid "All items in this paste set will also be deleted."
 msgstr ""
 
-#: extension.js:1111
+#: extension.js:1134
 msgid "Delete"
 msgstr ""
 
-#: extension.js:1112 extension.js:1981 pasteSetDialog.js:184
+#: extension.js:1135 extension.js:2019 pasteSetDialog.js:184
 #: pasteSetDialog.js:236
 msgid "Cancel"
 msgstr ""
 
-#: extension.js:1181
+#: extension.js:1204
 msgid "After paste"
 msgstr ""
 
-#: extension.js:1187
+#: extension.js:1210
 msgid "No action"
 msgstr ""
 
-#: extension.js:1198
+#: extension.js:1221
 msgid "No key after paste"
 msgstr ""
 
-#: extension.js:1199
+#: extension.js:1222
 #, javascript-format
 msgid "Send %s after paste"
 msgstr ""
 
-#: extension.js:1240
+#: extension.js:1263
 #, javascript-format
 msgid "%s: %s"
 msgstr ""
 
-#: extension.js:1242 pasteSetDialog.js:102
+#: extension.js:1265 pasteSetDialog.js:102
 msgid "On"
 msgstr ""
 
-#: extension.js:1242 pasteSetDialog.js:102
+#: extension.js:1265 pasteSetDialog.js:102
 msgid "Off"
 msgstr ""
 
-#: extension.js:1700
+#: extension.js:1737
 msgid "Could not execute the command"
 msgstr ""
 
-#: extension.js:1857
+#: extension.js:1895
 msgid "Add to a paste set"
 msgstr ""
 
-#: extension.js:1878
+#: extension.js:1916
 msgid "Delete from history"
 msgstr ""
 
-#: extension.js:1933
+#: extension.js:1971
 #, javascript-format
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:1972
+#: extension.js:2010
 msgid "Clear all?"
 msgstr ""
 
-#: extension.js:1973
+#: extension.js:2011
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr ""
 
-#: extension.js:1974
+#: extension.js:2012
 msgid "This operation cannot be undone."
 msgstr ""
 
-#: extension.js:1980
+#: extension.js:2018
 msgid "Clear"
 msgstr ""
 
-#: extension.js:2424
+#: extension.js:2482
 msgid "Copied"
 msgstr ""
 
-#: extension.js:2466
+#: extension.js:2524
 msgid "Copied!"
 msgstr ""
 
-#: extension.js:2863
+#: extension.js:2922
 msgid "Clipboard history was recovered"
 msgstr ""
 
-#: extension.js:2864
+#: extension.js:2923
 msgid "Could not save or load clipboard history"
 msgstr ""
 
-#: extension.js:2868
+#: extension.js:2927
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 
-#: extension.js:2873
+#: extension.js:2932
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
@@ -308,7 +317,7 @@ msgstr ""
 msgid "Could not read session metadata."
 msgstr ""
 
-#: historySession.js:34
+#: historySession.js:35 historySession.js:56
 msgid "Could not save session metadata."
 msgstr ""
 

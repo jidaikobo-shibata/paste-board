@@ -31,6 +31,54 @@ try {
   session = new HistorySession(directory, 'boot3:login2', false);
   equal(session.discardHistory, true); // Honor previous session's policy.
 
+  const path = GLib.build_filenamev([directory, 'history-session.json']);
+  for (const enabled of [false, true]) {
+    for (const malformed of [
+      '{',
+      'null',
+      '{}',
+      '{"sessionId":"old","clearOnLogout":"false","ended":false,"discardPending":false}',
+    ]) {
+      GLib.file_set_contents(path, malformed);
+      session = new HistorySession(directory, 'boot:new-login', enabled);
+      equal(session.discardHistory, enabled);
+      equal(
+        new TextDecoder().decode(
+          GLib.file_get_contents(session.recoveredFrom)[1],
+        ),
+        malformed,
+      );
+      equal(
+        JSON.parse(new TextDecoder().decode(GLib.file_get_contents(path)[1]))
+          .discardPending,
+        enabled,
+      );
+      GLib.unlink(session.recoveredFrom);
+      session.cleared();
+      equal(
+        new HistorySession(directory, 'boot:new-login', enabled).discardHistory,
+        false,
+      );
+    }
+  }
+
+  for (const enabled of [false, true]) {
+    const invalid = new Uint8Array([255]);
+    GLib.file_set_contents(path, invalid);
+    session = new HistorySession(directory, 'boot:utf8-test', enabled);
+    equal(session.discardHistory, enabled);
+    equal(
+      Array.from(GLib.file_get_contents(session.recoveredFrom)[1]).join(','),
+      '255',
+    );
+    GLib.unlink(session.recoveredFrom);
+    session.cleared();
+    equal(
+      new HistorySession(directory, 'boot:utf8-test', enabled).discardHistory,
+      false,
+    );
+  }
+
   print(`History-session policy: ${count} checks passed`);
 } finally {
   GLib.unlink(GLib.build_filenamev([directory, 'history-session.json']));

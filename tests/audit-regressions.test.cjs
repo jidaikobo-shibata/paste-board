@@ -19,6 +19,7 @@ function method(name) {
 function instance(names, globals = {}) {
   const context = vm.createContext({
     _: (value) => value,
+    PRIVATE_MODE: false,
     console: { log() {} },
     ...globals,
   });
@@ -70,6 +71,7 @@ test('initial display and private-mode transitions preserve the clipboard', () =
     _applyPasteSetVisibility: noop,
     _updateButtonText: noop,
     _queryClipboard: noop,
+    _cancelPasteCommand: noop,
   });
   owner._updatePrivateModeState();
   owner._currentClipboardEntry = { type: 1, text: 'old history' };
@@ -1059,6 +1061,7 @@ function historyFixture(options = {}) {
       '_queryPrimaryClipboard',
       '_pruneOldestEntries',
       '_removeEntry',
+      '_refreshHistoryAfterRemoval',
       '_deleteEntryAndRestoreLatest',
       '_clearHistory',
     ],
@@ -1098,6 +1101,7 @@ function historyFixture(options = {}) {
     },
   );
   Object.assign(owner, {
+    searchEntry: { get_text: () => '' },
     entries: new DS.LinkedList(),
     _archivedHistoryEntries: new DS.LinkedList(),
     _pasteSets: {},
@@ -1419,6 +1423,7 @@ test('history search treats regex metacharacters as literal text without blockin
         owner.activeHistoryMenuItems = 0;
       },
     },
+    entries: { last: () => entry },
     searchEntryFront: entry,
     searchEntryBack: entry,
     _addEntry(item) {
@@ -1428,6 +1433,7 @@ test('history search treats regex metacharacters as literal text without blockin
     },
     _truncated: (value) => value,
   });
+  entry.list = owner.entries;
   context.owner = owner;
   vm.runInContext("owner.populateSearchResults('(a+)+$')", context, {
     timeout: 200,
@@ -1438,4 +1444,209 @@ test('history search treats regex metacharacters as literal text without blockin
     timeout: 200,
   });
   assert.equal(matches.length, 1);
+});
+
+test('private mode excludes hidden candidates and blocks every paste or copy entry point', () => {
+  let commands = 0;
+  const [owner] = instance(
+    [
+      '_visiblePasteCandidates',
+      '_activatePasteEntry',
+      '_copyPasteEntry',
+      '_quickPaste',
+      '_quickPasteCommand',
+    ],
+    {
+      PRIVATE_MODE: true,
+      runCommand: () => commands++,
+    },
+  );
+  owner.historySection = {
+    _getMenuItems: () => [{ entry: { kind: 'command' } }],
+  };
+  assert.equal(owner._visiblePasteCandidates().length, 0);
+  for (const entry of [
+    { type: 1, text: 'hidden' },
+    { type: 1, pasteSetItem: true, kind: 'command', command: 'must not run' },
+  ]) {
+    owner._activatePasteEntry(entry);
+    owner._copyPasteEntry(entry);
+    owner._quickPaste(entry);
+    owner._quickPasteCommand(entry, false, false);
+  }
+  assert.equal(commands, 0);
+});
+
+test('a privacy transition cancels a pending text paste before keyboard injection', () => {
+  for (const change of ['private', 'epoch']) {
+    const timers = [],
+      writes = [],
+      target = {};
+    const [owner, context] = instance(['_quickPaste'], {
+      DS: { TYPE_TEXT: 1 },
+      global: { display: { focus_window: target } },
+      Clipboard: {
+        get_text: (_, cb) => cb(null, 'original'),
+        set_text: (...args) => writes.push(args),
+      },
+      St: { ClipboardType: { CLIPBOARD: 1 } },
+      GLib: {
+        PRIORITY_DEFAULT: 0,
+        SOURCE_REMOVE: false,
+        timeout_add: (_, ms, cb) => {
+          timers.push(cb);
+          return timers.length;
+        },
+      },
+    });
+    let ended = 0;
+    Object.assign(owner, {
+      menu: { isOpen: true },
+      _quickPasteKeysAreHeld: () => false,
+      _endQuickPasteTracking: () => ended++,
+      _sendQuickPasteKeys: () => assert.fail('private paste injected'),
+    });
+    owner._quickPaste({ type: 1, text: 'chosen' });
+    if (change === 'private') context.PRIVATE_MODE = true;
+    else owner._clipboardQueryEpoch = 1;
+    timers[0]();
+    assert.equal(ended, 1);
+    assert.equal(writes.length, 0);
+  }
+});
+
+test('history cleanup subscribes independently and honors cleanup policy after metadata or login failures', async () => {
+  const start = source.indexOf('  async _prepareHistorySession(');
+  const end = source.indexOf('\n  _saveClearedSessionHistory(', start);
+  for (const enabled of [false, true])
+    for (const failLogin of [false, true]) {
+      let logout;
+      const context = vm.createContext({
+        _: (x) => x,
+        SettingsFields: { CLEAR_ON_LOGOUT: 'cleanup' },
+        TextDecoder,
+        GLib: {
+          file_get_contents: () => [true, new Uint8Array([98, 111, 111, 116])],
+          get_user_cache_dir: () => '/tmp',
+          build_filenamev: (x) => x.join('/'),
+        },
+        Gio: {
+          DBus: {
+            session: {
+              signal_subscribe(...args) {
+                logout = args.at(-1);
+                return 42;
+              },
+            },
+          },
+          DBusSignalFlags: { NONE: 0 },
+        },
+        LoginManager: {
+          getLoginManager: () => ({
+            getCurrentSessionProxy: async () => {
+              if (failLogin) throw new Error('login unavailable');
+              return { Id: 'new-login' };
+            },
+          }),
+        },
+        HistorySession: class {
+          constructor() {
+            throw new Error('metadata unavailable');
+          }
+        },
+      });
+      const Owner = vm.runInContext(
+        '(class {' + source.slice(start, end) + '})',
+        context,
+      );
+      const owner = new Owner();
+      let loggedOut = 0;
+      Object.assign(owner, {
+        extension: { uuid: 'audit' },
+        settings: { get_boolean: () => enabled },
+        _showNotification: noop,
+        _onSessionOver: () => loggedOut++,
+      });
+      assert.equal(await owner._prepareHistorySession(), enabled);
+      assert.equal(owner._sessionOverSignal, 42);
+      logout();
+      assert.equal(loggedOut, 1);
+    }
+});
+
+test('deleting a search result preserves filtering and refreshes detached pagination references', () => {
+  const dsContext = vm.createContext({});
+  const DS = vm.runInContext(
+    fs
+      .readFileSync(path.join(root, 'dataStructures.js'), 'utf8')
+      .replace(/export /g, '') + '\n({LLNode,LinkedList,TYPE_TEXT})',
+    dsContext,
+  );
+  const [owner] = instance(
+    [
+      '_removeEntry',
+      '_refreshHistoryAfterRemoval',
+      'populateSearchResults',
+      '_navigateNextPage',
+    ],
+    {
+      DS,
+      PAGE_SIZE: 50,
+      MAX_VISIBLE_CHARS: 200,
+      Store: { deleteTextEntry: noop },
+    },
+  );
+  const entries = new DS.LinkedList();
+  for (const [id, text] of [
+    [1, 'older'],
+    [2, 'match newest'],
+  ]) {
+    const entry = new DS.LLNode();
+    Object.assign(entry, { id, text, type: DS.TYPE_TEXT });
+    entries.append(entry);
+  }
+  let rows = [];
+  Object.assign(owner, {
+    entries,
+    searchEntry: { get_text: () => 'match newest' },
+    historySection: {
+      _getMenuItems: () => rows.map((entry) => ({ entry })),
+      removeAll: () => {
+        rows = [];
+        owner.activeHistoryMenuItems = 0;
+      },
+    },
+    _updateCandidateNumbers: noop,
+    _maybeRestoreMenuPages: () => assert.fail('unfiltered rows restored'),
+    _truncated: (x) => x,
+    _addEntry(entry) {
+      rows.push(entry);
+      this.activeHistoryMenuItems++;
+      entry.menuItem = { label: { set_text: noop }, destroy: noop };
+    },
+    searchEntryFront: entries.last(),
+    searchEntryBack: entries.last(),
+  });
+  const removed = entries.last();
+  owner._removeEntry(removed, true, false);
+  assert.equal(rows.length, 0);
+  owner._navigateNextPage();
+  assert.equal(rows.length, 0);
+  owner.searchEntryFront = owner.searchEntryBack = removed;
+  owner.populateSearchResults('match newest');
+  assert.equal(rows.length, 0);
+  owner._removeEntry(entries.last(), true, false);
+  owner._navigateNextPage();
+  assert.equal(rows.length, 0);
+});
+
+test('pruning multiple history entries refreshes the filtered view only once', () => {
+  const { owner, context, copy } = historyFixture();
+  for (let i = 0; i < 20; i++) copy('entry ' + i);
+  let refreshes = 0;
+  owner._refreshHistoryAfterRemoval = () => refreshes++;
+  context.MAX_REGISTRY_LENGTH = 1;
+  owner._pruneOldestEntries();
+  assert.equal(owner.entries.length, 1);
+  assert.equal(refreshes, 1);
 });

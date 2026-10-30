@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: \n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-29 21:45+0900\n"
+"POT-Creation-Date: 2026-10-30 09:08+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -106,201 +106,210 @@ msgstr "すべての履歴を削除"
 msgid "Preferences"
 msgstr "環境設定"
 
-#: extension.js:389 historySession.js:7
-msgid "Cannot identify the login session."
-msgstr "ログインセッションを識別できません。"
-
-#: extension.js:414
+#: extension.js:403 extension.js:436
 msgid "Could not prepare history cleanup on logout"
 msgstr "ログアウト時の履歴消去を準備できません"
 
-#: extension.js:429 extension.js:2709
+#: extension.js:412 historySession.js:7
+msgid "Cannot identify the login session."
+msgstr "ログインセッションを識別できません。"
+
+#: extension.js:426
+msgid "Session information was recovered"
+msgstr "セッション情報を復旧しました"
+
+#: extension.js:428
+#, javascript-format
+msgid "The original session information was preserved at: %s"
+msgstr "元のセッション情報は次の場所に保全しました：%s"
+
+#: extension.js:451 extension.js:2768
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
-#: extension.js:458
+#: extension.js:480
 msgid "Could not load paste sets"
 msgstr "ペーストセットを読み込めません"
 
-#: extension.js:693
+#: extension.js:716
 msgid "Could not move the item"
 msgstr "項目を移動できません"
 
-#: extension.js:732
+#: extension.js:755
 msgid "Could not add to the paste set"
 msgstr "セットへ追加できません"
 
-#: extension.js:800
+#: extension.js:823
 msgid "Could not create the paste set"
 msgstr "セットを作成できません"
 
-#: extension.js:836 extension.js:1001 pasteSets.js:112
+#: extension.js:859 extension.js:1024 pasteSets.js:112
 msgid "History"
 msgstr "履歴"
 
-#: extension.js:919
+#: extension.js:942
 msgid "Move up"
 msgstr "上へ移動"
 
-#: extension.js:928
+#: extension.js:951
 msgid "Move down"
 msgstr "下へ移動"
 
-#: extension.js:937
+#: extension.js:960
 msgid "Edit name and content"
 msgstr "名前と本文を編集"
 
-#: extension.js:943
+#: extension.js:966
 msgid "Delete item"
 msgstr "項目を削除"
 
-#: extension.js:959
+#: extension.js:982
 msgid "No matching items"
 msgstr "一致する項目がありません"
 
-#: extension.js:960
+#: extension.js:983
 msgid "Drag a history item onto this tab to add it"
 msgstr "履歴の項目をこのタブへドラッグして追加できます"
 
-#: extension.js:977
+#: extension.js:1000
 msgid "Could not save paste sets"
 msgstr "ペーストセットを保存できません"
 
-#: extension.js:1006
+#: extension.js:1029
 msgid "Edit tab"
 msgstr "タブを編集"
 
-#: extension.js:1025
+#: extension.js:1048
 msgid "Rename paste set"
 msgstr "セット名を変更"
 
-#: extension.js:1025
+#: extension.js:1048
 msgid "Create paste set"
 msgstr "ペーストセットを作成"
 
-#: extension.js:1062
+#: extension.js:1085
 msgid "Edit paste item"
 msgstr "ペースト項目を編集"
 
-#: extension.js:1062
+#: extension.js:1085
 msgid "Add paste item"
 msgstr "ペースト項目を追加"
 
-#: extension.js:1106
+#: extension.js:1129
 msgid "Delete this item?"
 msgstr "項目を削除しますか？"
 
-#: extension.js:1106
+#: extension.js:1129
 msgid "Delete this paste set?"
 msgstr "セットを削除しますか？"
 
-#: extension.js:1107
+#: extension.js:1130
 msgid "Selected item"
 msgstr "選択した項目"
 
-#: extension.js:1109
+#: extension.js:1132
 msgid "This item will be removed from the paste set."
 msgstr "この項目をセットから削除します。"
 
-#: extension.js:1110
+#: extension.js:1133
 msgid "All items in this paste set will also be deleted."
 msgstr "セット内のすべての項目も削除します。"
 
-#: extension.js:1111
+#: extension.js:1134
 msgid "Delete"
 msgstr "削除"
 
-#: extension.js:1112 extension.js:1981 pasteSetDialog.js:184
+#: extension.js:1135 extension.js:2019 pasteSetDialog.js:184
 #: pasteSetDialog.js:236
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: extension.js:1181
+#: extension.js:1204
 msgid "After paste"
 msgstr "貼付後"
 
-#: extension.js:1187
+#: extension.js:1210
 msgid "No action"
 msgstr "そのまま"
 
-#: extension.js:1198
+#: extension.js:1221
 msgid "No key after paste"
 msgstr "貼付後の操作なし"
 
-#: extension.js:1199
+#: extension.js:1222
 #, javascript-format
 msgid "Send %s after paste"
 msgstr "貼付後に%sキーを送る"
 
-#: extension.js:1240
+#: extension.js:1263
 #, javascript-format
 msgid "%s: %s"
 msgstr "%s：%s"
 
-#: extension.js:1242 pasteSetDialog.js:102
+#: extension.js:1265 pasteSetDialog.js:102
 msgid "On"
 msgstr "オン"
 
-#: extension.js:1242 pasteSetDialog.js:102
+#: extension.js:1265 pasteSetDialog.js:102
 msgid "Off"
 msgstr "オフ"
 
-#: extension.js:1700
+#: extension.js:1737
 msgid "Could not execute the command"
 msgstr "コマンドを実行できません"
 
-#: extension.js:1857
+#: extension.js:1895
 msgid "Add to a paste set"
 msgstr "ペーストセットへ追加"
 
-#: extension.js:1878
+#: extension.js:1916
 msgid "Delete from history"
 msgstr "履歴から削除"
 
-#: extension.js:1933
+#: extension.js:1971
 #, javascript-format
 msgid "Command: %s"
 msgstr "コマンド：%s"
 
-#: extension.js:1972
+#: extension.js:2010
 msgid "Clear all?"
 msgstr "すべて削除しますか？"
 
-#: extension.js:1973
+#: extension.js:2011
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr "クリップボードの履歴を全て削除してよろしいですか？"
 
-#: extension.js:1974
+#: extension.js:2012
 msgid "This operation cannot be undone."
 msgstr "削除した履歴は復元できません"
 
-#: extension.js:1980
+#: extension.js:2018
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:2424
+#: extension.js:2482
 msgid "Copied"
 msgstr "コピーしました"
 
-#: extension.js:2466
+#: extension.js:2524
 msgid "Copied!"
 msgstr "Copied!"
 
-#: extension.js:2863
+#: extension.js:2922
 msgid "Clipboard history was recovered"
 msgstr "クリップボード履歴を復旧しました"
 
-#: extension.js:2864
+#: extension.js:2923
 msgid "Could not save or load clipboard history"
 msgstr "クリップボード履歴を保存または読み込めません"
 
-#: extension.js:2868
+#: extension.js:2927
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 "読み取り可能な履歴を復元しました。元のファイルは次の場所に保全しました：%s"
 
-#: extension.js:2873
+#: extension.js:2932
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
@@ -316,7 +325,7 @@ msgstr "セッション情報の保存先を作成できません。"
 msgid "Could not read session metadata."
 msgstr "セッション情報を読み込めません。"
 
-#: historySession.js:34
+#: historySession.js:35 historySession.js:56
 msgid "Could not save session metadata."
 msgstr "セッション情報を保存できません。"
 
