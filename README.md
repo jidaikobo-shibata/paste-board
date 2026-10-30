@@ -88,8 +88,8 @@ the network, or launch applications—even when they produce no text. Only add
 commands you understand and trust. Cancelling a command does not undo its actions.**
 
 Commands must finish within 3 seconds and produce at most 64 KiB of output.
-Interactive commands are unsupported; the extension does not request, store, or
-supply passwords. Failed commands and empty output are not pasted.
+Interactive commands, including password prompts, are unsupported.
+Failed commands and empty output are not pasted.
 
 ## Privacy and preferences
 

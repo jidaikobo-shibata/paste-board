@@ -20,6 +20,9 @@ function instance(names, globals = {}) {
   const context = vm.createContext({
     _: (value) => value,
     PRIVATE_MODE: false,
+    MAX_TEXT_BYTES: 16 * 1024 * 1024,
+    textFitsLimit: (text, limit = 16 * 1024 * 1024) =>
+      typeof text === 'string' && text.length <= limit,
     console: { log() {} },
     ...globals,
   });
@@ -28,6 +31,9 @@ function instance(names, globals = {}) {
     context,
   );
   const owner = new Class();
+  if (!owner._readClipboard)
+    owner._readClipboard = (type, callback) =>
+      context.Clipboard.get_text(type, callback);
   if (!owner._capturePasteShortcut)
     owner._capturePasteShortcut = () => ({
       keyval: 118,
@@ -1868,4 +1874,87 @@ test('history selection alone checks log compaction after recording the move', (
   owner._currentStateBuilder = () => 'current';
   owner._moveEntryFirst(entry);
   assert.deepEqual(calls, [['memory'], ['move', 7], ['compact', 'current']]);
+});
+
+test('oversized copied text is rejected before history or storage mutation', () => {
+  const [owner] = instance(['_processClipboardContent'], { MAX_BYTES: 4 });
+  let cleared = false,
+    notified = false;
+  owner._clearCurrentClipboardEntry = () => {
+    cleared = true;
+  };
+  owner._showNotification = () => {
+    notified = true;
+  };
+  assert.equal(owner._processClipboardContent('oversized', true), undefined);
+  assert.equal(cleared, true);
+  assert.equal(notified, true);
+});
+
+test('failed bounded clipboard reads never restore saved history over the clipboard', () => {
+  const [owner] = instance(['_queryClipboard'], {
+    St: { ClipboardType: { CLIPBOARD: 1 } },
+  });
+  owner.entries = { last: () => ({ text: 'saved' }) };
+  owner._readClipboard = (type, callback) =>
+    callback(null, null, new Error('limit'));
+  owner._setCurrentClipboardEntry = () => assert.fail('clipboard replaced');
+  owner._processClipboardContent = () =>
+    assert.fail('failed read became history');
+  owner._queryClipboard(true, true);
+});
+
+test('failed original-clipboard read aborts paste and releases busy state', () => {
+  const [owner] = instance(['_quickPaste', '_endQuickPasteTracking'], {
+    DS: { TYPE_TEXT: 1 },
+    St: { ClipboardType: { CLIPBOARD: 1 } },
+    global: { display: { focus_window: {} } },
+  });
+  owner.menu = { isOpen: true };
+  owner._readClipboard = (type, callback) =>
+    callback(null, null, new Error('limit'));
+  let notified = false;
+  owner._showNotification = () => {
+    notified = true;
+  };
+  owner._quickPaste({ type: 1, text: 'candidate' });
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(notified, true);
+});
+
+test('new clipboard reads cancel superseded requests without losing the current request', async () => {
+  const reads = [];
+  const [owner] = instance(['_readClipboard'], {
+    readClipboardText: () => {
+      let reject, resolve;
+      const promise = new Promise((yes, no) => {
+        resolve = yes;
+        reject = no;
+      });
+      const reading = {
+        promise,
+        resolve,
+        cancel: () => reject(new Error('cancelled')),
+      };
+      reads.push(reading);
+      return reading;
+    },
+    St: { ClipboardType: { CLIPBOARD: 1 } },
+    Meta: { SelectionType: { SELECTION_CLIPBOARD: 1, SELECTION_PRIMARY: 2 } },
+  });
+  const responses = [];
+  owner._readClipboard(1, (unused, text, error) =>
+    responses.push(error ? 'cancelled' : text),
+  );
+  owner._readClipboard(1, (unused, text, error) =>
+    responses.push(error ? 'cancelled' : text),
+  );
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(responses, ['cancelled']);
+  assert.equal(owner._clipboardReadByType.get(1), reads[1]);
+  reads[1].resolve('latest');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(responses, ['cancelled', 'latest']);
+  assert.equal(owner._clipboardReads.size, 0);
+  assert.equal(owner._clipboardReadByType.size, 0);
 });

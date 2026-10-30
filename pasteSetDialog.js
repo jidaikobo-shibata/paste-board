@@ -87,7 +87,7 @@ export const PasteSetDialog = GObject.registerClass(
                 'Runs with your permissions and can modify or delete files or access the network. Commands execute even without output. Register only commands you understand and trust.',
               ),
               _(
-                'Interactive input is not supported. Passwords are never requested, stored, or supplied by this extension.',
+                'Commands requiring interactive input, such as password prompts, are not supported.',
               ),
               _(
                 'Limits: 3 seconds and 64 KiB of output. Actions already performed cannot be undone.',

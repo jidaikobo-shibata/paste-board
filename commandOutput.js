@@ -67,7 +67,11 @@ export function runCommand(
           command,
         ];
       } else {
-        [, argv] = GLib.shell_parse_argv(command);
+        try {
+          [, argv] = GLib.shell_parse_argv(command);
+        } catch {
+          throw new Error(_('Could not start the command.'));
+        }
       }
       // Python isolated mode ignores Python startup/import environment hooks.
       process = launcher.spawnv([
@@ -85,9 +89,14 @@ export function runCommand(
       // Only the trusted supervisor writes here, with bounded JSON-encoded output.
       process.communicate_utf8_async(null, cancellable, (self, result) => {
         try {
-          const [, stdout, stderr] = self.communicate_utf8_finish(result);
+          const [, stdout] = self.communicate_utf8_finish(result);
           if (settled) return;
-          const response = JSON.parse(stdout);
+          let response;
+          try {
+            response = JSON.parse(stdout);
+          } catch {
+            throw new Error(_('Command supervision failed.'));
+          }
           if (response.error) {
             const messages = {
               'output-limit': _('Command output exceeded the size limit.'),
@@ -99,12 +108,10 @@ export function runCommand(
             };
             const message =
               messages[response.error] || _('Command supervision failed.');
-            throw new Error(
-              message + (response.detail ? '\n' + response.detail : ''),
-            );
+            throw new Error(message);
           }
           if (!self.get_successful() || typeof response.text !== 'string')
-            throw new Error(stderr || _('Command supervision failed.'));
+            throw new Error(_('Command supervision failed.'));
           let text = response.text;
           if (trimTrailingNewlines) text = text.replace(/(?:\r?\n)+$/, '');
           if (!text)

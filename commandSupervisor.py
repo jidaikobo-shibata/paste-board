@@ -26,8 +26,8 @@ def main():
 
     signal.signal(signal.SIGTERM, stop_group)
 
-    def fail(code, detail=""):
-        print(json.dumps({"error": code, "detail": detail}), flush=True)
+    def fail(code):
+        print(json.dumps({"error": code}), flush=True)
         stop_group()
 
     try:
@@ -38,7 +38,7 @@ def main():
             sys.argv[2:], stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         )
-        output = {"stdout": bytearray(), "stderr": bytearray()}
+        output = bytearray()
         total = 0
         with selectors.DefaultSelector() as selector:
             for name, stream in (("stdout", child.stdout), ("stderr", child.stderr)):
@@ -54,20 +54,20 @@ def main():
                     total += len(data)
                     if total > limit:
                         fail("output-limit")
-                    output[key.data].extend(data)
+                    if key.data == "stdout":
+                        output.extend(data)
         if child.wait() != 0:
-            detail = output["stderr"].decode("utf-8", errors="replace")[:300]
-            fail("command-failed", detail)
-        text = output["stdout"].decode("utf-8", errors="strict")
+            fail("command-failed")
+        text = output.decode("utf-8", errors="strict")
         if "\0" in text:
             fail("nul-output")
         print(json.dumps({"text": text}, ensure_ascii=False), flush=True)
     except UnicodeError:
         fail("invalid-utf8")
-    except OSError as error:
-        fail("launch-failed", str(error))
-    except Exception as error:
-        fail("supervisor-failed", str(error))
+    except OSError:
+        fail("launch-failed")
+    except Exception:
+        fail("supervisor-failed")
 
 
 if __name__ == "__main__":

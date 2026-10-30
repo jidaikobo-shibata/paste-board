@@ -69,7 +69,25 @@ async function main() {
   );
   await rejects('no-such-clipboard-test-command-4f70');
   await rejects('false', {}, 'did not exit successfully');
-  await rejects("sh -c 'printf failure >&2; exit 2'", {}, 'failure');
+  await rejects(
+    "sh -c 'printf failure >&2; exit 2'",
+    {},
+    'did not exit successfully',
+  );
+  try {
+    await runCommand("printf 'AUDIT_SECRET' >&2; exit 1").promise;
+    throw new Error('Unexpected command success');
+  } catch (error) {
+    equal(error.message.includes('AUDIT_SECRET'), false);
+    equal(error.message.includes('did not exit successfully'), true);
+  }
+  try {
+    await executeCommand("printf 'AUDIT_SECRET").promise;
+    throw new Error('Unexpected command success');
+  } catch (error) {
+    equal(error.message.includes('AUDIT_SECRET'), false);
+    equal(error.message.includes('Could not start'), true);
+  }
   await rejects('true', {}, 'no output');
   await rejects('sleep 2', { timeoutMs: 40 }, 'timed out');
   await rejects('yes', { maxOutputBytes: 8192 }, 'size limit');

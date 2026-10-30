@@ -1,6 +1,7 @@
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
 import * as DS from './dataStructures.js';
+import { MAX_TEXT_BYTES, MAX_LOG_BYTES, textFitsLimit } from './inputLimits.js';
 
 // Record numbers are stable: existing logs retain their text, archives and IDs.
 const SAVE = 1;
@@ -26,7 +27,7 @@ function io(object, begin, finish, ...args) {
 }
 
 function textRecord(text) {
-  if (typeof text !== 'string' || text.includes('\0'))
+  if (!textFitsLimit(text) || text.includes('\0'))
     throw new Error('Invalid history text');
   const encoded = encoder.encode(text);
   const bytes = new Uint8Array(encoded.length + 2);
@@ -228,6 +229,20 @@ class HistoryStore {
       };
       let stream;
       try {
+        const info = await io(
+          this.file,
+          'query_info_async',
+          'query_info_finish',
+          'standard::size,standard::type',
+          Gio.FileQueryInfoFlags.NONE,
+          0,
+          null,
+        );
+        if (
+          info.get_file_type() !== Gio.FileType.REGULAR ||
+          info.get_size() > MAX_LOG_BYTES
+        )
+          throw new Error('History exceeds size limit');
         const input = await io(this.file, 'read_async', 'read_finish', 0, null);
         stream = Gio.DataInputStream.new(input);
         stream.set_byte_order(Gio.DataStreamByteOrder.LITTLE_ENDIAN);
@@ -242,6 +257,7 @@ class HistoryStore {
       }
       let damaged;
       try {
+        let processed = 0;
         const requireBytes = async (count, eofAllowed = false) => {
           while (stream.get_available() < count) {
             const filled = await io(
@@ -261,18 +277,38 @@ class HistoryStore {
         };
         while (await requireBytes(1, true)) {
           const type = stream.read_byte(null);
+          processed++;
+          if (processed > MAX_LOG_BYTES)
+            throw new Error('History exceeds size limit');
           if (type === SAVE) {
-            const [text] = await io(
-              stream,
-              'read_upto_async',
-              'read_upto_finish',
-              '\0',
-              1,
-              0,
-              null,
+            const chunks = [];
+            let size = 0;
+            while (true) {
+              await requireBytes(1);
+              const available = stream.peek_buffer();
+              const terminator = available.indexOf(0);
+              const count = terminator < 0 ? available.length : terminator;
+              size += count;
+              processed += count + (terminator >= 0 ? 1 : 0);
+              if (processed > MAX_LOG_BYTES)
+                throw new Error('History exceeds size limit');
+              if (size > MAX_TEXT_BYTES)
+                throw new Error('History text exceeds size limit');
+              if (count) chunks.push(stream.read_bytes(count, null).get_data());
+              if (terminator >= 0) {
+                stream.read_byte(null);
+                break;
+              }
+            }
+            const bytes = new Uint8Array(size);
+            let offset = 0;
+            for (const chunk of chunks) {
+              bytes.set(chunk, offset);
+              offset += chunk.length;
+            }
+            const text = new TextDecoder('utf-8', { fatal: true }).decode(
+              bytes,
             );
-            if (stream.read_byte(null) !== 0)
-              throw new Error('Invalid history terminator');
             const entry = new DS.LLNode();
             entry.id = entry.diskId = state.nextId++;
             entry.type = DS.TYPE_TEXT;
@@ -283,6 +319,9 @@ class HistoryStore {
             if (![DELETE, ARCHIVE, RESTORE, MOVE].includes(type))
               throw new Error('Unknown history record');
             await requireBytes(4);
+            processed += 4;
+            if (processed > MAX_LOG_BYTES)
+              throw new Error('History exceeds size limit');
             const id = stream.read_uint32(null);
             const entry =
               state.entries.findById(id) || state.archived.findById(id);

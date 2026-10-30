@@ -1,5 +1,7 @@
 import { _ } from './i18n.js';
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
+import { readBoundedFile } from './inputLimits.js';
 
 // Metadata only. Clipboard history and paste-set files are managed separately.
 export class HistorySession {
@@ -10,10 +12,8 @@ export class HistorySession {
     this.path = GLib.build_filenamev([directory, 'history-session.json']);
     let previous = null;
     if (GLib.file_test(this.path, GLib.FileTest.EXISTS)) {
-      const [ok, bytes] = GLib.file_get_contents(this.path);
-      if (!ok) throw new Error(_('Could not read session metadata.'));
       try {
-        if (bytes.length > 65536) throw new Error('Oversized session metadata');
+        const bytes = readBoundedFile(this.path, 65536);
         previous = JSON.parse(
           new TextDecoder('utf-8', { fatal: true }).decode(bytes),
         );
@@ -31,8 +31,12 @@ export class HistorySession {
         // the malformed metadata before replacing it; it contains no history.
         this.recoveredFrom =
           this.path + '.invalid-' + GLib.uuid_string_random();
-        if (!GLib.file_set_contents(this.recoveredFrom, bytes))
-          throw new Error(_('Could not save session metadata.'));
+        Gio.File.new_for_path(this.path).move(
+          Gio.File.new_for_path(this.recoveredFrom),
+          Gio.FileCopyFlags.NONE,
+          null,
+          null,
+        );
         previous = null;
       }
     }

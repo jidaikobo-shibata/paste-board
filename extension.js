@@ -32,6 +32,8 @@ import {
   sendShortcut,
 } from './pasteShortcuts.js';
 import { HistorySession } from './historySession.js';
+import { MAX_TEXT_BYTES, textFitsLimit } from './inputLimits.js';
+import { readClipboardText } from './clipboardRead.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
@@ -107,6 +109,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    for (const read of this._clipboardReads || []) read.cancel();
     this._pasteSets?.close().catch((error) => console.error(error));
     if (this._sessionOverSignal) {
       Gio.DBus.session.signal_unsubscribe(this._sessionOverSignal);
@@ -1685,89 +1688,102 @@ class ClipboardIndicator extends PanelMenu.Button {
       !closeAfterPaste && this._keepMenuOpen ? this._pasteAfterAction : 'none';
     const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
-    Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_clipboard, original) => {
-      if (
-        this._destroyed ||
-        PRIVATE_MODE ||
-        epoch !== (this._clipboardQueryEpoch || 0) ||
-        !this.menu.isOpen ||
-        generation !== (this._clipboardGeneration || 0)
-      ) {
-        this._endQuickPasteTracking();
-        return;
-      }
-      // A new login can have saved history but no current text selection.
-      // Treat an absent text clipboard as empty instead of rejecting every paste.
-      original ??= '';
-      let attempts = 0;
-      // Wait for the physical shortcut keys to be released before injecting paste.
-      this._quickPasteTimer = GLib.timeout_add(
-        GLib.PRIORITY_DEFAULT,
-        25,
-        () => {
-          if (this._quickPasteKeysAreHeld()) {
-            if (++attempts < 80) return GLib.SOURCE_CONTINUE;
-            this._endQuickPasteTracking();
-            this._quickPasteTimer = undefined;
-            return GLib.SOURCE_REMOVE;
-          }
-          this._quickPasteTimer = undefined;
-          if (
-            this._destroyed ||
-            PRIVATE_MODE ||
-            epoch !== (this._clipboardQueryEpoch || 0) ||
-            !this.menu.isOpen ||
-            global.display.focus_window !== target ||
-            generation !== (this._clipboardGeneration || 0)
-          ) {
-            this._endQuickPasteTracking();
-            return GLib.SOURCE_REMOVE;
-          }
-          this._quickPasteState = {
-            original,
-            text: entry.text,
-            changed: false,
-            keepClipboard: commitSelection && !entry.pasteSetItem,
-          };
-          if (this.menu.isOpen) this._suspendQuickPasteInput();
-          Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
-          if (commitSelection && !entry.pasteSetItem) {
-            this._moveEntryFirst(entry);
-            this._setCurrentClipboardEntry(entry, false);
-          }
-          try {
-            this._sendQuickPasteKeys(closeAfterPaste, shortcut);
-          } catch (error) {
-            this._finishQuickPaste(true);
-            this._showNotification(_('Could not paste'), error.message);
-            return GLib.SOURCE_REMOVE;
-          }
-          // Experimental delay: application clipboard reads are asynchronous.
-          this._quickPasteTimer = GLib.timeout_add(
-            GLib.PRIORITY_DEFAULT,
-            100,
-            () => {
+    this._readClipboard(
+      St.ClipboardType.CLIPBOARD,
+      (_clipboard, original, readError) => {
+        if (
+          this._destroyed ||
+          PRIVATE_MODE ||
+          epoch !== (this._clipboardQueryEpoch || 0) ||
+          !this.menu.isOpen ||
+          generation !== (this._clipboardGeneration || 0)
+        ) {
+          this._endQuickPasteTracking();
+          return;
+        }
+        if (readError) {
+          this._endQuickPasteTracking();
+          this._showNotification(_('Could not read clipboard text.'), '');
+          return;
+        }
+        // A new login can have saved history but no current text selection.
+        // Treat an absent text clipboard as empty instead of rejecting every paste.
+        original ??= '';
+        if (!textFitsLimit(original) || !textFitsLimit(entry.text)) {
+          this._endQuickPasteTracking();
+          this._showNotification(_('Copied text exceeds the size limit.'), '');
+          return;
+        }
+        let attempts = 0;
+        // Wait for the physical shortcut keys to be released before injecting paste.
+        this._quickPasteTimer = GLib.timeout_add(
+          GLib.PRIORITY_DEFAULT,
+          25,
+          () => {
+            if (this._quickPasteKeysAreHeld()) {
+              if (++attempts < 80) return GLib.SOURCE_CONTINUE;
+              this._endQuickPasteTracking();
               this._quickPasteTimer = undefined;
-              const changed = this._quickPasteState?.changed;
-              this._finishQuickPaste(true);
-              if (
-                !changed &&
-                !PRIVATE_MODE &&
-                epoch === (this._clipboardQueryEpoch || 0) &&
-                !this._destroyed &&
-                this.menu.isOpen &&
-                global.display.focus_window === target &&
-                this._keepMenuOpen &&
-                !this._quickPasteKeysAreHeld()
-              )
-                this._sendPostPasteAction(afterAction);
               return GLib.SOURCE_REMOVE;
-            },
-          );
-          return GLib.SOURCE_REMOVE;
-        },
-      );
-    });
+            }
+            this._quickPasteTimer = undefined;
+            if (
+              this._destroyed ||
+              PRIVATE_MODE ||
+              epoch !== (this._clipboardQueryEpoch || 0) ||
+              !this.menu.isOpen ||
+              global.display.focus_window !== target ||
+              generation !== (this._clipboardGeneration || 0)
+            ) {
+              this._endQuickPasteTracking();
+              return GLib.SOURCE_REMOVE;
+            }
+            this._quickPasteState = {
+              original,
+              text: entry.text,
+              changed: false,
+              keepClipboard: commitSelection && !entry.pasteSetItem,
+            };
+            if (this.menu.isOpen) this._suspendQuickPasteInput();
+            Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
+            if (commitSelection && !entry.pasteSetItem) {
+              this._moveEntryFirst(entry);
+              this._setCurrentClipboardEntry(entry, false);
+            }
+            try {
+              this._sendQuickPasteKeys(closeAfterPaste, shortcut);
+            } catch (error) {
+              this._finishQuickPaste(true);
+              this._showNotification(_('Could not paste'), error.message);
+              return GLib.SOURCE_REMOVE;
+            }
+            // Experimental delay: application clipboard reads are asynchronous.
+            this._quickPasteTimer = GLib.timeout_add(
+              GLib.PRIORITY_DEFAULT,
+              100,
+              () => {
+                this._quickPasteTimer = undefined;
+                const changed = this._quickPasteState?.changed;
+                this._finishQuickPaste(true);
+                if (
+                  !changed &&
+                  !PRIVATE_MODE &&
+                  epoch === (this._clipboardQueryEpoch || 0) &&
+                  !this._destroyed &&
+                  this.menu.isOpen &&
+                  global.display.focus_window === target &&
+                  this._keepMenuOpen &&
+                  !this._quickPasteKeysAreHeld()
+                )
+                  this._sendPostPasteAction(afterAction);
+                return GLib.SOURCE_REMOVE;
+              },
+            );
+            return GLib.SOURCE_REMOVE;
+          },
+        );
+      },
+    );
   }
 
   _cancelPasteCommand() {
@@ -2433,6 +2449,31 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
+  _readClipboard(type, callback) {
+    this._clipboardReadByType ??= new Map();
+    this._clipboardReadByType.get(type)?.cancel();
+    const reading = readClipboardText(
+      this.selection,
+      type === St.ClipboardType.CLIPBOARD
+        ? Meta.SelectionType.SELECTION_CLIPBOARD
+        : Meta.SelectionType.SELECTION_PRIMARY,
+    );
+    this._clipboardReads ??= new Set();
+    this._clipboardReads.add(reading);
+    this._clipboardReadByType.set(type, reading);
+    reading.promise
+      .then(
+        (text) => callback(null, text, null),
+        (error) => callback(null, null, error),
+      )
+      .catch((error) => console.error(error))
+      .finally(() => {
+        this._clipboardReads.delete(reading);
+        if (this._clipboardReadByType.get(type) === reading)
+          this._clipboardReadByType.delete(type);
+      });
+  }
+
   _queryClipboard(externalCopy = false, restoreEmpty = false) {
     if (this._destroyed || !this.entries || PRIVATE_MODE) {
       return;
@@ -2440,7 +2481,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     const generation = this._clipboardGeneration || 0;
     const epoch = this._clipboardQueryEpoch || 0;
-    Clipboard.get_text(St.ClipboardType.CLIPBOARD, (_, text) => {
+    this._readClipboard(St.ClipboardType.CLIPBOARD, (_, text, readError) => {
       if (
         this._destroyed ||
         PRIVATE_MODE ||
@@ -2448,6 +2489,11 @@ class ClipboardIndicator extends PanelMenu.Button {
         generation !== (this._clipboardGeneration || 0)
       )
         return;
+      if (readError) {
+        if (readError.code === 'size-limit')
+          this._showNotification(readError.message, '');
+        return;
+      }
       if (!text && restoreEmpty && this.entries.last()) {
         const mimetypes =
           this.selection.get_mimetypes(
@@ -2481,7 +2527,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const epoch = this._clipboardQueryEpoch || 0;
     const generation = (this._primaryQueryGeneration =
       (this._primaryQueryGeneration || 0) + 1);
-    Clipboard.get_text(St.ClipboardType.PRIMARY, (_, text) => {
+    this._readClipboard(St.ClipboardType.PRIMARY, (_, text, readError) => {
       if (
         this._destroyed ||
         PRIVATE_MODE ||
@@ -2490,6 +2536,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         generation !== this._primaryQueryGeneration
       )
         return;
+      if (readError) return;
       const last = this._lastPrimaryEntry;
       text = this._processClipboardContent(text, false);
       this._lastPrimaryEntry = text
@@ -2516,6 +2563,11 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._loggingOut || this._destroyed) return;
     if (this._quickPasteBusy || this._quickPasteRestoring) {
       if (externalCopy) this._pendingClipboardCopy = true;
+      return;
+    }
+    if (text && !textFitsLimit(text, Math.min(MAX_BYTES, MAX_TEXT_BYTES))) {
+      if (selectEntry) this._clearCurrentClipboardEntry(false);
+      this._showNotification(_('Copied text exceeds the size limit.'), '');
       return;
     }
     if (STRIP_TEXT && text) {
@@ -2730,6 +2782,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
 
     if (PRIVATE_MODE) {
+      for (const read of this._clipboardReads || []) read.cancel();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
       this.icon.add_style_class_name('private-mode');

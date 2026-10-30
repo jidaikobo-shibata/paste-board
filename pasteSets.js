@@ -1,6 +1,7 @@
 import { _, format } from './i18n.js';
 import GLib from 'gi://GLib';
 import Gio from 'gi://Gio';
+import { readBoundedFile, MAX_TEXT_BYTES } from './inputLimits.js';
 
 const pendingWrites = new Set();
 
@@ -15,9 +16,12 @@ export class PasteSets {
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
       throw new Error(_('Could not create the paste set directory.'));
     if (GLib.file_test(this.path, GLib.FileTest.EXISTS)) {
-      const [ok, bytes] = GLib.file_get_contents(this.path);
-      if (!ok || bytes.length > 16 * 1024 * 1024)
+      let bytes;
+      try {
+        bytes = readBoundedFile(this.path, MAX_TEXT_BYTES);
+      } catch {
         throw new Error(_('Could not read paste sets.'));
+      }
       this.data = JSON.parse(new TextDecoder().decode(bytes));
       // Omitted discriminators mean plain text and direct command execution.
       // Normalize the persisted format once at the input boundary.
