@@ -21,6 +21,7 @@ export const PasteSetDialog = GObject.registerClass(
       let body;
       let kind = options.kind || 'text';
       let executionMode = options.executionMode || 'direct';
+      let previewOnOpen = options.previewOnOpen === true;
       let trimTrailingNewlines = options.trimTrailingNewlines !== false;
       if (text !== null) {
         const types = new St.BoxLayout({ style_class: 'ci-paste-action-row' });
@@ -58,6 +59,12 @@ export const PasteSetDialog = GObject.registerClass(
           style_class: 'ci-paste-action-choice',
         });
         this.contentLayout.add_child(trim);
+        const preview = new St.Button({
+          can_focus: true,
+          accessible_role: Atk.Role.TOGGLE_BUTTON,
+          style_class: 'ci-paste-action-choice',
+        });
+        this.contentLayout.add_child(preview);
         const typeButtons = [];
         const modeButtons = [];
         const sync = () => {
@@ -73,10 +80,18 @@ export const PasteSetDialog = GObject.registerClass(
             ? _('Command to execute')
             : _('Text to paste');
           body.hint_text = command ? "date '+%Y-%m-%d %H:%M:%S'" : '';
-          explanation.visible = trim.visible = modes.visible = command;
+          explanation.visible =
+            trim.visible =
+            modes.visible =
+            preview.visible =
+              command;
           explanation.set_text(
             [
-              executionMode === 'bash'
+              previewOnOpen
+                ? _(
+                    'Opening this tab runs the command. Pasting uses the previewed output.',
+                  )
+                : executionMode === 'bash'
                 ? _(
                     'Runs in Bash when pasted. Pipes and variable expansion are supported.',
                   )
@@ -94,6 +109,16 @@ export const PasteSetDialog = GObject.registerClass(
               ),
             ].join('\n'),
           );
+          preview.label = `${previewOnOpen ? '☑' : '☐'} ${_(
+            'Preview output when opening this tab',
+          )}`;
+          preview.accessible_name = format(
+            _('Preview output when opening this tab: %s'),
+            previewOnOpen ? _('On') : _('Off'),
+          );
+          if (previewOnOpen)
+            preview.add_accessible_state(Atk.StateType.CHECKED);
+          else preview.remove_accessible_state(Atk.StateType.CHECKED);
           trim.label = `${trimTrailingNewlines ? '☑' : '☐'} ${_(
             'Trim trailing newlines',
           )}`;
@@ -157,6 +182,10 @@ export const PasteSetDialog = GObject.registerClass(
           modeButtons.push([value, button]);
           modes.add_child(button);
         }
+        preview.connect('clicked', () => {
+          previewOnOpen = !previewOnOpen;
+          sync();
+        });
         trim.connect('clicked', () => {
           trimTrailingNewlines = !trimTrailingNewlines;
           sync();
@@ -172,6 +201,7 @@ export const PasteSetDialog = GObject.registerClass(
             kind,
             trimTrailingNewlines,
             executionMode,
+            previewOnOpen,
           });
           this.close();
         } catch (e) {

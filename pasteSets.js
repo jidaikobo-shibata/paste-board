@@ -31,7 +31,10 @@ export class PasteSets {
             for (const item of set.items) {
               if (!item || typeof item !== 'object') continue;
               item.kind ??= 'text';
-              if (item.kind === 'command') item.executionMode ??= 'direct';
+              if (item.kind === 'command') {
+                item.executionMode ??= 'direct';
+                item.previewOnOpen ??= false;
+              }
             }
         }
       this._validate(this.data);
@@ -87,7 +90,9 @@ export class PasteSets {
             item.command.length > 8192 ||
             item.command.includes('\0') ||
             !['direct', 'bash'].includes(item.executionMode) ||
-            typeof item.trimTrailingNewlines !== 'boolean')
+            typeof item.trimTrailingNewlines !== 'boolean' ||
+            (item.previewOnOpen !== undefined &&
+              typeof item.previewOnOpen !== 'boolean'))
         )
           throw new Error(_('Invalid command item format.'));
         ids.add(item.id);
@@ -217,6 +222,8 @@ export class PasteSets {
       next.executionMode =
         item.executionMode ?? previous?.executionMode ?? 'direct';
       next.trimTrailingNewlines = item.trimTrailingNewlines !== false;
+      next.previewOnOpen =
+        item.previewOnOpen ?? previous?.previewOnOpen ?? false;
     }
     return next;
   }

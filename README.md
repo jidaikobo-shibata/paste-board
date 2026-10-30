@@ -76,8 +76,12 @@ Press Esc when finished.
 
 Edit an item in a paste set and select **Command** instead of **Text**.
 For example, use `date '+%Y-%m-%d'` to paste today's date.
-The command runs each time you choose the item; opening or editing the set does
-not run it.
+By default, the command runs each time you choose the item.
+
+Enable **Preview output when opening this tab** for commands you want to preview.
+Opening the tab then runs the command and shows its output below the item name.
+Pasting uses that same output; search and reordering do not run it again.
+Closing the panel or switching tabs clears the preview.
 
 Use **Direct execution** for a command and its arguments. Choose **Bash
 (one-liner)** for pipes, variables, or other shell syntax. Shell startup files

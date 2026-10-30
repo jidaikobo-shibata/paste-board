@@ -204,3 +204,7 @@
   background-color: #5aa0e6;
   border-radius: 0;
 }
+
+.ci-command-preview {
+  font-size: 0.9em;
+}

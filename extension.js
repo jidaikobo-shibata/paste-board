@@ -25,6 +25,7 @@ import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
+import { CommandPreviews, previewSummary } from './commandPreviews.js';
 import { CopyFeedback } from './copyFeedback.js';
 import {
   readOverrides,
@@ -109,6 +110,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._commandPreviews?.destroy();
     for (const read of this._clipboardReads || []) read.cancel();
     this._pasteSets?.close().catch((error) => console.error(error));
     if (this._sessionOverSignal) {
@@ -197,6 +199,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        this._commandPreviews?.clear();
         this._stopPasteDragFeedback();
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
@@ -530,6 +533,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _switchPasteTab(id) {
     if (this._quickPasteBusy) return;
+    if (this._activePasteTab !== id) this._commandPreviews?.clear();
     this._activePasteTab = id;
     this.searchEntry.set_text('');
     this._renderPasteSets();
@@ -923,6 +927,16 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
     }
     const set = sets.find((item) => item.id === this._activePasteTab);
+    this._commandPreviews ??= new CommandPreviews((id) => {
+      if (this._destroyed || PRIVATE_MODE || !this.menu.isOpen) return;
+      const row = this._pasteSetSection
+        ._getMenuItems()
+        .find((row) => row.entry?.id === id);
+      if (row) this._updateCommandPreviewRow(row);
+    });
+    if (this.menu.isOpen && !PRIVATE_MODE)
+      this._commandPreviews.sync(set?.items || []);
+    else this._commandPreviews.clear();
     const query = this.searchEntry.get_text().toLowerCase();
     const previous = new Map();
     if (set) {
@@ -950,6 +964,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             'command',
             'executionMode',
             'trimTrailingNewlines',
+            'previewOnOpen',
           ].every((key) => row.entry[key] === item[key])
         )
           previous.set(item.id, row);
@@ -960,6 +975,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         const position = positions.get(item.id);
         const existing = previous.get(item.id);
         if (existing) {
+          this._updateCommandPreviewRow(existing);
           existing._moveButtons.forEach((button, direction) => {
             const enabled =
               direction === 0 ? position > 0 : position < set.items.length - 1;
@@ -998,6 +1014,22 @@ class ClipboardIndicator extends PanelMenu.Button {
             }),
             1,
           );
+        if (item.kind === 'command' && item.previewOnOpen) {
+          const position = row.get_children().indexOf(row.label);
+          row.remove_child(row.label);
+          const content = new St.BoxLayout({ x_expand: true });
+          content.set_vertical(true);
+          content.add_child(row.label);
+          row.previewLabel = new St.Label({
+            text: '',
+            style_class: 'ci-command-preview',
+            x_expand: true,
+          });
+          row.previewLabel.opacity = 205;
+          content.add_child(row.previewLabel);
+          row.insert_child_at_index(content, position);
+          this._updateCommandPreviewRow(row);
+        }
         this._makePasteItemDraggable(row);
         this._makePasteItemDropTarget(row);
         row.connect('key-focus-in', () =>
@@ -1072,6 +1104,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
+  }
+
+  _updateCommandPreviewRow(row) {
+    if (!row.previewLabel) return;
+    const record = this._commandPreviews?.get(row.entry);
+    row.previewLabel.text =
+      record?.state === 'ready'
+        ? previewSummary(record.text)
+        : record?.state === 'error'
+        ? _('Preview unavailable')
+        : _('Generating preview…');
+    this._setCandidateAccessibleName(row);
   }
 
   _changePasteSet(change) {
@@ -1184,6 +1228,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           kind: item?.kind || 'text',
           executionMode: item?.executionMode || 'direct',
           trimTrailingNewlines: item?.trimTrailingNewlines !== false,
+          previewOnOpen: item?.previewOnOpen === true,
         },
       ),
     );
@@ -1810,10 +1855,24 @@ class ClipboardIndicator extends PanelMenu.Button {
     const generation = this._clipboardGeneration || 0;
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
-    const running = runCommand(entry.command, {
-      trimTrailingNewlines: entry.trimTrailingNewlines,
-      executionMode: entry.executionMode,
-    });
+    let running;
+    if (entry.previewOnOpen) {
+      const record = this._commandPreviews?.get(entry);
+      if (!record) {
+        this._endQuickPasteTracking();
+        this._showNotification(_('Preview unavailable'), '');
+        return;
+      }
+      running = {
+        promise: record.promise,
+        cancel: () => this._commandPreviews?.clear(),
+      };
+    } else {
+      running = runCommand(entry.command, {
+        trimTrailingNewlines: entry.trimTrailingNewlines,
+        executionMode: entry.executionMode,
+      });
+    }
     this._pasteCommandRun = running;
     running.promise
       .then((text) => {
@@ -2107,10 +2166,11 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _setCandidateAccessibleName(item) {
     const shortcut = item.shortcutLabel?.get_text();
-    const description =
+    let description =
       item.entry.kind === 'command'
         ? format(_('Command: %s'), item.label.get_text())
         : item.label.get_text();
+    if (item.previewLabel) description += `. ${item.previewLabel.text}`;
     item.accessible_name = shortcut
       ? `${item.shortcutLabel.shortcutName || shortcut}. ${description}`
       : description;
@@ -2783,6 +2843,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     if (PRIVATE_MODE) {
       for (const read of this._clipboardReads || []) read.cancel();
+      this._commandPreviews?.clear();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
       this.icon.add_style_class_name('private-mode');

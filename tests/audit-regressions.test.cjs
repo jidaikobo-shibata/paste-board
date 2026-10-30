@@ -1958,3 +1958,60 @@ test('new clipboard reads cancel superseded requests without losing the current 
   assert.equal(owner._clipboardReads.size, 0);
   assert.equal(owner._clipboardReadByType.size, 0);
 });
+
+test('previewed command paste waits for and reuses the displayed result without executing again', async () => {
+  const target = {};
+  let resolve;
+  const promise = new Promise((yes) => {
+    resolve = yes;
+  });
+  const [owner] = instance(['_quickPasteCommand', '_endQuickPasteTracking'], {
+    global: { display: { focus_window: target } },
+    runCommand: () => assert.fail('preview command ran twice'),
+  });
+  const pasted = [];
+  owner.menu = { isOpen: true };
+  owner._commandPreviews = { get: () => ({ promise }) };
+  owner._quickPaste = (entry, options) => pasted.push(entry.text);
+  const entry = {
+    id: 'a',
+    previewOnOpen: true,
+    kind: 'command',
+    command: 'random',
+  };
+  owner._quickPasteCommand(entry);
+  assert.equal(owner._quickPasteBusy, true);
+  resolve('visible random value');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pasted, ['visible random value']);
+  owner._quickPasteCommand(entry);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(pasted, ['visible random value', 'visible random value']);
+});
+
+test('missing or failed previews never silently run the command on paste', async () => {
+  const [owner] = instance(['_quickPasteCommand', '_endQuickPasteTracking'], {
+    global: { display: { focus_window: {} } },
+    runCommand: () => assert.fail('preview command reran'),
+  });
+  owner.menu = { isOpen: true };
+  let errors = 0;
+  owner._showNotification = () => errors++;
+  owner._quickPaste = () => assert.fail('failed preview pasted');
+  owner._commandPreviews = { get: () => null };
+  const entry = {
+    id: 'a',
+    previewOnOpen: true,
+    kind: 'command',
+    command: 'bad',
+  };
+  owner._quickPasteCommand(entry);
+  assert.equal(owner._quickPasteBusy, false);
+  owner._commandPreviews = {
+    get: () => ({ promise: Promise.reject(Error('failed')) }),
+  };
+  owner._quickPasteCommand(entry);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(errors, 2);
+});
