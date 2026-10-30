@@ -143,11 +143,28 @@ class HistoryStore {
 
   async replace(entries) {
     await this.closeStream();
+    const bytes = encodeSnapshot(entries);
+    // GBytes with zero bytes can pass a NULL buffer to GLib's async writer.
+    // Atomically create/truncate an empty replacement without issuing a write.
+    if (!bytes.length) {
+      const empty = await io(
+        this.file,
+        'replace_async',
+        'replace_finish',
+        null,
+        false,
+        Gio.FileCreateFlags.PRIVATE,
+        0,
+        null,
+      );
+      await io(empty, 'close_async', 'close_finish', 0, null);
+      return;
+    }
     await io(
       this.file,
       'replace_contents_bytes_async',
       'replace_contents_finish',
-      new GLib.Bytes(encodeSnapshot(entries)),
+      new GLib.Bytes(bytes),
       null,
       false,
       Gio.FileCreateFlags.PRIVATE,

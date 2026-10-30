@@ -289,6 +289,18 @@ async function faultCases() {
   ]);
   equal(text(loaded.archived), ['protected archive']);
   await Store.destroy();
+
+  // Empty snapshots must finish: a zero-length GBytes write can stall in GLib.
+  Store.init('empty-reset-test');
+  equal(await Store.resetDatabase(() => []), true);
+  const emptyPath =
+    GLib.get_user_cache_dir() + '/empty-reset-test/database.log';
+  equal(GLib.file_get_contents(emptyPath)[1].length, 0);
+  equal(await Store.storeTextEntry('copied after clearing'), true);
+  await Store.destroy();
+  Store.init('empty-reset-test');
+  equal(text((await read()).entries), ['copied after clearing']);
+  await Store.destroy();
 }
 
 const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10000, () => {
