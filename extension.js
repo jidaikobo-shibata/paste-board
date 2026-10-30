@@ -1766,21 +1766,48 @@ class ClipboardIndicator extends PanelMenu.Button {
     const code = action === 'enter' ? 28 : action === 'tab' ? 15 : null;
     if (code === null) return;
     this._quickPasteBusy = true;
-    this._suspendQuickPasteInput();
+    try {
+      this._suspendQuickPasteInput();
+      this._sendKeyCodes([code]);
+      this._quickPasteInputTimer = GLib.timeout_add(
+        GLib.PRIORITY_DEFAULT,
+        40,
+        () => {
+          this._quickPasteInputTimer = undefined;
+          this._endQuickPasteTracking();
+          this._resumeQuickPasteInput();
+          return GLib.SOURCE_REMOVE;
+        },
+      );
+    } catch (error) {
+      this._endQuickPasteTracking();
+      this._resumeQuickPasteInput();
+      this._showNotification(_('Could not paste'), error.message);
+    }
+  }
+
+  _sendKeyCodes(codes) {
     const keyboard = VirtualKeyboard();
     const time = GLib.get_monotonic_time();
-    keyboard.notify_key(time, code, Clutter.KeyState.PRESSED);
-    keyboard.notify_key(time, code, Clutter.KeyState.RELEASED);
-    this._quickPasteInputTimer = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT,
-      40,
-      () => {
-        this._quickPasteInputTimer = undefined;
-        this._endQuickPasteTracking();
-        this._resumeQuickPasteInput();
-        return GLib.SOURCE_REMOVE;
-      },
-    );
+    const held = [];
+    let failure;
+    try {
+      for (const code of codes) {
+        held.push(code);
+        keyboard.notify_key(time, code, Clutter.KeyState.PRESSED);
+      }
+    } catch (error) {
+      failure = error;
+    } finally {
+      for (const code of held.reverse()) {
+        try {
+          keyboard.notify_key(time, code, Clutter.KeyState.RELEASED);
+        } catch (error) {
+          failure ??= error;
+        }
+      }
+    }
+    if (failure) throw failure;
   }
 
   _capturePasteShortcut() {
@@ -1793,20 +1820,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     closeAfterPaste = false,
     shortcut = this._capturePasteShortcut(),
   ) {
-    const keyboard = VirtualKeyboard();
-    const time = GLib.get_monotonic_time();
     if (shortcut.custom) {
-      sendShortcut(keyboard, shortcut, time, Clutter.KeyState);
+      sendShortcut(
+        VirtualKeyboard(),
+        shortcut,
+        GLib.get_monotonic_time(),
+        Clutter.KeyState,
+      );
     } else {
       // Preserve the existing key-code path for applications without an override.
-      keyboard.notify_key(time, 29, Clutter.KeyState.PRESSED);
-      if (shortcut.modifiers & 4)
-        keyboard.notify_key(time, 42, Clutter.KeyState.PRESSED);
-      keyboard.notify_key(time, 47, Clutter.KeyState.PRESSED);
-      keyboard.notify_key(time, 47, Clutter.KeyState.RELEASED);
-      if (shortcut.modifiers & 4)
-        keyboard.notify_key(time, 42, Clutter.KeyState.RELEASED);
-      keyboard.notify_key(time, 29, Clutter.KeyState.RELEASED);
+      this._sendKeyCodes([29, ...(shortcut.modifiers & 4 ? [42] : []), 47]);
     }
     if (closeAfterPaste) {
       this._quickPasteInputReleased = false;

@@ -188,6 +188,7 @@ function grabFixture() {
       '_suspendQuickPasteInput',
       '_resumeQuickPasteInput',
       '_sendPostPasteAction',
+      '_sendKeyCodes',
       '_endQuickPasteTracking',
     ],
     globals,
@@ -1798,4 +1799,56 @@ test('shortcut injection failure restores the clipboard and releases paste state
   assert.equal(owner._quickPasteState, undefined);
   assert.equal(timers.length, 0);
   assert.deepEqual(notifications, [['Could not paste', 'injection failed']]);
+});
+
+test('automatic key injection releases every attempted key after press or release errors', () => {
+  for (const failState of [0, 1]) {
+    const sent = [];
+    const [owner] = instance(['_sendKeyCodes', '_sendQuickPasteKeys'], {
+      GLib: { get_monotonic_time: () => 1 },
+      Clutter: { KeyState: { PRESSED: 1, RELEASED: 0 } },
+      VirtualKeyboard: () => ({
+        notify_key(time, code, state) {
+          sent.push([code, state]);
+          if (code === 47 && state === failState) throw new Error('injection');
+        },
+      }),
+    });
+    assert.throws(() =>
+      owner._sendQuickPasteKeys(false, { custom: false, modifiers: 5 }),
+    );
+    assert.deepEqual(sent.slice(-3), [
+      [47, 0],
+      [42, 0],
+      [29, 0],
+    ]);
+  }
+});
+
+test('failed post-paste action clears busy state and restores the panel grab', () => {
+  const [owner] = instance(
+    ['_sendPostPasteAction', '_sendKeyCodes', '_endQuickPasteTracking'],
+    {
+      GLib: { get_monotonic_time: () => 1 },
+      Clutter: { KeyState: { PRESSED: 1, RELEASED: 0 } },
+      VirtualKeyboard: () => ({
+        notify_key() {
+          throw new Error('injection');
+        },
+      }),
+    },
+  );
+  let resumed = false,
+    notified = false;
+  owner._suspendQuickPasteInput = () => {};
+  owner._resumeQuickPasteInput = () => {
+    resumed = true;
+  };
+  owner._showNotification = () => {
+    notified = true;
+  };
+  owner._sendPostPasteAction('tab');
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(resumed, true);
+  assert.equal(notified, true);
 });
