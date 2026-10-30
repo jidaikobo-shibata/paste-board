@@ -2528,6 +2528,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.entries.append(entry);
     if (entry.diskId) {
       Store.moveEntryToEnd(entry.diskId);
+      Store.maybePerformLogCompaction(this._currentStateBuilder.bind(this));
     }
   }
 

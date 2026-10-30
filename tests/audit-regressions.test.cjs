@@ -1852,3 +1852,20 @@ test('failed post-paste action clears busy state and restores the panel grab', (
   assert.equal(resumed, true);
   assert.equal(notified, true);
 });
+
+test('history selection alone checks log compaction after recording the move', () => {
+  const calls = [];
+  const [owner] = instance(['_moveEntryFirst'], {
+    Store: {
+      moveEntryToEnd: (id) => calls.push(['move', id]),
+      maybePerformLogCompaction: (build) => calls.push(['compact', build()]),
+    },
+  });
+  const entry = { diskId: 7, menuItem: {} };
+  owner.historySection = { moveMenuItem: () => {} };
+  owner._updateCandidateNumbers = () => {};
+  owner.entries = { append: () => calls.push(['memory']) };
+  owner._currentStateBuilder = () => 'current';
+  owner._moveEntryFirst(entry);
+  assert.deepEqual(calls, [['memory'], ['move', 7], ['compact', 'current']]);
+});
