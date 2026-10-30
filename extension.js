@@ -25,6 +25,7 @@ import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
+import { CopyFeedback } from './copyFeedback.js';
 import { HistorySession } from './historySession.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
@@ -81,6 +82,10 @@ class ClipboardIndicator extends PanelMenu.Button {
       style_class: 'system-status-icon clipboard-indicator-icon',
     });
     hbox.add_child(this.icon);
+    this._copyFeedback = new CopyFeedback(
+      this.icon,
+      this._showNotification.bind(this),
+    );
     this._buttonText = new St.Label({
       text: '',
       y_align: Clutter.ActorAlign.CENTER,
@@ -112,7 +117,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       GLib.Source.remove(this._pasteDragEndTimer);
       this._pasteDragEndTimer = undefined;
     }
-    this._clearCopyHighlight();
+    this._copyFeedback.destroy();
+    this._copyFeedback = undefined;
     this._notifSource?.destroy();
     this._notifSource = undefined;
     if (this._quickPasteInputTimer) {
@@ -1570,22 +1576,22 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
 
     this._quickPasteKeysHeld.add(event.get_key_code());
-    this._quickPaste(items[index - 1].entry, !this._keepMenuOpen);
+    this._quickPaste(items[index - 1].entry, {
+      closeAfterPaste: !this._keepMenuOpen,
+    });
     return true;
   }
 
   _quickPaste(
     entry,
-    closeAfterPaste = false,
-    allowClosedMenu = false,
-    commitSelection = false,
+    { closeAfterPaste = false, commitSelection = false } = {},
   ) {
     if (PRIVATE_MODE || this._destroyed) return;
     const epoch = this._clipboardQueryEpoch || 0;
     commitSelection =
       commitSelection && !this._keepMenuOpen && !entry.pasteSetItem;
     if (entry.pasteSetItem && entry.kind === 'command') {
-      this._quickPasteCommand(entry, closeAfterPaste, allowClosedMenu);
+      this._quickPasteCommand(entry, { closeAfterPaste });
       return;
     }
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
@@ -1605,7 +1611,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._destroyed ||
         PRIVATE_MODE ||
         epoch !== (this._clipboardQueryEpoch || 0) ||
-        (!allowClosedMenu && !this.menu.isOpen) ||
+        !this.menu.isOpen ||
         generation !== (this._clipboardGeneration || 0)
       ) {
         this._endQuickPasteTracking();
@@ -1631,7 +1637,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._destroyed ||
             PRIVATE_MODE ||
             epoch !== (this._clipboardQueryEpoch || 0) ||
-            (!allowClosedMenu && !this.menu.isOpen) ||
+            !this.menu.isOpen ||
             global.display.focus_window !== target ||
             generation !== (this._clipboardGeneration || 0)
           ) {
@@ -1689,9 +1695,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _quickPasteCommand(
     entry,
-    closeAfterPaste,
-    allowClosedMenu,
-    copyOnly = false,
+    { closeAfterPaste = false, copyOnly = false } = {},
   ) {
     if (
       PRIVATE_MODE ||
@@ -1717,7 +1721,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (
           this._destroyed ||
           PRIVATE_MODE ||
-          (!allowClosedMenu && !this.menu.isOpen) ||
+          !this.menu.isOpen ||
           global.display.focus_window !== target ||
           generation !== (this._clipboardGeneration || 0) ||
           epoch !== (this._clipboardQueryEpoch || 0)
@@ -1726,7 +1730,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         // Pasting is temporary; explicit copy-only actions also enter history.
         const output = { ...entry, kind: 'text', text };
         if (copyOnly) this._copyPasteEntry(output);
-        else this._quickPaste(output, closeAfterPaste, allowClosedMenu);
+        else this._quickPaste(output, { closeAfterPaste });
       })
       .catch((error) => {
         if (this._pasteCommandRun !== running) return;
@@ -2118,16 +2122,17 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (PRIVATE_MODE || this._destroyed) return;
     if (this._quickPasteBusy) return;
     if (PASTE_ON_SELECTION) {
-      this._quickPaste(
-        entry,
-        !this._keepMenuOpen,
-        false,
-        !entry.pasteSetItem && !this._keepMenuOpen,
-      );
+      this._quickPaste(entry, {
+        closeAfterPaste: !this._keepMenuOpen,
+        commitSelection: !entry.pasteSetItem && !this._keepMenuOpen,
+      });
       return;
     }
     if (entry.pasteSetItem && entry.kind === 'command')
-      this._quickPasteCommand(entry, !this._keepMenuOpen, false, true);
+      this._quickPasteCommand(entry, {
+        closeAfterPaste: !this._keepMenuOpen,
+        copyOnly: true,
+      });
     else this._copyPasteEntry(entry);
   }
 
@@ -2449,24 +2454,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     return text;
   }
 
-  _clearCopyHighlight() {
-    if (this._copyPanelFlashTimer) {
-      GLib.Source.remove(this._copyPanelFlashTimer);
-      this._copyPanelFlashTimer = undefined;
-    }
-    if (this._copyHighlightTimer) {
-      GLib.Source.remove(this._copyHighlightTimer);
-      this._copyHighlightTimer = undefined;
-    }
-    this.icon.remove_style_class_name('copy-highlight');
-    if (this._copyBubble) {
-      this._copyBubble.destroy();
-      this._copyBubble = undefined;
-    }
-    this._copyPanelFlash?.destroy();
-    this._copyPanelFlash = undefined;
-  }
-
   _highlightCopy() {
     if (
       this._destroyed ||
@@ -2475,89 +2462,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._quickPasteRestoring
     )
       return;
-    this._clearCopyHighlight();
-    const mode = COPY_FEEDBACK;
-    if (mode === 0) return;
-    if (mode === 4) {
-      this._showNotification(_('Copied'), '');
-      return;
-    }
-    if (mode === 1 || mode === 2)
-      this.icon.add_style_class_name('copy-highlight');
-    if (mode === 3 || mode === 5) {
-      const [x, y] = Main.panel.get_transformed_position();
-      const [width, height] = Main.panel.get_transformed_size();
-      this._copyPanelFlash = new St.Widget({
-        style_class: 'ci-copy-panel-flash',
-        reactive: false,
-        can_focus: false,
-        width,
-        height,
-        x,
-        y,
-      });
-      Main.uiGroup.add_child(this._copyPanelFlash);
-      if (St.Settings.get().enable_animations)
-        this._copyPanelFlash.ease({
-          opacity: 0,
-          duration: 350,
-          mode: Clutter.AnimationMode.EASE_OUT_QUAD,
-        });
-      if (mode === 5) {
-        this._copyPanelFlashTimer = GLib.timeout_add(
-          GLib.PRIORITY_DEFAULT,
-          350,
-          () => {
-            this._copyPanelFlashTimer = undefined;
-            this._copyPanelFlash?.destroy();
-            this._copyPanelFlash = undefined;
-            return GLib.SOURCE_REMOVE;
-          },
-        );
-      }
-    }
-    const anchor =
-      this.icon.visible && this.icon.mapped ? this.icon : Main.panel;
-    const monitor = Main.layoutManager.findMonitorForActor(anchor);
-    if ((mode === 2 || mode === 5) && monitor && anchor.mapped) {
-      this._copyBubble = new St.Label({
-        text: _('Copied!'),
-        style_class: 'ci-copy-bubble',
-        reactive: false,
-        can_focus: false,
-      });
-      Main.uiGroup.add_child(this._copyBubble);
-      const [, width] = this._copyBubble.get_preferred_width(-1);
-      const [, height] = this._copyBubble.get_preferred_height(width);
-      const [iconX, iconY] = anchor.get_transformed_position();
-      const [iconWidth, iconHeight] = anchor.get_transformed_size();
-      const margin = 6;
-      const x = Math.max(
-        monitor.x + margin,
-        Math.min(
-          iconX + iconWidth / 2 - width / 2,
-          monitor.x + monitor.width - width - margin,
-        ),
-      );
-      const y = Math.max(
-        monitor.y + margin,
-        Math.min(
-          iconY + iconHeight + 14,
-          monitor.y + monitor.height - height - margin,
-        ),
-      );
-      this._copyBubble.set_position(Math.round(x), Math.round(y));
-      this._copyBubble.set_size(width, height);
-    }
-    this._copyHighlightTimer = GLib.timeout_add(
-      GLib.PRIORITY_DEFAULT,
-      mode === 3 ? 350 : 800,
-      () => {
-        this._copyHighlightTimer = undefined;
-        this._clearCopyHighlight();
-        return GLib.SOURCE_REMOVE;
-      },
-    );
+    this._copyFeedback.show(COPY_FEEDBACK);
   }
 
   _moveEntryFirst(entry) {
@@ -2772,7 +2677,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     this._updateCandidateNumbers();
     this._syncModeButtons();
-    if (COPY_FEEDBACK === 0 || PRIVATE_MODE) this._clearCopyHighlight();
+    if (COPY_FEEDBACK === 0 || PRIVATE_MODE) this._copyFeedback.clear();
 
     if (prevPrivateMode !== undefined && PRIVATE_MODE !== prevPrivateMode) {
       this._updatePrivateModeState();

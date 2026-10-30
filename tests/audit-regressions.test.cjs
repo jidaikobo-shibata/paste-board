@@ -453,9 +453,10 @@ test('paste restores custom-set and numeric selections while retaining explicit 
           const text = '\nbody\n\n';
           owner._quickPaste(
             { type: 1, text, pasteSetItem: custom },
-            !pinned,
-            false,
-            operation !== 'digit',
+            {
+              closeAfterPaste: !pinned,
+              commitSelection: operation !== 'digit',
+            },
           );
           timers.shift()();
           if (externalCopy) {
@@ -523,11 +524,7 @@ function commandFixture() {
 test('command items forward their normalized execution mode unchanged', async () => {
   for (const mode of ['direct', 'bash']) {
     const { owner, resolve, launches } = commandFixture();
-    owner._quickPasteCommand(
-      { command: 'date', executionMode: mode },
-      false,
-      false,
-    );
+    owner._quickPasteCommand({ command: 'date', executionMode: mode }, {});
     assert.equal(launches[0][1].executionMode, mode);
     resolve('date output');
     await new Promise((resolve) => setImmediate(resolve));
@@ -543,7 +540,7 @@ test('command output enters temporary plain-text paste and keeps the set item un
     text: '',
     pasteSetItem: true,
   };
-  owner._quickPasteCommand(item, false, false);
+  owner._quickPasteCommand(item);
   assert.equal(owner._quickPasteBusy, true);
   assert.equal(paste.length, 0);
   resolve('generated');
@@ -555,7 +552,8 @@ test('command output enters temporary plain-text paste and keeps the set item un
   assert.equal(paste[0][0].pasteSetItem, true);
   assert.equal(item.kind, 'command');
   assert.equal(item.text, '');
-  assert.equal(paste[0].length, 3); // No commitSelection: output must restore the clipboard.
+  assert.equal(paste[0].length, 2);
+  assert.equal(paste[0][1].commitSelection, undefined); // Output must restore the clipboard.
 });
 
 test('late command results cannot paste after menu close, disable or context changes', async () => {
@@ -568,7 +566,7 @@ test('late command results cannot paste after menu close, disable or context cha
     'cancel',
   ]) {
     const { owner, context, resolve, paste, cancelled } = commandFixture();
-    owner._quickPasteCommand({ command: 'date' }, false, false);
+    owner._quickPasteCommand({ command: 'date' });
     if (change === 'close') owner.menu.isOpen = false;
     if (change === 'disable') owner._destroyed = true;
     if (change === 'focus') context.global.display.focus_window = {};
@@ -585,7 +583,7 @@ test('late command results cannot paste after menu close, disable or context cha
 
 test('command errors release busy state without pasting or modifying clipboard', async () => {
   const { owner, reject, paste, errors } = commandFixture();
-  owner._quickPasteCommand({ command: 'false' }, false, false);
+  owner._quickPasteCommand({ command: 'false' });
   reject(new Error('failure'));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(owner._quickPasteBusy, false);
@@ -843,7 +841,8 @@ test('copy-only mode records every tab and command output as the current clipboa
         };
         owner._activatePasteEntry(entry);
         if (command) {
-          assert.equal(commands[0][3], true);
+          assert.equal(commands[0][1].copyOnly, true);
+          assert.equal(commands[0][1].closeAfterPaste, !pinned);
           assert.deepEqual(copied, []);
         } else {
           assert.deepEqual(copied, ['chosen']);
@@ -890,7 +889,7 @@ test('fixed history paste preserves the clipboard and order on paste or close', 
     _hideModeHint: noop,
     _quickPasteKeysHeld: new Set(),
   });
-  owner._quickPaste({ type: 1, text: 'chosen' }, false, false, true);
+  owner._quickPaste({ type: 1, text: 'chosen' }, { commitSelection: true });
   timers.shift()();
   assert.deepEqual(copied, ['chosen']);
   assert.deepEqual(moves, []);
@@ -911,9 +910,7 @@ test('command copy-only results use clipboard copy without a paste key', async (
   owner._copyPasteEntry = (entry) => copied.push(entry.text);
   owner._quickPasteCommand(
     { command: 'date', pasteSetItem: true },
-    false,
-    false,
-    true,
+    { copyOnly: true },
   );
   resolve('generated');
   await new Promise((resolve) => setImmediate(resolve));
@@ -1028,7 +1025,10 @@ test('pasting saved text works with an initially empty clipboard and restores em
         pasted++;
       },
     });
-    owner._quickPaste({ type: 'text', text: 'saved text' }, true);
+    owner._quickPaste(
+      { type: 'text', text: 'saved text' },
+      { closeAfterPaste: true },
+    );
     assert.equal(timers.length, 1);
     timers.shift()();
     assert.equal(pasted, 1);
@@ -1315,7 +1315,8 @@ function feedbackFixture({
     add_style_class_name: noop,
     remove_style_class_name: noop,
   };
-  const [owner, context] = instance(['_highlightCopy', '_clearCopyHighlight'], {
+  const context = vm.createContext({
+    _: (value) => value,
     PRIVATE_MODE: false,
     COPY_FEEDBACK: mode,
     Main: {
@@ -1342,18 +1343,26 @@ function feedbackFixture({
       Source: { remove: (id) => timers.delete(id) },
     },
   });
-  Object.assign(owner, {
-    icon,
-    _showNotification: (...args) => notifications.push(args),
-  });
+  const feedbackSource = fs
+    .readFileSync(path.join(root, 'copyFeedback.js'), 'utf8')
+    .replace(/^import .*;\n/gm, '')
+    .replace(/^export /gm, '');
+  const CopyFeedback = vm.runInContext(
+    feedbackSource + '\nCopyFeedback',
+    context,
+  );
+  const owner = new CopyFeedback(icon, (...args) => notifications.push(args));
   return { owner, context, actors, timers, notifications };
 }
 
 test('top-bar plus bubble anchors below icon or panel center and cleans each effect on time', () => {
   for (const iconVisible of [true, false])
     for (const animated of [true, false]) {
-      const { owner, timers } = feedbackFixture({ iconVisible, animated });
-      owner._highlightCopy();
+      const { owner, context, timers } = feedbackFixture({
+        iconVisible,
+        animated,
+      });
+      owner.show(context.COPY_FEEDBACK);
       const flash = owner._copyPanelFlash,
         bubble = owner._copyBubble;
       assert.deepEqual(
@@ -1379,22 +1388,24 @@ test('top-bar plus bubble anchors below icon or panel center and cleans each eff
 
 test('repeated copy cancels previous feedback timers and mode changes remove effects', () => {
   const { owner, context, timers } = feedbackFixture();
-  owner._highlightCopy();
+  owner.show(context.COPY_FEEDBACK);
   const previous = [owner._copyPanelFlash, owner._copyBubble];
   const previousTimers = [...timers.keys()];
-  owner._highlightCopy();
+  owner.show(context.COPY_FEEDBACK);
   assert.ok(previous.every((actor) => actor.destroyed));
   assert.ok(previousTimers.every((id) => !timers.has(id)));
   assert.equal(timers.size, 2);
   context.COPY_FEEDBACK = 0;
-  owner._highlightCopy();
+  owner.show(context.COPY_FEEDBACK);
   assert.equal(timers.size, 0);
   assert.equal(owner._copyBubble, undefined);
 });
 
 test('existing copy-feedback notification keeps mode 4 without visual overlays', () => {
-  const { owner, actors, notifications } = feedbackFixture({ mode: 4 });
-  owner._highlightCopy();
+  const { owner, context, actors, notifications } = feedbackFixture({
+    mode: 4,
+  });
+  owner.show(context.COPY_FEEDBACK);
   assert.deepEqual(notifications, [['Copied', '']]);
   assert.equal(actors.length, 0);
 });
@@ -1472,7 +1483,7 @@ test('private mode excludes hidden candidates and blocks every paste or copy ent
     owner._activatePasteEntry(entry);
     owner._copyPasteEntry(entry);
     owner._quickPaste(entry);
-    owner._quickPasteCommand(entry, false, false);
+    owner._quickPasteCommand(entry);
   }
   assert.equal(commands, 0);
 });
@@ -1649,4 +1660,38 @@ test('pruning multiple history entries refreshes the filtered view only once', (
   owner._pruneOldestEntries();
   assert.equal(owner.entries.length, 1);
   assert.equal(refreshes, 1);
+});
+
+test('copy feedback releases actors, timers and owner references on destroy', () => {
+  const { owner, timers, actors } = feedbackFixture();
+  owner.show(5);
+  assert.equal(timers.size, 2);
+  owner.destroy();
+  assert.equal(timers.size, 0);
+  assert.ok(actors.every((actor) => actor.destroyed));
+  assert.equal(owner.icon, null);
+  assert.equal(owner.notify, null);
+  const count = actors.length;
+  owner.destroy();
+  owner.show(5);
+  assert.equal(actors.length, count);
+});
+
+test('indicator retains privacy and paste suppression before invoking feedback', () => {
+  const calls = [];
+  const [owner, context] = instance(['_highlightCopy'], { COPY_FEEDBACK: 2 });
+  owner._copyFeedback = { show: (mode) => calls.push(mode) };
+  owner._highlightCopy();
+  for (const property of [
+    '_destroyed',
+    '_quickPasteBusy',
+    '_quickPasteRestoring',
+  ]) {
+    owner[property] = true;
+    owner._highlightCopy();
+    owner[property] = false;
+  }
+  context.PRIVATE_MODE = true;
+  owner._highlightCopy();
+  assert.deepEqual(calls, [2]);
 });
