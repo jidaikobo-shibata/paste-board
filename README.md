@@ -9,7 +9,7 @@ pastes followed by Tab or Enter.
 - Pin the panel to paste several items without reopening it.
 - Generate text on demand with command items.
 
-![Paste Board panel showing paste-set tabs, reusable form fields, and a command item.](screenshot.png)
+![Paste Board with its clipboard icon, paste-set tabs, reusable form fields, and a command output preview.](screenshot.png)
 
 ## Install
 
