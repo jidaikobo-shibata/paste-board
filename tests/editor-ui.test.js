@@ -2,6 +2,7 @@
 import GLib from 'gi://GLib';
 import St from 'gi://St';
 import Clutter from 'gi://Clutter';
+import Atk from 'gi://Atk';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
 
@@ -71,8 +72,37 @@ export default class extends Extension {
     };
     const button = (dialog, label) =>
       descendants(dialog).find(
-        (actor) => actor instanceof St.Button && actor.label === _(label),
+        (actor) =>
+          actor instanceof St.Button &&
+          (actor.label === _(label) || actor.accessible_name === _(label)),
       );
+    const capture = async (name) => {
+      if (!GLib.getenv('EDITOR_TEST_CAPTURE')) return;
+      const { default: Gio } = await import('gi://Gio');
+      const { default: Shell } = await import('gi://Shell');
+      const stream = Gio.File.new_for_path(
+        `${GLib.get_user_cache_dir()}/${name}.png`,
+      ).replace(null, false, Gio.FileCreateFlags.NONE, null);
+      const screenshot = new Shell.Screenshot();
+      await new Promise((resolve, reject) =>
+        screenshot.screenshot_area(
+          0,
+          0,
+          global.stage.width,
+          global.stage.height,
+          stream,
+          (object, result) => {
+            try {
+              object.screenshot_area_finish(result);
+              resolve();
+            } catch (error) {
+              reject(error);
+            }
+          },
+        ),
+      );
+      stream.close(null);
+    };
     Main.overview.hide();
     const id = owner._pasteSets.create('Editor test');
     owner._pasteSets.put(id, {
@@ -86,6 +116,34 @@ export default class extends Extension {
     let dialog = owner._pasteSetDialog;
     assert(!dialog._editorRun.mapped, 'Text editor displays command controls');
     assert(!dialog._editorOutput.mapped, 'Text editor displays command output');
+    assert(
+      descendants(dialog).some(
+        (actor) =>
+          actor instanceof St.Label && actor.text === _('Name') && actor.mapped,
+      ),
+      'Name label is not persistent',
+    );
+    const title = descendants(dialog).find(
+      (actor) =>
+        actor instanceof St.Label &&
+        actor.has_style_class_name('ci-editor-title'),
+    );
+    assert(
+      title?.get_parent() === dialog.contentLayout,
+      'Title is inside scrolling content',
+    );
+    assert(
+      descendants(dialog).some(
+        (actor) => actor instanceof St.Label && actor.text === _('Body'),
+      ),
+      'Text body label differs',
+    );
+    await capture('editor-text');
+    button(dialog, 'Text').grab_key_focus();
+    await key(Clutter.KEY_Right);
+    assert(dialog._editorRun.mapped, 'Right arrow did not change editing tab');
+    await key(Clutter.KEY_Left);
+    assert(!dialog._editorRun.mapped, 'Left arrow did not restore text tab');
     const body = descendants(dialog).find(
       (actor) =>
         actor instanceof St.Entry &&
@@ -189,6 +247,66 @@ export default class extends Extension {
       'Opened command editor hides command controls',
     );
     assert(!dialog._editorPreviewRun, 'Opening editor executed command');
+    await capture('editor-command');
+    const help = button(dialog, 'About command execution');
+    const explanation = descendants(dialog).find(
+      (actor) =>
+        actor instanceof St.Label &&
+        actor.text.includes(
+          _(
+            'Commands requiring interactive input, such as password prompts, are not supported.',
+          ),
+        ),
+    );
+    assert(!explanation.mapped, 'Command details are not initially collapsed');
+    help.grab_key_focus();
+    await key(Clutter.KEY_space);
+    assert(
+      explanation.mapped &&
+        help
+          .get_accessible()
+          .ref_state_set()
+          .contains_state(Atk.StateType.EXPANDED),
+      'Keyboard help did not expose details and expanded state',
+    );
+    await capture('editor-help');
+    await key(Clutter.KEY_space);
+    assert(
+      !explanation.mapped && !dialog._editorPreviewRun,
+      'Help ran a command or did not collapse',
+    );
+    const checks = descendants(dialog).filter(
+      (actor) => actor.accessible_role === Atk.Role.CHECK_BOX,
+    );
+    assert(checks.length === 2, 'Command options are not standard checkboxes');
+    checks[0].grab_key_focus();
+    await key(Clutter.KEY_space);
+    assert(checks[0].checked, 'Space did not enable checkbox');
+    await key(Clutter.KEY_space);
+    assert(!checks[0].checked, 'Space did not disable checkbox');
+    const select = descendants(dialog).find(
+      (actor) => actor.accessible_role === Atk.Role.COMBO_BOX,
+    );
+    select.grab_key_focus();
+    await key(Clutter.KEY_space);
+    assert(
+      dialog._editorModeMenu.isOpen,
+      'Keyboard did not open mode dropdown',
+    );
+    await key(Clutter.KEY_Escape);
+    assert(
+      !dialog._editorModeMenu.isOpen && !dialog._editorPreviewClosed,
+      'Escape closed the editor instead of dropdown',
+    );
+    select.grab_key_focus();
+    await key(Clutter.KEY_Down);
+    await key(Clutter.KEY_Down);
+    await key(Clutter.KEY_Return);
+    assert(
+      !dialog._editorModeMenu.isOpen &&
+        select.accessible_name.includes(_('Bash (one-liner)')),
+      'Keyboard did not select Bash mode',
+    );
     button(dialog, 'Run and preview').emit('clicked', 0);
     for (let attempt = 0; attempt < 100 && dialog._editorPreviewRun; attempt++)
       await delay(50);
@@ -203,6 +321,47 @@ export default class extends Extension {
       'Long output has no scroll range',
     );
     assert(!dialog._editorOutput.clutter_text.editable, 'Output is editable');
+    const commandInput = descendants(dialog).find(
+      (actor) =>
+        actor instanceof St.Entry &&
+        actor.accessible_name === _('Command to execute'),
+    );
+    commandInput.set_text('printf "%s\\n" "$((1+1))"');
+    button(dialog, 'Run and preview').emit('clicked', 0);
+    for (let attempt = 0; attempt < 100 && dialog._editorPreviewRun; attempt++)
+      await delay(50);
+    assert(
+      dialog._editorOutput.get_text() === '2\n',
+      'Selected Bash execution mode was not used',
+    );
+    checks[1].grab_key_focus();
+    await key(Clutter.KEY_space);
+    assert(checks[1].checked, 'Automatic preview checkbox did not toggle');
+    button(dialog, 'Save').emit('clicked', 0);
+    await delay(200);
+    await owner._pasteSets.flush();
+    const saved = owner._pasteSets.data.sets[0].items[1];
+    assert(
+      saved.executionMode === 'bash' &&
+        saved.previewOnOpen &&
+        !saved.trimTrailingNewlines,
+      'Save lost selected execution settings',
+    );
+    const modalCount = Main.modalCount;
+    owner._editPasteSetItem(id, saved);
+    await delay(200);
+    dialog = owner._pasteSetDialog;
+    const reopenedSelect = descendants(dialog).find(
+      (actor) => actor.accessible_role === Atk.Role.COMBO_BOX,
+    );
+    reopenedSelect.grab_key_focus();
+    await key(Clutter.KEY_space);
+    assert(dialog._editorModeMenu.isOpen, 'Reopened dropdown did not open');
     dialog.close();
+    await delay(250);
+    assert(
+      Main.modalCount === modalCount,
+      'Closing editor left a modal input grab',
+    );
   }
 }

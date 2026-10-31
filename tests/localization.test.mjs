@@ -12,6 +12,12 @@ function equal(actual, expected) {
   checks++;
 }
 equal(_('History'), japanese ? '履歴' : 'History');
+equal(_('Body'), japanese ? '本文' : 'Body');
+equal(_('Output'), japanese ? '出力' : 'Output');
+equal(
+  _('About command execution'),
+  japanese ? 'コマンド実行について' : 'About command execution',
+);
 equal(_('Panel width (%)'), japanese ? 'パネルの幅（%）' : 'Panel width (%)');
 equal(
   _('Command execution timed out.'),

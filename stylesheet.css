@@ -153,13 +153,13 @@
 }
 
 .ci-set-body-scroll {
-  min-height: 120px;
+  min-height: 100px;
   max-height: 260px;
 }
 
 .ci-set-body {
   width: 420px;
-  min-height: 100px;
+  min-height: 80px;
 }
 
 .ci-set-error {
@@ -211,11 +211,78 @@
 }
 
 .ci-editor-output-scroll {
-  min-height: 90px;
+  min-height: 66px;
   max-height: 140px;
 }
 
 .ci-editor-output {
   width: 420px;
-  min-height: 72px;
+  min-height: 48px;
+}
+
+.ci-editor-title {
+  font-size: 1.25em;
+  font-weight: bold;
+  margin-bottom: 12px;
+}
+
+.ci-editor-fields {
+  spacing: 6px;
+}
+
+.ci-editor-tabs {
+  spacing: 8px;
+  margin: 4px 0;
+  border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+}
+
+.ci-editor-tabs .ci-paste-tab {
+  padding: 6px 12px 0;
+}
+
+.ci-editor-tabs .ci-tab-underline {
+  margin-top: 6px;
+}
+
+.ci-editor-select {
+  padding: 5px 10px;
+  border: 1px solid rgba(128, 128, 128, 0.65);
+  border-radius: 6px;
+  background-color: rgba(128, 128, 128, 0.12);
+}
+
+.ci-editor-select-content {
+  spacing: 12px;
+}
+
+.ci-editor-help {
+  padding: 3px 9px;
+  border: 1px solid rgba(128, 128, 128, 0.65);
+  border-radius: 99px;
+}
+
+.ci-editor-select:focus,
+.ci-editor-select:hover,
+.ci-editor-help:focus,
+.ci-editor-help:hover {
+  background-color: rgba(128, 128, 128, 0.25);
+  box-shadow: inset 0 0 0 1px #5aa0e6;
+}
+
+.ci-editor-warning {
+  width: 420px;
+  font-size: 0.9em;
+}
+
+.ci-editor-mode-row,
+.ci-editor-run-row {
+  spacing: 8px;
+}
+
+.ci-editor-name {
+  width: 420px;
+}
+
+.ci-editor-run-row {
+  padding-right: 8px;
 }

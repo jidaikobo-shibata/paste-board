@@ -7,6 +7,8 @@ import Pango from 'gi://Pango';
 import { ensureActorVisibleInScrollView } from 'resource:///org/gnome/shell/misc/animationUtils.js';
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { runCommand } from './commandOutput.js';
+import * as CheckBox from 'resource:///org/gnome/shell/ui/checkBox.js';
+import * as PopupMenu from 'resource:///org/gnome/shell/ui/popupMenu.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
 // ScrollView allocates its child's minimum height. A multiline entry must not
@@ -30,12 +32,20 @@ export const PasteSetDialog = GObject.registerClass(
         this._editorPreviewRun = null;
         running?.cancel();
       });
-      this.contentLayout.add_child(new St.Label({ text: title }));
+      const titleLabel = new St.Label({
+        text: title,
+        style_class: 'ci-editor-title',
+        accessible_role: Atk.Role.HEADING,
+      });
+      this.contentLayout.add_child(titleLabel);
+      const nameLabel = new St.Label({ text: _('Name') });
+      this.contentLayout.add_child(nameLabel);
       const nameInput = new St.Entry({
         text: name,
         can_focus: true,
         accessible_name: _('Name'),
-        hint_text: _('Name'),
+        label_actor: nameLabel,
+        style_class: 'ci-editor-name',
       });
       nameInput.clutter_text.set_max_length(text === null ? 100 : 200);
       this.contentLayout.add_child(nameInput);
@@ -46,7 +56,11 @@ export const PasteSetDialog = GObject.registerClass(
       let previewOnOpen = options.previewOnOpen === true;
       let trimTrailingNewlines = options.trimTrailingNewlines !== false;
       if (text !== null) {
-        const types = new St.BoxLayout({ style_class: 'ci-paste-action-row' });
+        const types = new St.BoxLayout({
+          style_class: 'ci-editor-tabs',
+          accessible_role: Atk.Role.PAGE_TAB_LIST,
+          accessible_name: _('Item type'),
+        });
         this.contentLayout.add_child(types);
         const bodyLabel = new St.Label({ text: '' });
         this.contentLayout.add_child(bodyLabel);
@@ -58,6 +72,7 @@ export const PasteSetDialog = GObject.registerClass(
           accessible_name: _('Text to paste'),
           style_class: 'ci-set-body',
         });
+        body.clutter_text.y_align = Clutter.ActorAlign.START;
         body.clutter_text.single_line_mode = false;
         body.clutter_text.activatable = false;
         body.clutter_text.line_wrap = true;
@@ -86,32 +101,28 @@ export const PasteSetDialog = GObject.registerClass(
         });
         this.contentLayout.add_child(scroll);
         const modes = new St.BoxLayout({
-          style_class: 'ci-paste-action-row',
+          style_class: 'ci-editor-mode-row',
           accessible_name: _('Execution mode'),
         });
         this.contentLayout.add_child(modes);
         const explanation = new St.Label({
           style_class: 'ci-set-error',
           text: '',
+          can_focus: true,
+          reactive: true,
         });
         explanation.clutter_text.line_wrap = true;
         explanation.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         explanation.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
         this.contentLayout.add_child(explanation);
-        const trim = new St.Button({
-          can_focus: true,
-          accessible_role: Atk.Role.TOGGLE_BUTTON,
-          style_class: 'ci-paste-action-choice',
-        });
+        const trim = new CheckBox.CheckBox(_('Trim trailing newlines'));
         this.contentLayout.add_child(trim);
-        const preview = new St.Button({
-          can_focus: true,
-          accessible_role: Atk.Role.TOGGLE_BUTTON,
-          style_class: 'ci-paste-action-choice',
-        });
+        const preview = new CheckBox.CheckBox(
+          _('Preview output when opening this tab'),
+        );
         this.contentLayout.add_child(preview);
         const controls = new St.BoxLayout({
-          style_class: 'ci-paste-action-row',
+          style_class: 'ci-editor-run-row',
         });
         this._editorRun = new St.Button({
           label: _('Run and preview'),
@@ -126,9 +137,47 @@ export const PasteSetDialog = GObject.registerClass(
         });
         controls.add_child(this._editorRun);
         controls.add_child(this._editorStop);
+        const help = new St.Button({
+          label: '?',
+          can_focus: true,
+          toggle_mode: true,
+          accessible_role: Atk.Role.TOGGLE_BUTTON,
+          accessible_name: _('About command execution'),
+          style_class: 'ci-editor-help',
+          x_align: Clutter.ActorAlign.END,
+          x_expand: true,
+        });
+        help
+          .get_accessible()
+          .set_description(_('Show or hide command execution details.'));
+        help
+          .get_accessible()
+          .add_relationship(
+            Atk.RelationType.CONTROLLER_FOR,
+            explanation.get_accessible(),
+          );
+        explanation
+          .get_accessible()
+          .add_relationship(
+            Atk.RelationType.CONTROLLED_BY,
+            help.get_accessible(),
+          );
+        controls.add_child(help);
+        help.connect('clicked', () => {
+          explanation.visible = help.checked;
+          if (help.checked) help.add_accessible_state(Atk.StateType.EXPANDED);
+          else help.remove_accessible_state(Atk.StateType.EXPANDED);
+        });
+        const warning = new St.Label({
+          text: _('Runs with your user permissions.'),
+          style_class: 'ci-editor-warning',
+        });
+        warning.clutter_text.line_wrap = true;
+        warning.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
         this.contentLayout.add_child(controls);
+        this.contentLayout.add_child(warning);
         this._editorStatus = new St.Label({
-          text: _('Command output'),
+          text: _('Output'),
           style_class: 'ci-set-error',
         });
         this._editorStatus.clutter_text.line_wrap = true;
@@ -169,10 +218,7 @@ export const PasteSetDialog = GObject.registerClass(
           });
           if (this._editorPreviewRun) this._editorStop.grab_key_focus();
           if (this._editorScroll)
-            ensureActorVisibleInScrollView(
-              this._editorScroll,
-              this._editorOutput,
-            );
+            ensureActorVisibleInScrollView(this._editorScroll, outputScroll);
         });
         this._editorStop.connect('clicked', () => {
           this._cancelCommandPreview();
@@ -182,22 +228,53 @@ export const PasteSetDialog = GObject.registerClass(
           this._cancelCommandPreview(),
         );
         const typeButtons = [];
-        const modeButtons = [];
+        modes.add_child(
+          new St.Label({
+            text: _('Execution mode'),
+            y_align: Clutter.ActorAlign.CENTER,
+          }),
+        );
+        const modeSelect = new St.Button({
+          can_focus: true,
+          accessible_role: Atk.Role.COMBO_BOX,
+          style_class: 'ci-editor-select',
+        });
+        const modeContent = new St.BoxLayout({
+          style_class: 'ci-editor-select-content',
+        });
+        const modeLabel = new St.Label({ y_align: Clutter.ActorAlign.CENTER });
+        modeContent.add_child(modeLabel);
+        modeContent.add_child(
+          new St.Icon({ icon_name: 'pan-down-symbolic', icon_size: 12 }),
+        );
+        modeSelect.set_child(modeContent);
+        modes.add_child(modeSelect);
+        const modeMenu = new PopupMenu.PopupMenu(modeSelect, 0, St.Side.TOP);
+        this._editorModeMenu = modeMenu;
+        Main.uiGroup.add_child(modeMenu.actor);
+        modeMenu.actor.hide();
+        const modeManager = new PopupMenu.PopupMenuManager(this);
+        modeManager.addMenu(modeMenu);
+        modeSelect.connect('clicked', () => modeMenu.toggle());
+        modeMenu.connect('open-state-changed', (_, open) => {
+          if (open) modeSelect.add_accessible_state(Atk.StateType.EXPANDED);
+          else modeSelect.remove_accessible_state(Atk.StateType.EXPANDED);
+        });
+        this.connect('destroy', () => {
+          modeMenu.destroy();
+          this._editorModeMenu = null;
+        });
+        const modeItems = [];
         const sync = () => {
           this._cancelCommandPreview();
           const command = kind === 'command';
-          bodyLabel.set_text(
-            command
-              ? executionMode === 'bash'
-                ? _('Bash one-liner')
-                : _('Command and arguments')
-              : _('Text (line breaks are preserved)'),
-          );
+          bodyLabel.set_text(command ? _('Command') : _('Body'));
           body.accessible_name = command
             ? _('Command to execute')
             : _('Text to paste');
           body.hint_text = command ? "date '+%Y-%m-%d %H:%M:%S'" : '';
-          explanation.visible =
+          explanation.visible = command && help.checked;
+          warning.visible =
             trim.visible =
             modes.visible =
             preview.visible =
@@ -230,42 +307,30 @@ export const PasteSetDialog = GObject.registerClass(
               ),
             ].join('\n'),
           );
-          preview.label = `${previewOnOpen ? '☑' : '☐'} ${_(
-            'Preview output when opening this tab',
-          )}`;
-          preview.accessible_name = format(
-            _('Preview output when opening this tab: %s'),
-            previewOnOpen ? _('On') : _('Off'),
+          preview.checked = previewOnOpen;
+          trim.checked = trimTrailingNewlines;
+          const selectedMode =
+            executionMode === 'bash'
+              ? _('Bash (one-liner)')
+              : _('Direct execution');
+          modeLabel.text = selectedMode;
+          modeSelect.accessible_name = format(
+            _('Execution mode: %s'),
+            selectedMode,
           );
-          if (previewOnOpen)
-            preview.add_accessible_state(Atk.StateType.CHECKED);
-          else preview.remove_accessible_state(Atk.StateType.CHECKED);
-          trim.label = `${trimTrailingNewlines ? '☑' : '☐'} ${_(
-            'Trim trailing newlines',
-          )}`;
-          trim.accessible_name = format(
-            _('Trim trailing newlines: %s'),
-            trimTrailingNewlines ? _('On') : _('Off'),
-          );
-          if (trimTrailingNewlines)
-            trim.add_accessible_state(Atk.StateType.CHECKED);
-          else trim.remove_accessible_state(Atk.StateType.CHECKED);
+          for (const [value, item] of modeItems)
+            item.setOrnament(
+              value === executionMode
+                ? PopupMenu.Ornament.DOT
+                : PopupMenu.Ornament.NONE,
+            );
           for (const [value, button] of typeButtons) {
             if (kind === value) {
               button.add_style_pseudo_class('checked');
-              button.add_accessible_state(Atk.StateType.CHECKED);
+              button.add_accessible_state(Atk.StateType.SELECTED);
             } else {
               button.remove_style_pseudo_class('checked');
-              button.remove_accessible_state(Atk.StateType.CHECKED);
-            }
-          }
-          for (const [value, button] of modeButtons) {
-            if (executionMode === value) {
-              button.add_style_pseudo_class('checked');
-              button.add_accessible_state(Atk.StateType.CHECKED);
-            } else {
-              button.remove_style_pseudo_class('checked');
-              button.remove_accessible_state(Atk.StateType.CHECKED);
+              button.remove_accessible_state(Atk.StateType.SELECTED);
             }
           }
         };
@@ -274,10 +339,28 @@ export const PasteSetDialog = GObject.registerClass(
           ['command', _('Command')],
         ]) {
           const button = new St.Button({
-            label,
+            accessible_name: label,
             can_focus: true,
-            accessible_role: Atk.Role.RADIO_BUTTON,
-            style_class: 'ci-paste-action-choice',
+            accessible_role: Atk.Role.PAGE_TAB,
+            style_class: 'ci-paste-tab',
+          });
+          const tabContent = new St.BoxLayout({
+            orientation: Clutter.Orientation.VERTICAL,
+          });
+          tabContent.add_child(new St.Label({ text: label }));
+          tabContent.add_child(
+            new St.Widget({ style_class: 'ci-tab-underline' }),
+          );
+          button.set_child(tabContent);
+          button.connect('key-press-event', (_, event) => {
+            const symbol = event.get_key_symbol();
+            if (symbol !== Clutter.KEY_Left && symbol !== Clutter.KEY_Right)
+              return Clutter.EVENT_PROPAGATE;
+            const next = typeButtons.find(([type]) => type !== kind);
+            kind = next[0];
+            sync();
+            next[1].grab_key_focus();
+            return Clutter.EVENT_STOP;
           });
           button.connect('clicked', () => {
             kind = value;
@@ -290,27 +373,39 @@ export const PasteSetDialog = GObject.registerClass(
           ['direct', _('Direct execution')],
           ['bash', _('Bash (one-liner)')],
         ]) {
-          const button = new St.Button({
-            label,
-            can_focus: true,
-            accessible_role: Atk.Role.RADIO_BUTTON,
-            style_class: 'ci-paste-action-choice',
-          });
-          button.connect('clicked', () => {
+          const item = new PopupMenu.PopupMenuItem(label);
+          item.connect('activate', () => {
             executionMode = value;
             sync();
           });
-          modeButtons.push([value, button]);
-          modes.add_child(button);
+          modeItems.push([value, item]);
+          modeMenu.addMenuItem(item);
         }
         preview.connect('clicked', () => {
-          previewOnOpen = !previewOnOpen;
+          previewOnOpen = preview.checked;
           sync();
         });
         trim.connect('clicked', () => {
-          trimTrailingNewlines = !trimTrailingNewlines;
+          trimTrailingNewlines = trim.checked;
           sync();
         });
+        // Keep the trial-and-error workflow together: input, execute, output.
+        for (const actor of [
+          types,
+          modes,
+          bodyLabel,
+          scroll,
+          controls,
+          warning,
+          explanation,
+          this._editorStatus,
+          outputScroll,
+          trim,
+          preview,
+        ]) {
+          this.contentLayout.remove_child(actor);
+          this.contentLayout.add_child(actor);
+        }
         syncEditor = sync;
       }
       const error = new St.Label({ text: '', style_class: 'ci-set-error' });
@@ -350,9 +445,13 @@ export const PasteSetDialog = GObject.registerClass(
           },
         });
       if (body) {
-        const contents = new St.BoxLayout({ x_expand: true });
+        const contents = new St.BoxLayout({
+          x_expand: true,
+          style_class: 'ci-editor-fields',
+        });
         contents.set_vertical(true);
         for (const child of this.contentLayout.get_children()) {
+          if (child === titleLabel) continue;
           this.contentLayout.remove_child(child);
           contents.add_child(child);
         }
@@ -407,7 +506,7 @@ export const PasteSetDialog = GObject.registerClass(
       const running = this._editorPreviewRun;
       this._editorPreviewRun = null;
       running?.cancel();
-      this._setCommandPreviewState('', _('Command output'));
+      this._setCommandPreviewState('', _('Output'));
     }
 
     _startCommandPreview(command, options) {
@@ -420,7 +519,7 @@ export const PasteSetDialog = GObject.registerClass(
         (text) => {
           if (this._editorPreviewRun !== running) return;
           this._editorPreviewRun = null;
-          this._setCommandPreviewState(text, _('Command output'));
+          this._setCommandPreviewState(text, _('Output'));
         },
         (error) => {
           if (this._editorPreviewRun !== running) return;
@@ -435,6 +534,7 @@ export const PasteSetDialog = GObject.registerClass(
 
     close() {
       this._editorPreviewClosed = true;
+      this._editorModeMenu?.close();
       this._cancelCommandPreview();
       super.close();
     }
