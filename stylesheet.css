@@ -153,6 +153,7 @@
 }
 
 .ci-set-body-scroll {
+  min-height: 120px;
   max-height: 260px;
 }
 
@@ -207,4 +208,14 @@
 
 .ci-command-preview {
   font-size: 0.9em;
+}
+
+.ci-editor-output-scroll {
+  min-height: 90px;
+  max-height: 140px;
+}
+
+.ci-editor-output {
+  width: 420px;
+  min-height: 72px;
 }

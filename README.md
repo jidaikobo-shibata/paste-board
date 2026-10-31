@@ -77,6 +77,9 @@ Press Esc when finished.
 Edit an item in a paste set and select **Command** instead of **Text**.
 For example, use `date '+%Y-%m-%d'` to paste today's date.
 By default, the command runs each time you choose the item.
+Use **Run and preview** in the item editor to test a command before saving.
+This is an explicit execution even while automatic previews are paused;
+the output is read-only and is not saved with the item.
 
 Enable **Preview output when opening this tab** for commands you want to preview.
 Opening the tab then runs the command and shows its output below the item name.

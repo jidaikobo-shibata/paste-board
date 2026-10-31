@@ -1240,6 +1240,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           executionMode: item?.executionMode || 'direct',
           trimTrailingNewlines: item?.trimTrailingNewlines !== false,
           previewOnOpen: item?.previewOnOpen === true,
+          canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
       ),
     );
@@ -2922,6 +2923,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (PRIVATE_MODE) {
       for (const read of this._clipboardReads || []) read.cancel();
       this._commandPreviews?.clear();
+      this._pasteSetDialog?._cancelCommandPreview?.();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
       this.icon.add_style_class_name('private-mode');

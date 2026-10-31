@@ -2,7 +2,7 @@
   "name": "paste-board",
   "scripts": {
     "format:check": "prettier --check .",
-    "test": "LC_ALL=C.utf8 node tests/audit-regressions.test.cjs && LC_ALL=C.utf8 gjs -m tests/command-output.test.mjs && LC_ALL=C.utf8 gjs -m tests/history-session.test.mjs && LC_ALL=C.utf8 gjs -m tests/paste-sets.test.mjs && LC_ALL=C.utf8 gjs -m tests/command-previews.test.mjs && LC_ALL=C.utf8 gjs -m tests/paste-set-writes.test.mjs && GSETTINGS_BACKEND=memory LC_ALL=C.utf8 gjs -m tests/paste-shortcuts.test.mjs && LC_ALL=C.utf8 gjs -m tests/input-limits.test.mjs && LC_ALL=C.utf8 gjs -m tests/clipboard-read.test.mjs && LC_ALL=C.utf8 gjs -m tests/localization.test.mjs en && LC_ALL=ja_JP.utf8 gjs -m tests/localization.test.mjs ja && bash tests/run-store-test.sh"
+    "test": "LC_ALL=C.utf8 node tests/audit-regressions.test.cjs && LC_ALL=C.utf8 node tests/editor-command-preview.test.cjs && LC_ALL=C.utf8 gjs -m tests/command-output.test.mjs && LC_ALL=C.utf8 gjs -m tests/history-session.test.mjs && LC_ALL=C.utf8 gjs -m tests/paste-sets.test.mjs && LC_ALL=C.utf8 gjs -m tests/command-previews.test.mjs && LC_ALL=C.utf8 gjs -m tests/paste-set-writes.test.mjs && GSETTINGS_BACKEND=memory LC_ALL=C.utf8 gjs -m tests/paste-shortcuts.test.mjs && LC_ALL=C.utf8 gjs -m tests/input-limits.test.mjs && LC_ALL=C.utf8 gjs -m tests/clipboard-read.test.mjs && LC_ALL=C.utf8 gjs -m tests/localization.test.mjs en && LC_ALL=ja_JP.utf8 gjs -m tests/localization.test.mjs ja && bash tests/run-store-test.sh"
   },
   "devDependencies": {
     "prettier": "2.5.1"

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-31 09:36+0900\n"
+"POT-Creation-Date: 2026-10-31 10:02+0900\n"
 "PO-Revision-Date: 2022-04-12 15:21-0500\n"
 "Last-Translator: Ulices <hasecilu@protonmail.com>\n"
 "Language-Team: \n"
@@ -18,8 +18,8 @@ msgstr ""
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 "X-Generator: Poedit 3.0.1\n"
 
-#: appPastePrefs.js:59 extension.js:1333 extension.js:2298
-#: pasteSetDialog.js:214 pasteSetDialog.js:266
+#: appPastePrefs.js:59 extension.js:1334 extension.js:2299
+#: pasteSetDialog.js:303 pasteSetDialog.js:427
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -27,7 +27,7 @@ msgstr "Cancelar"
 msgid "Application paste shortcut"
 msgstr ""
 
-#: appPastePrefs.js:69 pasteSetDialog.js:218
+#: appPastePrefs.js:69 pasteSetDialog.js:307
 msgid "Save"
 msgstr ""
 
@@ -92,7 +92,7 @@ msgstr ""
 msgid "Add application"
 msgstr ""
 
-#: appPastePrefs.js:277 extension.js:1465
+#: appPastePrefs.js:277 extension.js:1466
 #, javascript-format
 msgid "%s: %s"
 msgstr ""
@@ -111,16 +111,16 @@ msgstr ""
 msgid "Could not save application shortcuts."
 msgstr ""
 
-#: clipboardRead.js:27 clipboardRead.js:75 extension.js:1825
+#: clipboardRead.js:27 clipboardRead.js:75 extension.js:1826
 msgid "Could not read clipboard text."
 msgstr ""
 
-#: clipboardRead.js:62 extension.js:1833 extension.js:2708
+#: clipboardRead.js:62 extension.js:1834 extension.js:2709
 msgid "Copied text exceeds the size limit."
 msgstr ""
 
-#: commandOutput.js:40 commandPreviews.js:88 commandPreviews.js:111
-#: commandPreviews.js:125
+#: commandOutput.js:40 commandPreviews.js:89 commandPreviews.js:112
+#: commandPreviews.js:126
 msgid "Command execution was cancelled."
 msgstr ""
 
@@ -165,11 +165,11 @@ msgstr ""
 msgid "The command produced no output; nothing was pasted."
 msgstr ""
 
-#: commandPreviews.js:95
+#: commandPreviews.js:96
 msgid "Waiting for the preview timed out."
 msgstr ""
 
-#: commandPreviews.js:190
+#: commandPreviews.js:191
 msgid "Whitespace output"
 msgstr ""
 
@@ -244,7 +244,7 @@ msgstr ""
 msgid "The original session information was preserved at: %s"
 msgstr ""
 
-#: extension.js:476 extension.js:3016
+#: extension.js:476 extension.js:3018
 msgid "Could not save session metadata"
 msgstr ""
 
@@ -300,7 +300,7 @@ msgstr ""
 msgid "Automatic previews paused"
 msgstr ""
 
-#: extension.js:1127 extension.js:1937
+#: extension.js:1127 extension.js:1938 pasteSetDialog.js:131
 msgid "Preview unavailable"
 msgstr ""
 
@@ -332,106 +332,106 @@ msgstr ""
 msgid "Add paste item"
 msgstr ""
 
-#: extension.js:1327
+#: extension.js:1328
 msgid "Delete this item?"
 msgstr ""
 
-#: extension.js:1327
+#: extension.js:1328
 msgid "Delete this paste set?"
 msgstr ""
 
-#: extension.js:1328
+#: extension.js:1329
 msgid "Selected item"
 msgstr ""
 
-#: extension.js:1330
+#: extension.js:1331
 msgid "This item will be removed from the paste set."
 msgstr ""
 
-#: extension.js:1331
+#: extension.js:1332
 msgid "All items in this paste set will also be deleted."
 msgstr ""
 
-#: extension.js:1332
+#: extension.js:1333
 msgid "Delete"
 msgstr ""
 
-#: extension.js:1405
+#: extension.js:1406
 msgid "After paste"
 msgstr ""
 
-#: extension.js:1411
+#: extension.js:1412
 msgid "No action"
 msgstr ""
 
-#: extension.js:1422
+#: extension.js:1423
 msgid "No key after paste"
 msgstr ""
 
-#: extension.js:1423
+#: extension.js:1424
 #, javascript-format
 msgid "Send %s after paste"
 msgstr ""
 
-#: extension.js:1467 pasteSetDialog.js:117 pasteSetDialog.js:127
+#: extension.js:1468 pasteSetDialog.js:205 pasteSetDialog.js:215
 msgid "On"
 msgstr ""
 
-#: extension.js:1467 pasteSetDialog.js:117 pasteSetDialog.js:127
+#: extension.js:1468 pasteSetDialog.js:205 pasteSetDialog.js:215
 msgid "Off"
 msgstr ""
 
-#: extension.js:1876 extension.js:2007
+#: extension.js:1877 extension.js:2008
 msgid "Could not paste"
 msgstr ""
 
-#: extension.js:1980
+#: extension.js:1981 pasteSetDialog.js:381
 msgid "Could not execute the command"
 msgstr ""
 
-#: extension.js:2173
+#: extension.js:2174
 msgid "Add to a paste set"
 msgstr ""
 
-#: extension.js:2194
+#: extension.js:2195
 msgid "Delete from history"
 msgstr ""
 
-#: extension.js:2249
+#: extension.js:2250
 #, javascript-format
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:2289
+#: extension.js:2290
 msgid "Clear all?"
 msgstr "¿Limpiar todo?"
 
-#: extension.js:2290
+#: extension.js:2291
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr "¿Estás seguro de querer borrar todos los elementos del portapapeles?"
 
-#: extension.js:2291
+#: extension.js:2292
 msgid "This operation cannot be undone."
 msgstr "Esta opción no se puede deshacer."
 
-#: extension.js:2297
+#: extension.js:2298
 msgid "Clear"
 msgstr "Limpiar"
 
-#: extension.js:3170
+#: extension.js:3172
 msgid "Clipboard history was recovered"
 msgstr ""
 
-#: extension.js:3171
+#: extension.js:3173
 msgid "Could not save or load clipboard history"
 msgstr ""
 
-#: extension.js:3175
+#: extension.js:3177
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 
-#: extension.js:3180
+#: extension.js:3182
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
@@ -445,105 +445,126 @@ msgstr ""
 msgid "Could not save session metadata."
 msgstr ""
 
-#: pasteSetDialog.js:16 pasteSetDialog.js:17
+#: pasteSetDialog.js:26 pasteSetDialog.js:27
 msgid "Name"
 msgstr ""
 
-#: pasteSetDialog.js:35 pasteSetDialog.js:81
+#: pasteSetDialog.js:45 pasteSetDialog.js:165
 msgid "Text to paste"
 msgstr ""
 
-#: pasteSetDialog.js:47
+#: pasteSetDialog.js:58
 msgid "Execution mode"
 msgstr ""
 
-#: pasteSetDialog.js:75
+#: pasteSetDialog.js:85
+msgid "Run and preview"
+msgstr ""
+
+#: pasteSetDialog.js:90
+msgid "Stop"
+msgstr ""
+
+#: pasteSetDialog.js:99 pasteSetDialog.js:111 pasteSetDialog.js:112
+#: pasteSetDialog.js:361 pasteSetDialog.js:374
+msgid "Command output"
+msgstr ""
+
+#: pasteSetDialog.js:146
+msgid "Preview stopped"
+msgstr ""
+
+#: pasteSetDialog.js:159
 msgid "Bash one-liner"
 msgstr ""
 
-#: pasteSetDialog.js:76
+#: pasteSetDialog.js:160
 msgid "Command and arguments"
 msgstr ""
 
-#: pasteSetDialog.js:77
+#: pasteSetDialog.js:161
 msgid "Text (line breaks are preserved)"
 msgstr ""
 
-#: pasteSetDialog.js:80
+#: pasteSetDialog.js:164
 msgid "Command to execute"
 msgstr ""
 
-#: pasteSetDialog.js:92
+#: pasteSetDialog.js:180
 msgid "Opening this tab runs the command. Pasting uses the previewed output."
 msgstr ""
 
-#: pasteSetDialog.js:96
+#: pasteSetDialog.js:184
 msgid "Runs in Bash when pasted. Pipes and variable expansion are supported."
 msgstr ""
 
-#: pasteSetDialog.js:99
+#: pasteSetDialog.js:187
 msgid ""
 "Runs directly when pasted. Pipes and variable expansion are not performed."
 msgstr ""
 
-#: pasteSetDialog.js:102
+#: pasteSetDialog.js:190
 msgid ""
 "Runs with your permissions and can modify or delete files or access the "
 "network. Commands execute even without output. Register only commands you "
 "understand and trust."
 msgstr ""
 
-#: pasteSetDialog.js:105
+#: pasteSetDialog.js:193
 msgid ""
 "Commands requiring interactive input, such as password prompts, are not "
 "supported."
 msgstr ""
 
-#: pasteSetDialog.js:108
+#: pasteSetDialog.js:196
 msgid ""
 "Limits: 3 seconds and 64 KiB of output. Actions already performed cannot be "
 "undone."
 msgstr ""
 
-#: pasteSetDialog.js:113
+#: pasteSetDialog.js:201
 msgid "Preview output when opening this tab"
 msgstr ""
 
-#: pasteSetDialog.js:116
+#: pasteSetDialog.js:204
 #, javascript-format
 msgid "Preview output when opening this tab: %s"
 msgstr ""
 
-#: pasteSetDialog.js:123
+#: pasteSetDialog.js:211
 msgid "Trim trailing newlines"
 msgstr ""
 
-#: pasteSetDialog.js:126
+#: pasteSetDialog.js:214
 #, javascript-format
 msgid "Trim trailing newlines: %s"
 msgstr ""
 
-#: pasteSetDialog.js:152
+#: pasteSetDialog.js:240
 msgid "Text"
 msgstr ""
 
-#: pasteSetDialog.js:153
+#: pasteSetDialog.js:241
 msgid "Command"
 msgstr ""
 
-#: pasteSetDialog.js:169
+#: pasteSetDialog.js:257
 msgid "Direct execution"
 msgstr ""
 
-#: pasteSetDialog.js:170
+#: pasteSetDialog.js:258
 msgid "Bash (one-liner)"
 msgstr ""
 
-#: pasteSetDialog.js:222
+#: pasteSetDialog.js:311
 msgid "Delete tab"
 msgstr ""
 
-#: pasteSetDialog.js:239
+#: pasteSetDialog.js:369
+msgid "Running command…"
+msgstr ""
+
+#: pasteSetDialog.js:400
 msgid "Choose a paste set"
 msgstr ""
 
