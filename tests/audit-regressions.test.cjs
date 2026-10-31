@@ -2212,3 +2212,118 @@ test('a wide retained panel stays behind the modal and returns to the front afte
   closed();
   assert.deepEqual(operations[1], ['above', panel, null]);
 });
+
+test('paused automatic previews still allow explicit command execution and paste', async () => {
+  const { owner, resolve, paste, launches } = commandFixture();
+  owner._previewsPaused = true;
+  owner._commandPreviews = {
+    get: () => assert.fail('paused preview cache used'),
+  };
+  owner._quickPasteCommand({
+    id: 'preview',
+    previewOnOpen: true,
+    command: 'date',
+  });
+  assert.equal(launches.length, 1);
+  resolve('manual output');
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(paste[0][0].text, 'manual output');
+});
+
+test('pausing cancels selected previews and clears the cache but preserves explicit runs', () => {
+  const [owner] = instance(['_updatePreviewPauseState']);
+  let cancelled = 0,
+    cleared = 0,
+    rendered = 0;
+  owner._previewsPaused = true;
+  owner._pasteSets = {};
+  owner._cancelPasteCommand = () => cancelled++;
+  owner._commandPreviews = { clear: () => cleared++ };
+  owner._renderPasteSets = () => rendered++;
+  owner._pasteCommandRun = { preview: true };
+  owner._updatePreviewPauseState();
+  assert.deepEqual([cancelled, cleared, rendered], [1, 1, 1]);
+  owner._pasteCommandRun = {};
+  owner._updatePreviewPauseState();
+  assert.deepEqual([cancelled, cleared, rendered], [1, 2, 2]);
+  owner._previewsPaused = false;
+  owner._updatePreviewPauseState();
+  assert.deepEqual([cancelled, cleared, rendered], [1, 2, 3]);
+});
+
+test('paused preview rows replace old output with an explicit paused message', () => {
+  const [owner] = instance(['_updateCommandPreviewRow']);
+  owner._previewsPaused = true;
+  owner._commandPreviews = {
+    get: () => ({ state: 'ready', text: 'old output' }),
+  };
+  owner._setCandidateAccessibleName = () => {};
+  const row = { entry: {}, previewLabel: {} };
+  owner._updateCommandPreviewRow(row);
+  assert.equal(row.previewLabel.text, 'Automatic previews paused');
+});
+
+test('preview pause takes effect before startup connects settings signals', () => {
+  const [owner] = instance(['_togglePreviewPause'], {
+    SettingsFields: { PAUSE_COMMAND_PREVIEWS: 'pause' },
+  });
+  let stored = false,
+    applied = 0,
+    synced = 0;
+  owner._previewsPaused = false;
+  owner.settings = {
+    get_boolean: () => stored,
+    set_boolean: (key, value) => {
+      assert.equal(key, 'pause');
+      stored = value;
+      return true;
+    },
+  };
+  owner._updatePreviewPauseState = () => applied++;
+  owner._syncModeButtons = () => synced++;
+  owner._togglePreviewPause();
+  assert.equal(stored, true);
+  assert.equal(owner._previewsPaused, true);
+  assert.deepEqual([applied, synced], [1, 1]);
+  owner._togglePreviewPause();
+  assert.equal(owner._previewsPaused, false);
+  assert.deepEqual([applied, synced], [2, 2]);
+});
+
+test('pausing while a preview is selected aborts its pending paste quietly', async () => {
+  let reject;
+  const promise = new Promise((resolve, no) => {
+    reject = no;
+  });
+  const [owner] = instance(
+    [
+      '_quickPasteCommand',
+      '_cancelPasteCommand',
+      '_endQuickPasteTracking',
+      '_updatePreviewPauseState',
+    ],
+    {
+      global: { display: { focus_window: {} } },
+      runCommand: () => assert.fail('preview reran'),
+    },
+  );
+  owner.menu = { isOpen: true };
+  owner._commandPreviews = {
+    get: () => ({ promise }),
+    clear: () => reject(Error('cancelled')),
+  };
+  owner._quickPaste = () => assert.fail('cancelled preview pasted');
+  owner._showNotification = () =>
+    assert.fail('intentional pause reported as failure');
+  owner._quickPasteCommand({
+    id: 'slow',
+    command: 'slow',
+    previewOnOpen: true,
+  });
+  assert.equal(owner._pasteCommandRun.preview, true);
+  owner._previewsPaused = true;
+  owner._updatePreviewPauseState();
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(owner._pasteCommandRun, undefined);
+  assert.equal(owner._quickPasteBusy, false);
+});

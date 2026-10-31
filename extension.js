@@ -297,8 +297,14 @@ class ClipboardIndicator extends PanelMenu.Button {
       _('Pin the panel'),
       SettingsFields.KEEP_MENU_OPEN,
     );
+    this.pausePreviewsItem = this._createModeButton(
+      'media-playback-pause-symbolic',
+      _('Pause automatic previews'),
+      SettingsFields.PAUSE_COMMAND_PREVIEWS,
+    );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
+    actionsBox.add_child(this.pausePreviewsItem);
     actionsBox.add_child(
       this._setActionButton('tab-new-symbolic', _('Add a paste set'), () =>
         this._editPasteSetName(),
@@ -938,7 +944,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         .find((row) => row.entry?.id === id);
       if (row) this._updateCommandPreviewRow(row);
     });
-    if (this.menu.isOpen && !PRIVATE_MODE)
+    if (this.menu.isOpen && !PRIVATE_MODE && !this._previewsPaused)
       this._commandPreviews.sync(set?.items || []);
     else this._commandPreviews.clear();
     const query = this.searchEntry.get_text().toLowerCase();
@@ -1113,12 +1119,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   _updateCommandPreviewRow(row) {
     if (!row.previewLabel) return;
     const record = this._commandPreviews?.get(row.entry);
-    row.previewLabel.text =
-      record?.state === 'ready'
-        ? previewSummary(record.text)
-        : record?.state === 'error'
-        ? _('Preview unavailable')
-        : _('Generating preview…');
+    row.previewLabel.text = this._previewsPaused
+      ? _('Automatic previews paused')
+      : record?.state === 'ready'
+      ? previewSummary(record.text)
+      : record?.state === 'error'
+      ? _('Preview unavailable')
+      : _('Generating preview…');
     this._setCandidateAccessibleName(row);
   }
 
@@ -1373,6 +1380,8 @@ class ClipboardIndicator extends PanelMenu.Button {
           this._choosingPasteAction = false;
           this.settings.set_boolean(key, true);
         }
+      } else if (key === SettingsFields.PAUSE_COMMAND_PREVIEWS) {
+        this._togglePreviewPause();
       } else {
         this.settings.set_boolean(key, !this.settings.get_boolean(key));
       }
@@ -1450,6 +1459,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     for (const [button, active] of [
       [this.privateModeMenuItem, PRIVATE_MODE],
       [this.keepMenuOpenItem, this._keepMenuOpen],
+      [this.pausePreviewsItem, this._previewsPaused],
     ]) {
       button.accessible_name = format(
         _('%s: %s'),
@@ -1920,7 +1930,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
     let running;
-    if (entry.previewOnOpen) {
+    if (entry.previewOnOpen && !this._previewsPaused) {
       const record = this._commandPreviews?.get(entry);
       if (!record) {
         this._endQuickPasteTracking();
@@ -1929,6 +1939,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       running = {
         promise: record.promise,
+        preview: true,
         cancel: () => this._commandPreviews?.clear(),
       };
     } else {
@@ -2923,7 +2934,33 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
+  _togglePreviewPause() {
+    const key = SettingsFields.PAUSE_COMMAND_PREVIEWS;
+    const paused = !this.settings.get_boolean(key);
+    if (!this.settings.set_boolean(key, paused)) return;
+    // The footer is usable before history loading connects settings signals.
+    // Apply the safety switch immediately even during that startup window.
+    if (this._previewsPaused !== paused) {
+      this._previewsPaused = paused;
+      this._updatePreviewPauseState();
+      this._syncModeButtons();
+    }
+  }
+
+  _updatePreviewPauseState() {
+    if (this._previewsPaused) {
+      // Only an automatic preview selected for paste is cancelled here;
+      // explicitly executed commands keep their normal lifecycle.
+      if (this._pasteCommandRun?.preview) this._cancelPasteCommand();
+      this._commandPreviews?.clear();
+    }
+    if (this._pasteSets) this._renderPasteSets();
+  }
+
   _fetchSettings() {
+    this._previewsPaused = this.settings.get_boolean(
+      SettingsFields.PAUSE_COMMAND_PREVIEWS,
+    );
     this._keepMenuOpen = this.settings.get_boolean(
       SettingsFields.KEEP_MENU_OPEN,
     );
@@ -2963,8 +3000,11 @@ class ClipboardIndicator extends PanelMenu.Button {
   _onSettingsChange() {
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;
+    const prevPreviewsPaused = this._previewsPaused;
 
     this._fetchSettings();
+    if (prevPreviewsPaused !== this._previewsPaused)
+      this._updatePreviewPauseState();
     if (prevClearOnLogout !== CLEAR_ON_LOGOUT) {
       try {
         this._historySession?.setEnabled(CLEAR_ON_LOGOUT);

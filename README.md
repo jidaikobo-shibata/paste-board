@@ -83,6 +83,10 @@ Opening the tab then runs the command and shows its output below the item name.
 Pasting uses that same output; search and reordering do not run it again.
 Closing the panel or switching tabs clears the preview.
 
+Use the pause button in the bottom toolbar to stop automatic previews before
+opening a tab. This setting stays on until you turn it off, including after
+logging in again. Selecting a command manually still runs and pastes its output.
+
 Use **Direct execution** for a command and its arguments. Choose **Bash
 (one-liner)** for pipes, variables, or other shell syntax. Shell startup files
 are not loaded, so your interactive aliases and functions are unavailable.

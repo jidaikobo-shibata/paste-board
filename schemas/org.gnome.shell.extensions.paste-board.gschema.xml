@@ -3,6 +3,11 @@
       id="org.gnome.shell.extensions.paste-board"
       path="/org/gnome/shell/extensions/paste-board/">
 
+    <key type="b" name="pause-command-previews">
+      <default>false</default>
+      <summary>Pause automatic command previews until manually resumed</summary>
+    </key>
+
     <key type="a{s(uu)}" name="application-paste-shortcuts">
       <default>{}</default>
       <summary>Application-specific paste keys (key value and portable modifier bits)</summary>
