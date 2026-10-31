@@ -102,6 +102,92 @@ async function main() {
   equal(previewSummary('one\ntwo\nthree'), 'one\ntwo…');
   equal(previewSummary(' \n\t'), 'Whitespace output');
   equal(previewSummary('x'.repeat(130)), 'x'.repeat(120) + '…');
+  equal(previewSummary('\n\nActual text'), '\n…');
+  equal(previewSummary('\r\n\r\nActual text'), '\n…');
+  equal(previewSummary(' \n\t\nActual text'), ' \n\t…');
+  // Selected queued items move ahead without restarting either active command.
+  const priority = new CommandPreviews(() => {}, { execute });
+  const six = Array.from({ length: 6 }, (_, i) => item('priority-' + i));
+  const offset = calls.length;
+  priority.sync(six);
+  await tick();
+  const selected = priority.request(six[5], { timeoutMs: 1000 });
+  equal(calls.length, offset + 2);
+  calls[offset].resolve('first');
+  await tick();
+  equal(calls[offset + 2].command, six[5].command);
+  calls[offset + 2].resolve('selected output');
+  equal(await selected.promise, 'selected output');
+  equal(priority.get(six[5]).state, 'ready');
+  equal(await priority.request(six[5]).promise, 'selected output');
+  priority.destroy();
+  await tick();
+  // Waiting has a deadline even if no execution slot becomes available.
+  const deadline = new CommandPreviews(() => {}, { execute, concurrency: 1 });
+  const start = calls.length;
+  deadline.sync(six.slice(0, 2));
+  await tick();
+  const waitingDeadline = deadline.request(six[1], { timeoutMs: 15 });
+  let timedOut = false;
+  try {
+    await waitingDeadline.promise;
+  } catch (error) {
+    timedOut = error.message.includes('timed out');
+  }
+  equal(timedOut, true);
+  equal(deadline.get(six[1]).state, 'error');
+  calls[start].resolve('released');
+  await tick();
+  equal(calls.length, start + 1);
+  deadline.sync(six.slice(0, 2));
+  await tick();
+  equal(calls.length, start + 1);
+  deadline.destroy();
+  await tick();
+  // A selected running command is cancelled when its wait expires too.
+  const runningDeadline = new CommandPreviews(() => {}, { execute });
+  const activeIndex = calls.length;
+  runningDeadline.sync(six.slice(0, 1));
+  await tick();
+  try {
+    await runningDeadline.request(six[0], { timeoutMs: 15 }).promise;
+  } catch {}
+  await tick();
+  equal(calls[activeIndex].cancelled, true);
+  equal(runningDeadline.get(six[0]).state, 'error');
+  equal(runningDeadline.get(six[0]).text, undefined);
+  runningDeadline.destroy();
+  // A late success from a non-cooperative adapter cannot revive an expired result.
+  let lateResolve;
+  const late = new CommandPreviews(() => {}, {
+    execute: () => ({
+      promise: new Promise((resolve) => {
+        lateResolve = resolve;
+      }),
+      cancel() {},
+    }),
+  });
+  late.sync(six.slice(0, 1));
+  await tick();
+  try {
+    await late.request(six[0], { timeoutMs: 10 }).promise;
+  } catch {}
+  lateResolve('too late');
+  await tick();
+  equal(late.get(six[0]).state, 'error');
+  equal(late.get(six[0]).text, undefined);
+  late.destroy();
+  // Leaving the tab rejects a selected wait and releases its deadline timer.
+  const leaving = new CommandPreviews(() => {}, { execute });
+  leaving.sync(six.slice(0, 1));
+  await tick();
+  const selection = leaving.request(six[0], { timeoutMs: 1000 });
+  const cancelledSelection = selection.promise.catch(() => 'cancelled');
+  selection.cancel();
+  leaving.clear();
+  equal(await cancelledSelection, 'cancelled');
+  await tick();
+  equal(leaving.active.size, 0);
   // Defaults and persistence must not accidentally opt existing commands in.
   const directory = GLib.dir_make_tmp('paste-board-previews.XXXXXX');
   const sets = new PasteSets(directory);

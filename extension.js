@@ -1931,16 +1931,19 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._quickPasteBusy = true;
     let running;
     if (entry.previewOnOpen && !this._previewsPaused) {
-      const record = this._commandPreviews?.get(entry);
-      if (!record) {
+      const request = this._commandPreviews?.request(entry);
+      if (!request) {
         this._endQuickPasteTracking();
         this._showNotification(_('Preview unavailable'), '');
         return;
       }
       running = {
-        promise: record.promise,
+        promise: request.promise,
         preview: true,
-        cancel: () => this._commandPreviews?.clear(),
+        cancel: () => {
+          request.cancel();
+          this._commandPreviews?.clear();
+        },
       };
     } else {
       running = runCommand(entry.command, {

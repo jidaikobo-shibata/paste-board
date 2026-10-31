@@ -81,6 +81,7 @@ By default, the command runs each time you choose the item.
 Enable **Preview output when opening this tab** for commands you want to preview.
 Opening the tab then runs the command and shows its output below the item name.
 Pasting uses that same output; search and reordering do not run it again.
+Selecting a pending preview gives it priority and waits at most 6 seconds.
 Closing the panel or switching tabs clears the preview.
 
 Use the pause button in the bottom toolbar to stop automatic previews before

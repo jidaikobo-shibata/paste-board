@@ -1981,7 +1981,7 @@ test('previewed command paste waits for and reuses the displayed result without 
   });
   const pasted = [];
   owner.menu = { isOpen: true };
-  owner._commandPreviews = { get: () => ({ promise }) };
+  owner._commandPreviews = { request: () => ({ promise, cancel() {} }) };
   owner._quickPaste = (entry, options) => pasted.push(entry.text);
   const entry = {
     id: 'a',
@@ -2008,7 +2008,7 @@ test('missing or failed previews never silently run the command on paste', async
   let errors = 0;
   owner._showNotification = () => errors++;
   owner._quickPaste = () => assert.fail('failed preview pasted');
-  owner._commandPreviews = { get: () => null };
+  owner._commandPreviews = { request: () => null };
   const entry = {
     id: 'a',
     previewOnOpen: true,
@@ -2018,7 +2018,7 @@ test('missing or failed previews never silently run the command on paste', async
   owner._quickPasteCommand(entry);
   assert.equal(owner._quickPasteBusy, false);
   owner._commandPreviews = {
-    get: () => ({ promise: Promise.reject(Error('failed')) }),
+    request: () => ({ promise: Promise.reject(Error('failed')), cancel() {} }),
   };
   owner._quickPasteCommand(entry);
   await new Promise((resolve) => setImmediate(resolve));
@@ -2217,7 +2217,7 @@ test('paused automatic previews still allow explicit command execution and paste
   const { owner, resolve, paste, launches } = commandFixture();
   owner._previewsPaused = true;
   owner._commandPreviews = {
-    get: () => assert.fail('paused preview cache used'),
+    request: () => assert.fail('paused preview cache used'),
   };
   owner._quickPasteCommand({
     id: 'preview',
@@ -2309,7 +2309,7 @@ test('pausing while a preview is selected aborts its pending paste quietly', asy
   );
   owner.menu = { isOpen: true };
   owner._commandPreviews = {
-    get: () => ({ promise }),
+    request: () => ({ promise, cancel() {} }),
     clear: () => reject(Error('cancelled')),
   };
   owner._quickPaste = () => assert.fail('cancelled preview pasted');
