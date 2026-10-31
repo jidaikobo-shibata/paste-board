@@ -1122,10 +1122,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     row.previewLabel.text = this._previewsPaused
       ? _('Automatic previews paused')
       : record?.state === 'ready'
-      ? previewSummary(record.text)
-      : record?.state === 'error'
-      ? _('Preview unavailable')
-      : _('Generating preview…');
+        ? previewSummary(record.text)
+        : record?.state === 'error'
+          ? _('Preview unavailable')
+          : _('Generating preview…');
     this._setCandidateAccessibleName(row);
   }
 
@@ -1690,11 +1690,11 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._quickPasteKeysHeld.size > 0 ||
       Boolean(
         global.get_pointer()[2] &
-          (Clutter.ModifierType.CONTROL_MASK |
-            Clutter.ModifierType.SHIFT_MASK |
-            Clutter.ModifierType.MOD1_MASK |
-            Clutter.ModifierType.MOD4_MASK |
-            Clutter.ModifierType.SUPER_MASK),
+        (Clutter.ModifierType.CONTROL_MASK |
+          Clutter.ModifierType.SHIFT_MASK |
+          Clutter.ModifierType.MOD1_MASK |
+          Clutter.ModifierType.MOD4_MASK |
+          Clutter.ModifierType.SUPER_MASK),
       )
     );
   }

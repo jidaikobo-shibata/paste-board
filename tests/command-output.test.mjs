@@ -125,8 +125,8 @@ async function main() {
         scenario === 'leader-exit'
           ? `(sleep 0.3; printf late > '${marker}') & exit 0`
           : scenario === 'output-limit'
-          ? `(sleep 0.3; printf late > '${marker}') & yes`
-          : `printf harmless | (sleep 0.3; cat > '${marker}')`;
+            ? `(sleep 0.3; printf late > '${marker}') & yes`
+            : `printf harmless | (sleep 0.3; cat > '${marker}')`;
       const task = runCommand(command, {
         timeoutMs: 100,
         maxOutputBytes: 8192,

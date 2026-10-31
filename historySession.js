@@ -44,7 +44,7 @@ export class HistorySession {
       !previous || previous.sessionId !== sessionId || previous.ended;
     this.discardHistory = Boolean(
       previous?.discardPending ||
-        (changed && (clearOnLogout || previous?.clearOnLogout)),
+      (changed && (clearOnLogout || previous?.clearOnLogout)),
     );
     this.state = {
       sessionId,

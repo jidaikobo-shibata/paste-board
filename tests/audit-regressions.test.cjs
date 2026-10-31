@@ -484,8 +484,8 @@ test('paste restores custom-set and numeric selections while retaining explicit 
             externalCopy
               ? 'new copy'
               : !custom && !pinned && operation !== 'digit'
-              ? text
-              : 'original',
+                ? text
+                : 'original',
             JSON.stringify({ custom, operation, pinned, externalCopy }),
           );
         }

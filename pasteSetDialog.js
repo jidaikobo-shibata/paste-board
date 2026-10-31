@@ -290,12 +290,12 @@ export const PasteSetDialog = GObject.registerClass(
                     'Opening this tab runs the command. Pasting uses the previewed output.',
                   )
                 : executionMode === 'bash'
-                ? _(
-                    'Runs in Bash when pasted. Pipes and variable expansion are supported.',
-                  )
-                : _(
-                    'Runs directly when pasted. Pipes and variable expansion are not performed.',
-                  ),
+                  ? _(
+                      'Runs in Bash when pasted. Pipes and variable expansion are supported.',
+                    )
+                  : _(
+                      'Runs directly when pasted. Pipes and variable expansion are not performed.',
+                    ),
               _(
                 'Runs with your permissions and can modify or delete files or access the network. Commands execute even without output. Register only commands you understand and trust.',
               ),
