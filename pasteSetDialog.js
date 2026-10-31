@@ -9,6 +9,17 @@ import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import { runCommand } from './commandOutput.js';
 import * as ModalDialog from 'resource:///org/gnome/shell/ui/modalDialog.js';
 
+// ScrollView allocates its child's minimum height. A multiline entry must not
+// report a single line as its minimum, otherwise the remaining lines are clipped.
+const MultilineEntry = GObject.registerClass(
+  class MultilineEntry extends St.Entry {
+    vfunc_get_preferred_height(width) {
+      const [, height] = super.vfunc_get_preferred_height(width);
+      return [height, height];
+    }
+  },
+);
+
 export const PasteSetDialog = GObject.registerClass(
   class PasteSetDialog extends ModalDialog.ModalDialog {
     _init(title, name, text, save, remove = null, options = {}) {
@@ -29,6 +40,7 @@ export const PasteSetDialog = GObject.registerClass(
       nameInput.clutter_text.set_max_length(text === null ? 100 : 200);
       this.contentLayout.add_child(nameInput);
       let body;
+      let syncEditor;
       let kind = options.kind || 'text';
       let executionMode = options.executionMode || 'direct';
       let previewOnOpen = options.previewOnOpen === true;
@@ -39,7 +51,8 @@ export const PasteSetDialog = GObject.registerClass(
         const bodyLabel = new St.Label({ text: '' });
         this.contentLayout.add_child(bodyLabel);
         const scroll = new St.ScrollView({ style_class: 'ci-set-body-scroll' });
-        body = new St.Entry({
+        scroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
+        body = new MultilineEntry({
           text,
           can_focus: true,
           accessible_name: _('Text to paste'),
@@ -59,6 +72,18 @@ export const PasteSetDialog = GObject.registerClass(
         const bodyBox = new St.BoxLayout({});
         bodyBox.add_child(body);
         scroll.add_child(bodyBox);
+        body.clutter_text.connect('cursor-changed', () => {
+          const [valid, , y, height] = body.clutter_text.position_to_coords(
+            body.clutter_text.cursor_position,
+          );
+          if (!valid) return;
+          const adjustment = scroll.vadjustment;
+          const top = body.clutter_text.y + y;
+          const bottom = top + height;
+          if (top < adjustment.value) adjustment.value = top;
+          else if (bottom > adjustment.value + adjustment.page_size)
+            adjustment.value = bottom - adjustment.page_size;
+        });
         this.contentLayout.add_child(scroll);
         const modes = new St.BoxLayout({
           style_class: 'ci-paste-action-row',
@@ -113,7 +138,7 @@ export const PasteSetDialog = GObject.registerClass(
           style_class: 'ci-editor-output-scroll',
         });
         outputScroll.set_policy(St.PolicyType.NEVER, St.PolicyType.AUTOMATIC);
-        this._editorOutput = new St.Entry({
+        this._editorOutput = new MultilineEntry({
           can_focus: true,
           accessible_name: _('Command output'),
           hint_text: _('Command output'),
@@ -286,7 +311,7 @@ export const PasteSetDialog = GObject.registerClass(
           trimTrailingNewlines = !trimTrailingNewlines;
           sync();
         });
-        sync();
+        syncEditor = sync;
       }
       const error = new St.Label({ text: '', style_class: 'ci-set-error' });
       error.clutter_text.line_wrap = true;
@@ -346,12 +371,23 @@ export const PasteSetDialog = GObject.registerClass(
           'notify::key-focus',
           () => {
             const focus = global.stage.get_key_focus();
-            if (focus && editorScroll.contains(focus))
-              ensureActorVisibleInScrollView(editorScroll, focus);
+            if (focus && editorScroll.contains(focus)) {
+              let visibleActor = focus;
+              for (
+                let parent = focus.get_parent();
+                parent && parent !== editorScroll;
+                parent = parent.get_parent()
+              )
+                if (parent instanceof St.ScrollView) visibleActor = parent;
+              ensureActorVisibleInScrollView(editorScroll, visibleActor);
+            }
           },
           this,
         );
       }
+      // Reparenting actors into the scroll view shows them again. Apply the
+      // selected type only after the editor's widget hierarchy is complete.
+      syncEditor?.();
       this.setButtons(buttons);
       this.setInitialKeyFocus(nameInput);
     }
