@@ -49,6 +49,13 @@ export const PasteSetDialog = GObject.registerClass(
         body.clutter_text.activatable = false;
         body.clutter_text.line_wrap = true;
         body.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+        // St.Entry only focuses its text actor when the text itself is hit.
+        // The multiline entry also has empty space below short content.
+        body.connect('button-press-event', (_, event) => {
+          if (event.get_button() === Clutter.BUTTON_PRIMARY)
+            body.grab_key_focus();
+          return Clutter.EVENT_PROPAGATE;
+        });
         const bodyBox = new St.BoxLayout({});
         bodyBox.add_child(body);
         scroll.add_child(bodyBox);
