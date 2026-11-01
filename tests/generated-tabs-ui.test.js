@@ -396,11 +396,28 @@ export default class extends Extension {
     assert(
       descendants(dialog)
         .filter((actor) => actor.style_class === 'check-box')
+        .filter(
+          (actor) =>
+            actor.accessible_name !== _('Run command during cross-tab search'),
+        )
         .every((actor) => !actor.mapped),
       'Item-specific checkboxes leaked into tab editor',
     );
-    button(dialog, 'Cancel').emit('clicked', 0);
+    const autoSearch = button(dialog, 'Run command during cross-tab search');
+    assert(
+      autoSearch?.mapped && !autoSearch.checked,
+      'Search auto-run checkbox is absent or not opt-in',
+    );
+    autoSearch.checked = true;
+    autoSearch.emit('clicked', 0);
+    button(dialog, 'Save').emit('clicked', 0);
     await delay(200);
+    await owner._pasteSets.flush();
+    assert(
+      owner._pasteSets.data.sets.find((tab) => tab.id === set.id)
+        .runOnSearch === true,
+      'Search auto-run option was not saved by editor',
+    );
     owner.menu.open();
     await delay(150);
     owner._switchPasteTab(set.id);

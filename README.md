@@ -67,10 +67,14 @@ Results are grouped by tab, with number shortcuts assigned to candidates in the
 order shown. Names, text, and command strings are searched; available command
 previews can also match. Results are paged like history.
 
-Search never runs commands. Generated tabs contribute only results already
-obtained during the current panel visit; tabs without cached results are listed
-as not searched. Open their tabs explicitly to load them. Selecting a command
-item is still an explicit execution if no preview was acquired for it.
+Generated tabs normally contribute only results obtained during the current panel
+visit. Enable **Run command during cross-tab search** in a generated tab's editor
+to run it once when starting a non-empty all-tabs search. Further typing only
+filters the results; clear and re-enter the query to run it again. Opted-in tabs
+run sequentially and contribute results as they finish. The pause button prevents
+this automatic execution. Tabs without results are listed as not searched.
+Selecting an ordinary command item is still an explicit execution if no preview
+was acquired for it.
 
 Clear the search to return to the current tab's normal list. The scope checkbox
 is saved for subsequent sessions.
@@ -97,9 +101,9 @@ completion and stay in the command's order. Selecting a candidate pastes the
 captured text without running the command again.
 
 Use the refresh button to regenerate the list. While generation is running, that
-button stops it. Searching does not rerun the command; refreshing preserves the
+button stops it. Typing within a search does not rerun the command; refreshing preserves the
 search and, where possible, the selected text. Generated candidates are read-only.
-Only the tab name, command, and execution mode are saved. Completed results stay
+Only the tab configuration is saved. Completed results stay
 cached across tab switches until the panel closes; switching tabs cancels any
 unfinished generation.
 

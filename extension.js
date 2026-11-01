@@ -971,7 +971,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     return button;
   }
 
-  _generatedTabRecord(set) {
+  _ensureGeneratedTabs() {
     this._generatedTabs ??= new GeneratedTabs(() => {
       if (
         this._destroyed ||
@@ -995,6 +995,10 @@ class ClipboardIndicator extends PanelMenu.Button {
         rows[0];
       if (selected) selected.grab_key_focus();
     });
+  }
+
+  _generatedTabRecord(set) {
+    this._ensureGeneratedTabs();
     if (!this.menu.isOpen || PRIVATE_MODE) {
       this._generatedTabs.clear();
       return null;
@@ -1033,6 +1037,11 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._applyPasteSetVisibility();
       return;
     }
+    this._ensureGeneratedTabs();
+    this._generatedTabs.search(
+      this._pasteSets.data.sets,
+      this.menu.isOpen && !this._destroyed && !this._previewsPaused,
+    );
     const results = collectSearchResults({
       query: this.searchEntry.get_text(),
       history: newestHistory(this.entries),
@@ -1462,6 +1471,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               kind: options.kind === 'command' ? 'generated' : 'manual',
               command,
               executionMode: options.executionMode,
+              runOnSearch: options.runOnSearch,
             });
           this._renderPasteSets();
         },
@@ -1470,6 +1480,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           tabEditor: id !== 'history',
           kind: set?.kind === 'generated' ? 'command' : 'text',
           executionMode: set?.executionMode || 'direct',
+          runOnSearch: set?.runOnSearch === true,
           trimTrailingNewlines: false,
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
@@ -1492,6 +1503,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               kind: options.kind === 'command' ? 'generated' : 'manual',
               command,
               executionMode: options.executionMode,
+              runOnSearch: options.runOnSearch,
             };
             if (id) this._pasteSets.configure(id, name, configuration);
             else
@@ -1526,6 +1538,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           tabEditor: initialText === null,
           kind: set?.kind === 'generated' ? 'command' : 'text',
           executionMode: set?.executionMode || 'direct',
+          runOnSearch: set?.runOnSearch === true,
           trimTrailingNewlines: false,
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
@@ -2899,6 +2912,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSearchTextChanged() {
+    if (!this._isCrossTabSearch()) this._generatedTabs?.endSearch();
     this._crossSearchOffset = 0;
     if (this._isCrossTabSearch()) {
       this._renderPasteSets();

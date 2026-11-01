@@ -53,13 +53,12 @@ export class GeneratedTabs {
     this._start();
   }
 
-  _start() {
-    const record = this.record;
+  _start(record = this.record) {
     record.state = 'pending';
     record.items = [];
     // Catch launch failures as well as asynchronous failures; never publish a
     // partial result or let a superseded command replace a newer snapshot.
-    Promise.resolve()
+    return (record.completion = Promise.resolve()
       .then(() => {
         if (
           this.records.get(record.tab.id) !== record ||
@@ -94,7 +93,50 @@ export class GeneratedTabs {
         record.error = error;
         record.running = null;
         this._notify();
-      });
+      }));
+  }
+
+  // One sequential batch per nonempty cross-tab search. Query edits only filter.
+  search(tabs, enabled) {
+    if (!enabled) {
+      this.endSearch();
+      return;
+    }
+    if (this.searchSession) return;
+    const session = { cancelled: false, pending: null };
+    this.searchSession = session;
+    const run = async () => {
+      for (const tab of tabs) {
+        if (session.cancelled) return;
+        if (tab.kind !== 'generated' || tab.runOnSearch !== true) continue;
+        // Reuse an already-running visit rather than execute it twice.
+        let record = this.get(tab);
+        if (record?.state !== 'pending') {
+          this._discard(tab.id);
+          record = {
+            signature: JSON.stringify([tab.id, tab.command, tab.executionMode]),
+            state: 'idle',
+            items: [],
+            tab: { ...tab },
+          };
+          this.records.set(tab.id, record);
+        }
+        session.pending = record;
+        if (record.state === 'pending') await record.completion;
+        else await this._start(record);
+        session.pending = null;
+      }
+    };
+    run().catch((error) => console.error(error));
+  }
+
+  endSearch() {
+    const session = this.searchSession;
+    this.searchSession = null;
+    if (!session) return;
+    session.cancelled = true;
+    if (session.pending?.state === 'pending')
+      this._discard(session.pending.tab.id);
   }
 
   _notify() {
@@ -132,6 +174,7 @@ export class GeneratedTabs {
   }
 
   clear() {
+    this.endSearch();
     for (const id of this.records.keys()) this._discard(id);
     this.record = null;
   }

@@ -69,6 +69,56 @@ async function main() {
     executionMode: 'bash',
     items: [],
   };
+  const searchCalls = [];
+  const searchTabs = new GeneratedTabs(null, {
+    execute: (command, options) => {
+      const run = execute(command, options);
+      searchCalls.push(run);
+      return run;
+    },
+  });
+  const opted = { ...tab, runOnSearch: true };
+  const second = { ...opted, id: 'b', command: 'second' };
+  searchTabs.search([tab], true);
+  await tick();
+  equal(searchCalls.length, 0);
+  searchTabs.endSearch();
+  searchTabs.search([opted, second], false);
+  await tick();
+  equal(searchCalls.length, 0);
+  searchTabs.search([opted, second], true);
+  await tick();
+  equal(searchCalls.length, 1);
+  searchTabs.search([opted, second], true);
+  await tick();
+  equal(searchCalls.length, 1);
+  searchCalls[0].resolve('current file');
+  await tick();
+  equal(searchCalls.length, 2);
+  equal(searchTabs.get(opted).items[0].text, 'current file');
+  searchCalls[1].resolve('second file');
+  await tick();
+  searchTabs.endSearch();
+  searchTabs.search([opted, second], true);
+  await tick();
+  equal(searchCalls.length, 3);
+  searchTabs.clear();
+  await tick();
+  equal(searchCalls[2].cancelled, true);
+  equal(searchCalls.length, 3);
+  equal(searchTabs.records.size, 0);
+  // Failure must not block later tabs; disabling scope cancels pending work.
+  searchTabs.search([opted, second], true);
+  await tick();
+  searchCalls[3].reject(Error('failure'));
+  await tick();
+  equal(searchTabs.get(opted).state, 'error');
+  equal(searchCalls.length, 5);
+  searchTabs.search([], false);
+  await tick();
+  equal(searchCalls[4].cancelled, true);
+  searchTabs.destroy();
+  calls.length = 0;
   let record = tabs.sync(tab, { autoRun: false });
   equal(record.state, 'idle');
   await tick();
@@ -268,6 +318,7 @@ async function main() {
       { kind: 'generated', command: 'x'.repeat(8193) },
       { kind: 'generated', command: 'bad\0value' },
       { kind: 'generated', command: 'date', executionMode: 'unknown' },
+      { kind: 'generated', command: 'date', runOnSearch: 'true' },
     ])
       throws(() => store.create('Invalid', options));
     equal(store.data.sets.length, 2);
@@ -278,6 +329,20 @@ async function main() {
     });
     await store.flush();
     equal(new PasteSets(directory).data.sets[1].command, 'date');
+    store.configure(id, 'Search enabled', {
+      kind: 'generated',
+      command: 'date',
+      runOnSearch: true,
+    });
+    await store.flush();
+    equal(new PasteSets(directory).data.sets[1].runOnSearch, true);
+    store.configure(id, 'Search disabled', {
+      kind: 'generated',
+      command: 'date',
+      runOnSearch: false,
+    });
+    await store.flush();
+    equal(new PasteSets(directory).data.sets[1].runOnSearch, undefined);
     store.configure(id, 'Manual again', { kind: 'manual' });
     await store.flush();
     equal(new PasteSets(directory).data.sets[1], {

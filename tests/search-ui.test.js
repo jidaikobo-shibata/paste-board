@@ -462,6 +462,45 @@ export default class extends Extension {
         owner._allTabsCheck.checked,
       'Scope setting was not retained',
     );
+    owner._pasteSets.configure(unopened, 'Auto search', {
+      kind: 'generated',
+      executionMode: 'bash',
+      runOnSearch: true,
+      command: `n=$(cat '${root}/generator-count'); printf '%s' "$((n+1))" > '${root}/generator-count'; printf 'auto search candidate'`,
+    });
+    await query('auto search');
+    await wait(() =>
+      rows().some((row) => row.entry.text === 'auto search candidate'),
+    );
+    assert(
+      read(root + '/generator-count') === '2',
+      'Opted-in tab was not executed on search',
+    );
+    await query('auto search candidate');
+    assert(
+      read(root + '/generator-count') === '2',
+      'Typing reran the search command',
+    );
+    await query('');
+    await query('auto search');
+    await wait(() => read(root + '/generator-count') === '3');
+    await query('');
+    owner.settings.set_boolean('pause-command-previews', true);
+    await query('auto search');
+    await delay(150);
+    assert(
+      read(root + '/generator-count') === '3',
+      'Pause did not suppress search commands',
+    );
+    await query('');
+    owner.settings.set_boolean('pause-command-previews', false);
+    owner.settings.set_boolean('search-all-tabs', false);
+    await query('auto search');
+    await delay(150);
+    assert(
+      read(root + '/generator-count') === '3',
+      'Current-tab search ran commands',
+    );
     owner.menu.close();
   }
 }

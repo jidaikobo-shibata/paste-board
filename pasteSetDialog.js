@@ -55,6 +55,7 @@ export const PasteSetDialog = GObject.registerClass(
       let syncEditor;
       let kind = options.kind || 'text';
       let executionMode = options.executionMode || 'direct';
+      let runOnSearch = options.runOnSearch === true;
       let previewOnOpen = options.previewOnOpen === true;
       let trimTrailingNewlines = options.trimTrailingNewlines !== false;
       if (text !== null) {
@@ -123,6 +124,25 @@ export const PasteSetDialog = GObject.registerClass(
           _('Preview output when opening this tab'),
         );
         this.contentLayout.add_child(preview);
+        const searchRun = new CheckBox.CheckBox(
+          _('Run command during cross-tab search'),
+        );
+        searchRun.accessible_name = _('Run command during cross-tab search');
+        this.contentLayout.add_child(searchRun);
+        searchRun
+          .get_accessible()
+          .set_description(
+            _('Starting a search runs the command with your permissions.'),
+          );
+        searchRun.connect('clicked', () => {
+          runOnSearch = searchRun.checked;
+        });
+        const searchWarning = new St.Label({
+          text: _('Starting a search runs the command with your permissions.'),
+          style_class: 'ci-editor-warning',
+        });
+        searchWarning.clutter_text.line_wrap = true;
+        this.contentLayout.add_child(searchWarning);
         const controls = new St.BoxLayout({
           style_class: 'ci-editor-run-row',
         });
@@ -292,6 +312,9 @@ export const PasteSetDialog = GObject.registerClass(
             this._editorStatus.visible =
             outputScroll.visible =
               command;
+          searchRun.visible = Boolean(options.tabEditor && command);
+          searchRun.checked = runOnSearch;
+          searchWarning.visible = searchRun.visible;
           if (options.tabEditor) trim.visible = preview.visible = false;
           explanation.set_text(
             [
@@ -419,6 +442,8 @@ export const PasteSetDialog = GObject.registerClass(
           outputScroll,
           trim,
           preview,
+          searchRun,
+          searchWarning,
         ]) {
           this.contentLayout.remove_child(actor);
           this.contentLayout.add_child(actor);
@@ -436,6 +461,7 @@ export const PasteSetDialog = GObject.registerClass(
             trimTrailingNewlines,
             executionMode,
             previewOnOpen,
+            runOnSearch,
           });
           this.close();
         } catch (e) {

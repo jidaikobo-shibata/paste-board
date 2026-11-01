@@ -70,6 +70,8 @@ export class PasteSets {
         set.items.length > 1000
       )
         throw new Error(_('Invalid paste set format.'));
+      if (set.runOnSearch !== undefined && typeof set.runOnSearch !== 'boolean')
+        throw new Error(_('Invalid command tab format.'));
       if (set.kind !== undefined && !['manual', 'generated'].includes(set.kind))
         throw new Error(_('Invalid paste set format.'));
       if (
@@ -217,8 +219,15 @@ export class PasteSets {
   _configuredSet(
     set,
     name,
-    { kind = 'manual', command = '', executionMode = 'direct' } = {},
+    {
+      kind = 'manual',
+      command = '',
+      executionMode = 'direct',
+      runOnSearch = false,
+    } = {},
   ) {
+    if (typeof runOnSearch !== 'boolean')
+      throw new Error(_('Invalid command tab format.'));
     if (!['manual', 'generated'].includes(kind))
       throw new Error(_('Invalid paste set format.'));
     if (kind === 'generated' && set.items.length)
@@ -229,8 +238,14 @@ export class PasteSets {
     delete next.kind;
     delete next.command;
     delete next.executionMode;
+    delete next.runOnSearch;
     if (kind === 'generated')
-      Object.assign(next, { kind, command, executionMode });
+      Object.assign(next, {
+        kind,
+        command,
+        executionMode,
+        ...(runOnSearch ? { runOnSearch: true } : {}),
+      });
     return next;
   }
 
