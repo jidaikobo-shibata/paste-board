@@ -101,16 +101,39 @@ completion and stay in the command's order. Selecting a candidate pastes the
 captured text without running the command again.
 
 Use the refresh button to regenerate the list. While generation is running, that
-button stops it. Typing within a search does not rerun the command; refreshing preserves the
-search and, where possible, the selected text. Generated candidates are read-only.
-Only the tab configuration is saved. Completed results stay
-cached across tab switches until the panel closes; switching tabs cancels any
-unfinished generation.
+button stops it. Typing within a search does not rerun the command; refreshing
+preserves the search and, where possible, the selected text. Generated candidates
+are read-only. Only the tab configuration is saved. Completed results stay cached
+across tab switches until the panel closes; switching tabs cancels any unfinished
+generation.
 
 The pause button prevents automatic generation. You can still use **Refresh**
 to run the command explicitly while paused. Private mode blocks both operations.
 Commands have the same permissions and limits described below, plus a maximum
 of 1000 candidates. Failed commands never publish partial output.
+
+### Example: SSH connections
+
+Turn the `Host` lines in your SSH config into paste candidates such as
+`ssh staging` and `ssh production`:
+
+1. Create a paste set named **SSH connections** and select **Generate from command**.
+2. Choose **Bash (one-liner)** and enter:
+
+   ```bash
+   sed -nE 's/^[[:space:]]*[Hh][Oo][Ss][Tt][[:space:]]+/ssh /p' ~/.ssh/config
+   ```
+
+3. Enable **Run command during cross-tab search** if you want to find these
+   connections without opening their tab first, then save.
+
+Opening the tab or starting an all-tabs search (if enabled) reads the current
+config. Type part of a host name to filter the candidates, then choose one to
+paste the SSH command. Pasting does not execute it.
+
+This simple example copies each `Host` line as written: wildcard patterns and
+multiple aliases on one line need adjustment. Files referenced by `Include` are
+not read.
 
 ## Repeated pasting
 
