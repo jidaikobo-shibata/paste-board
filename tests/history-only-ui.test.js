@@ -62,6 +62,57 @@ export default class extends Extension {
       await delay(100);
     };
     const rows = () => owner._visiblePasteCandidates();
+    assert(
+      !owner.settings.get_boolean('enable-keybindings') &&
+        owner.settings.get_strv('toggle-menu').length === 0 &&
+        owner._historyPasteModifiers === 0,
+      'Fresh shortcut defaults are not off',
+    );
+    assert(
+      rows().every(
+        (row) =>
+          row.shortcutLabel.text === '' && !row.shortcutLabel.shortcutName,
+      ),
+      'Disabled shortcuts still show numbers',
+    );
+    assert(
+      owner._shortcutsBindingIds.length === 0,
+      'Fresh defaults registered a global shortcut',
+    );
+    const { default: Clutter } = await import('gi://Clutter');
+    const keyboard = Clutter.get_default_backend()
+      .get_default_seat()
+      .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    rows()[0].grab_key_focus();
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_0,
+      Clutter.KeyState.PRESSED,
+    );
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_0,
+      Clutter.KeyState.RELEASED,
+    );
+    await delay(150);
+    assert(
+      owner.menu.isOpen && owner.searchEntry.get_text() === '0',
+      'Disabled number paste consumed a plain digit',
+    );
+    await query('');
+    owner.settings.set_int('quick-paste-modifiers', 8);
+    await delay(100);
+    assert(
+      rows()[0].shortcutLabel.text === '1',
+      'Enabling number shortcuts did not show numbers',
+    );
+    owner.settings.set_int('quick-paste-modifiers', 0);
+    await delay(100);
+    assert(
+      rows().every((row) => row.shortcutLabel.text === ''),
+      'Turning shortcuts off did not hide numbers',
+    );
+
     await query('server prod');
     assert(
       !owner._isCrossTabSearch() &&

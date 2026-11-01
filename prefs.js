@@ -192,6 +192,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       [Fields.QUICK_PASTE_MODIFIERS, _('Modifiers for number-key paste')],
     ]) {
       const selector = new Gtk.ComboBoxText();
+      selector.append('0', _('Off'));
       for (let value = 1; value <= 15; value++)
         selector.append(
           String(value),

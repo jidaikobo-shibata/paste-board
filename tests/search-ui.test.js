@@ -80,6 +80,7 @@ export default class extends Extension {
           (_c, text) => resolve(text),
         ),
       );
+    owner.settings.set_int('quick-paste-modifiers', 8);
     Main.overview.hide();
     owner.settings.set_boolean('pause-command-previews', false);
     owner.settings.set_boolean('keep-menu-open', true);

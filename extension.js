@@ -1981,7 +1981,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       const bits = modifierBits(event.get_state(), Clutter.ModifierType);
       if (
         event.get_key_symbol() === Clutter.KEY_Escape ||
-        ((bits === 1 || bits === this._historyPasteModifiers) &&
+        ((bits === 1 ||
+          (this._historyPasteModifiers > 0 &&
+            bits === this._historyPasteModifiers)) &&
           event.get_key_unicode() === '0')
       )
         this.menu.close();
@@ -2075,7 +2077,10 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_STOP;
     }
     const bits = modifierBits(event.get_state(), Clutter.ModifierType);
-    const target = bits === this._historyPasteModifiers ? 'history' : null;
+    const target =
+      this._historyPasteModifiers > 0 && bits === this._historyPasteModifiers
+        ? 'history'
+        : null;
     const digit = event.get_key_unicode();
     if (
       target &&
@@ -2205,7 +2210,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   _handleCtrlSelectKeyEvent(event) {
     if (!this.menu.isOpen) return;
     const bits = modifierBits(event.get_state(), Clutter.ModifierType);
-    const target = bits === this._historyPasteModifiers ? 'history' : null;
+    const target =
+      this._historyPasteModifiers > 0 && bits === this._historyPasteModifiers
+        ? 'history'
+        : null;
     let digit = event.get_key_unicode();
     // Shift changes number-row symbols; Mutter uses XKB codes 10..19.
     const code = event.get_key_code();
@@ -2786,8 +2794,12 @@ class ClipboardIndicator extends PanelMenu.Button {
       items.forEach((item, index) => {
         if (!item.shortcutLabel) return;
         item.shortcutLabel.shortcutName =
-          index < 9 ? `${modifierLabel(modifiers)}+${index + 1}` : '';
-        item.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
+          modifiers > 0 && index < 9
+            ? `${modifierLabel(modifiers)}+${index + 1}`
+            : '';
+        item.shortcutLabel.set_text(
+          modifiers > 0 && index < 9 ? String(index + 1) : '',
+        );
         this._setCandidateAccessibleName(item);
       });
     }
@@ -2797,10 +2809,12 @@ class ClipboardIndicator extends PanelMenu.Button {
         .filter((item) => item.entry) || [];
     results.forEach((row, index) => {
       row.shortcutLabel.shortcutName =
-        index < 9
+        this._historyPasteModifiers > 0 && index < 9
           ? `${modifierLabel(this._historyPasteModifiers)}+${index + 1}`
           : '';
-      row.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
+      row.shortcutLabel.set_text(
+        this._historyPasteModifiers > 0 && index < 9 ? String(index + 1) : '',
+      );
       this._setCandidateAccessibleName(row);
     });
   }

@@ -33,9 +33,9 @@
       <summary>Keep the paste panel open after pasting with Enter, a click, or a number shortcut</summary>
     </key>
     <key type="i" name="quick-paste-modifiers">
-      <default>8</default>
-      <range min="1" max="15" />
-      <summary>Modifiers for number-key paste in the visible tab</summary>
+      <default>0</default>
+      <range min="0" max="15" />
+      <summary>Modifiers for number-key paste in the visible tab (0 disables it)</summary>
     </key>
     <key type="i" name="history-size">
       <default>1000</default>
@@ -112,11 +112,11 @@
     </key>
 
     <key name="enable-keybindings" type="b">
-      <default>true</default>
+      <default>false</default>
       <summary>Enable the shortcut that opens the paste panel</summary>
     </key>
     <key name="toggle-menu" type="as">
-      <default><![CDATA[['<Super>F1']]]></default>
+      <default>[]</default>
       <summary>Shortcut to open the paste panel</summary>
     </key>
 

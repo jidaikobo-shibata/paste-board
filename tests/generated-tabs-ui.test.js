@@ -79,6 +79,7 @@ export default class extends Extension {
       );
       await delay(150);
     };
+    owner.settings.set_int('quick-paste-modifiers', 8);
     Main.overview.hide();
     owner.settings.set_boolean('pause-command-previews', false);
     GLib.file_set_contents(root + '/counter', '0');

@@ -148,5 +148,20 @@ equal(events, [
   [0xffe1, 0],
   [0xffe3, 0],
 ]);
+equal(settings.get_boolean('enable-keybindings'), false);
+equal(settings.get_strv('toggle-menu'), []);
+equal(settings.get_int('quick-paste-modifiers'), 0);
+settings.set_boolean('enable-keybindings', true);
+settings.set_strv('toggle-menu', ['<Super>F1']);
+settings.set_int('quick-paste-modifiers', 8);
+equal(settings.get_boolean('enable-keybindings'), true);
+equal(settings.get_strv('toggle-menu'), ['<Super>F1']);
+equal(settings.get_int('quick-paste-modifiers'), 8);
+for (const key of [
+  'enable-keybindings',
+  'toggle-menu',
+  'quick-paste-modifiers',
+])
+  settings.reset(key);
 settings.reset(SETTINGS_KEY);
 print(`Application paste shortcuts: ${count} checks passed`);

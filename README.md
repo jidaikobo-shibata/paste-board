@@ -24,17 +24,19 @@ place. After updating the source, run `make` and log out and back in.
 
 ## Open, search, and paste
 
-Copy text as usual, then open the panel from the top-bar icon or **Super+F1**.
+Copy text as usual, then open the panel from the top-bar icon. Panel-opening
+and number-paste shortcuts are off by default to avoid desktop shortcut conflicts.
+Enable them and choose your keys in preferences if desired.
 
 - **Up/Down**, then **Enter**, or a click: paste an item.
-- **Super+1** through **Super+9**: paste a numbered candidate.
+- **Your chosen modifiers + 1–9**: paste a numbered candidate, when enabled.
 - **Left/Right** outside search: switch tabs.
 - **Ctrl+F**: switch between search and the last selected candidate.
   **/** outside search also focuses it.
 - **Esc**: close the panel.
 
 Type letters or digits anywhere in the panel to start searching, including the
-first character. Number shortcuts with modifiers still paste.
+first character. Enabled number shortcuts still paste.
 
 Search covers **All tabs** by default; uncheck it to search only the current tab.
 Space-separated words use AND matching, in any order. Results are grouped by tab

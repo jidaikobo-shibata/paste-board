@@ -4,7 +4,21 @@ set -euo pipefail
 if [[ ${1:-} != --session ]]; then
   paste_board_dev_root=$(mktemp -d /tmp/paste-board-dev.XXXXXX)
   paste_board_dev_script=$(readlink -f -- "${BASH_SOURCE[0]}")
+  paste_board_dev_schemas="$(dirname "$(dirname "$paste_board_dev_script")")/schemas"
+  paste_board_schema=org.gnome.shell.extensions.paste-board
+  # Copy only shortcut preferences into the isolated configuration.
+  paste_board_saved_enabled=$(gsettings --schemadir "$paste_board_dev_schemas" \
+    get "$paste_board_schema" enable-keybindings)
+  paste_board_saved_toggle=$(gsettings --schemadir "$paste_board_dev_schemas" \
+    get "$paste_board_schema" toggle-menu)
+  paste_board_saved_modifiers=$(gsettings --schemadir "$paste_board_dev_schemas" \
+    get "$paste_board_schema" quick-paste-modifiers)
+
   env \
+    GSETTINGS_SCHEMA_DIR="$paste_board_dev_schemas" \
+    PASTE_BOARD_SAVED_ENABLED="$paste_board_saved_enabled" \
+    PASTE_BOARD_SAVED_TOGGLE="$paste_board_saved_toggle" \
+    PASTE_BOARD_SAVED_MODIFIERS="$paste_board_saved_modifiers" \
     GSETTINGS_BACKEND=keyfile \
     XDG_CONFIG_HOME="$paste_board_dev_root/config" \
     XDG_CACHE_HOME="$paste_board_dev_root/cache" \
@@ -24,6 +38,10 @@ else
   command -v chromium >/dev/null
 fi
 : "${XDG_RUNTIME_DIR:?Wayland runtime directory is required}"
+paste_board_schema=org.gnome.shell.extensions.paste-board
+gsettings set "$paste_board_schema" enable-keybindings "$PASTE_BOARD_SAVED_ENABLED"
+gsettings set "$paste_board_schema" toggle-menu "$PASTE_BOARD_SAVED_TOGGLE"
+gsettings set "$paste_board_schema" quick-paste-modifiers "$PASTE_BOARD_SAVED_MODIFIERS"
 gsettings set org.gnome.shell disable-user-extensions false
 gsettings set org.gnome.shell enabled-extensions \
   '["paste-board@jidaikobo.shibata"]'
