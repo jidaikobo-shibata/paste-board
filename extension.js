@@ -178,6 +178,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     const header = new St.BoxLayout({ style_class: 'ci-search-header' });
     header.add_child(this.searchEntry);
     this._allTabsCheck = new CheckBox.CheckBox(_('All tabs'));
+    this._allTabsCheck.y_align = Clutter.ActorAlign.CENTER;
+    this._allTabsCheck.y_expand = false;
+    // Shell's checkbox aligns its indicator to the first text line. This
+    // single-line header control needs both children centered as one row.
+    for (const actor of this._allTabsCheck.get_child().get_children())
+      actor.y_align = Clutter.ActorAlign.CENTER;
+
     this._allTabsCheck.checked = this._searchAllTabs;
     this._allTabsCheck.connect('clicked', () => {
       const enabled = this._allTabsCheck.checked;
