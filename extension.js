@@ -2066,7 +2066,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       // Preserve Enter activation for action buttons, rather than closing.
       return Clutter.EVENT_PROPAGATE;
     }
-    // Keep an explicit route into search while other typing exits paste mode.
+    // Keep slash as a focus-only shortcut; letters and digits start typing.
     if (
       event.get_key_unicode() === '/' &&
       modifierBits(event.get_state(), Clutter.ModifierType) === 0
@@ -2082,6 +2082,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       (/^[1-9]$/.test(digit) || (bits & 4 && code >= 10 && code <= 18))
     )
       return Clutter.EVENT_STOP;
+    if (this._handleTypeToSearch(event)) return Clutter.EVENT_STOP;
     this.menu.close();
     // Propagation inside Shell does not forward this already captured key to
     // the Wayland client. Consume it rather than synthesize arbitrary input.
@@ -2575,6 +2576,35 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
 
+    return true;
+  }
+
+  _handleTypeToSearch(event) {
+    if (
+      !this.menu.isOpen ||
+      this._destroyed ||
+      this._quickPasteBusy ||
+      PRIVATE_MODE ||
+      this._isSearchActor(global.stage.get_key_focus())
+    )
+      return false;
+    const bits = modifierBits(event.get_state(), Clutter.ModifierType);
+    if (bits !== 0 && bits !== 4) return false;
+    const symbol = event.get_key_symbol();
+    const composing =
+      symbol === Clutter.KEY_Multi_key ||
+      (symbol >= Clutter.KEY_dead_grave && symbol <= Clutter.KEY_dead_currency);
+    if (!composing && !/^[\p{L}\p{N}]$/u.test(event.get_key_unicode()))
+      return false;
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
+    }
+    const text = this.searchEntry.clutter_text;
+    global.stage.set_key_focus(text);
+    // Let Clutter/its input method process the original key, including the first
+    // character and compose sequences. Consume the outer event to avoid repeats.
+    text.event(event, false);
     return true;
   }
 

@@ -33,6 +33,9 @@ Copy text as usual, then open the panel from the top-bar icon or **Super+F1**.
   **/** outside search also focuses it.
 - **Esc**: close the panel.
 
+Type letters or digits anywhere in the panel to start searching, including the
+first character. Number shortcuts with modifiers still paste.
+
 Search covers **All tabs** by default; uncheck it to search only the current tab.
 Space-separated words use AND matching, in any order. Results are grouped by tab
 and numbered in display order. Clear the query to return to the ordinary list.

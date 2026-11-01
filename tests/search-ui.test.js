@@ -164,6 +164,61 @@ export default class extends Extension {
     await delay(200);
     owner.menu.open();
     await delay(200);
+    for (const pinned of [false, true]) {
+      owner.settings.set_boolean('keep-menu-open', pinned);
+      await query('');
+      rows()[0].grab_key_focus();
+      await key(Clutter.KEY_s);
+      assert(
+        owner.menu.isOpen &&
+          owner.searchEntry.get_text() === 's' &&
+          owner._isSearchActor(global.stage.get_key_focus()),
+        'Typing lost its first character or closed the panel',
+      );
+      await key(Clutter.KEY_e);
+      assert(
+        owner.searchEntry.get_text() === 'se',
+        'Typing duplicated a character',
+      );
+      await query('');
+      rows()[0].grab_key_focus();
+      await key(Clutter.KEY_2);
+      assert(
+        owner.searchEntry.get_text() === '2',
+        'Unmodified digit did not start search',
+      );
+      await query('');
+      rows()[0].grab_key_focus();
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Shift_L,
+        Clutter.KeyState.PRESSED,
+      );
+      await key(Clutter.KEY_A);
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Shift_L,
+        Clutter.KeyState.RELEASED,
+      );
+      assert(
+        owner.searchEntry.get_text() === 'A',
+        'Shift-letter did not start uppercase search',
+      );
+      await query('');
+      rows()[0].grab_key_focus();
+      await key(Clutter.KEY_slash);
+      assert(
+        owner.searchEntry.get_text() === '' &&
+          owner._isSearchActor(global.stage.get_key_focus()),
+        'Slash stopped being a focus-only shortcut',
+      );
+    }
+    assert(
+      read(root + '/generated-pasted') === '',
+      'Typing search text leaked into the target application',
+    );
+    owner.settings.set_boolean('keep-menu-open', true);
+    owner._pasteAfterAction = 'none';
     await query('server prod');
     assert(
       rows().length === 3,

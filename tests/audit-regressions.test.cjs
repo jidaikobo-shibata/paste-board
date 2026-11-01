@@ -2476,3 +2476,99 @@ test('missing paste sets fall back to visible history without losing saved searc
   owner._pasteSets = { data: { sets: [] } };
   assert.equal(owner._isCrossTabSearch(), true);
 });
+
+test('type-to-search forwards the first original key and cancels deferred focus', () => {
+  const forwarded = [];
+  const removed = [];
+  let focus = null;
+  const [owner] = instance(['_handleTypeToSearch'], {
+    modifierBits: (state) => state,
+    Clutter: {
+      ModifierType: {},
+      KEY_Multi_key: 1000,
+      KEY_dead_grave: 1100,
+      KEY_dead_currency: 1200,
+    },
+    global: {
+      stage: {
+        get_key_focus: () => focus,
+        set_key_focus: (actor) => (focus = actor),
+      },
+    },
+    GLib: { Source: { remove: (id) => removed.push(id) } },
+  });
+  const text = { event: (event, capture) => forwarded.push([event, capture]) };
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    searchEntry: { clutter_text: text },
+    _isSearchActor: (actor) => actor === text,
+  });
+  for (const [value, bits, symbol] of [
+    ['a', 0, 97],
+    ['Z', 4, 90],
+    ['2', 0, 50],
+    ['東', 0, 0x1006771],
+    ['é', 0, 233],
+    ['', 0, 1000],
+    ['', 0, 1100],
+  ]) {
+    focus = null;
+    owner._initialFocusCallbackId = 42;
+    const event = {
+      get_state: () => bits,
+      get_key_unicode: () => value,
+      get_key_symbol: () => symbol,
+    };
+    assert.equal(owner._handleTypeToSearch(event), true);
+    assert.equal(focus, text);
+    assert.equal(forwarded.at(-1)[0], event);
+    assert.equal(forwarded.at(-1)[1], false);
+    assert.equal(owner._initialFocusCallbackId, undefined);
+  }
+  assert.equal(removed.length, 7);
+});
+
+test('type-to-search leaves shortcuts, existing input, and inactive panels alone', () => {
+  let searchFocused = false;
+  const [owner, context] = instance(['_handleTypeToSearch'], {
+    modifierBits: (state) => state,
+    Clutter: {
+      ModifierType: {},
+      KEY_Multi_key: 1000,
+      KEY_dead_grave: 1100,
+      KEY_dead_currency: 1200,
+    },
+    global: {
+      stage: {
+        get_key_focus: () => null,
+        set_key_focus: () => assert.fail('unexpected focus'),
+      },
+    },
+  });
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _isSearchActor: () => searchFocused,
+  });
+  const event = (value, bits = 0) => ({
+    get_state: () => bits,
+    get_key_unicode: () => value,
+    get_key_symbol: () => 97,
+  });
+  for (const value of [' ', '/', '!', '\n', ''])
+    assert.equal(owner._handleTypeToSearch(event(value)), false);
+  for (const bits of [1, 2, 8, 5, 12])
+    assert.equal(owner._handleTypeToSearch(event('a', bits)), false);
+  for (const field of ['_destroyed', '_quickPasteBusy']) {
+    owner[field] = true;
+    assert.equal(owner._handleTypeToSearch(event('a')), false);
+    owner[field] = false;
+  }
+  owner.menu.isOpen = false;
+  assert.equal(owner._handleTypeToSearch(event('a')), false);
+  owner.menu.isOpen = true;
+  searchFocused = true;
+  assert.equal(owner._handleTypeToSearch(event('a')), false);
+  searchFocused = false;
+  context.PRIVATE_MODE = true;
+  assert.equal(owner._handleTypeToSearch(event('a')), false);
+});
