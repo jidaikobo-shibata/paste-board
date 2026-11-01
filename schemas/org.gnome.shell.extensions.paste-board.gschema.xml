@@ -3,6 +3,11 @@
       id="org.gnome.shell.extensions.paste-board"
       path="/org/gnome/shell/extensions/paste-board/">
 
+    <key type="b" name="search-all-tabs">
+      <default>true</default>
+      <summary>Search all tabs when the panel search field is not empty</summary>
+    </key>
+
     <key type="b" name="pause-command-previews">
       <default>false</default>
       <summary>Pause automatic previews and generated tabs until manually resumed</summary>

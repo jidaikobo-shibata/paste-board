@@ -12,6 +12,7 @@ function equal(actual, expected) {
   checks++;
 }
 equal(_('History'), japanese ? '履歴' : 'History');
+equal(_('All tabs'), japanese ? '全タブ' : 'All tabs');
 equal(_('Body'), japanese ? '本文' : 'Body');
 equal(
   _('Generate from command'),

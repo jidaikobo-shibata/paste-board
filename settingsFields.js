@@ -1,4 +1,5 @@
 const SettingsFields = {
+  SEARCH_ALL_TABS: 'search-all-tabs',
   PAUSE_COMMAND_PREVIEWS: 'pause-command-previews',
   KEEP_MENU_OPEN: 'keep-menu-open',
   QUICK_PASTE_MODIFIERS: 'quick-paste-modifiers',

@@ -7,6 +7,9 @@ const path = require('node:path');
 const vm = require('node:vm');
 const root = path.join(__dirname, '..');
 const source = fs.readFileSync(path.join(root, 'extension.js'), 'utf8');
+const searchHelpers = vm.runInNewContext(
+  `(function(){${fs.readFileSync(path.join(root, 'search.js'), 'utf8').replace(/^export /gm, '')}; return { searchTerms, matchesSearch };})()`,
+);
 
 function method(name) {
   const start = source.indexOf(`  ${name}(`);
@@ -20,6 +23,7 @@ function instance(names, globals = {}) {
   const context = vm.createContext({
     _: (value) => value,
     PRIVATE_MODE: false,
+    ...searchHelpers,
     MAX_TEXT_BYTES: 16 * 1024 * 1024,
     textFitsLimit: (text, limit = 16 * 1024 * 1024) =>
       typeof text === 'string' && text.length <= limit,

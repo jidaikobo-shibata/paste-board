@@ -109,6 +109,7 @@
 }
 
 .ci-search-header {
+  spacing: 8px;
   padding: 6px 12px;
 }
 
@@ -285,4 +286,8 @@
 
 .ci-editor-run-row {
   padding-right: 8px;
+}
+
+.ci-search-group-label {
+  font-size: 0.9em;
 }

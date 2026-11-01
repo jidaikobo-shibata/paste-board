@@ -13,26 +13,42 @@ export function generatedItems(text, tabId) {
   }));
 }
 
-// One visible tab visit owns one snapshot. Results never enter persisted sets.
+// A panel visit owns tab snapshots. Only completed results survive tab switches.
+// Results never enter persisted sets.
 export class GeneratedTabs {
   constructor(onChange, { execute = runCommand } = {}) {
     this.onChange = onChange;
     this.execute = execute;
     this.record = null;
+    this.records = new Map();
+  }
+
+  get(tab) {
+    const record = this.records.get(tab.id);
+    const signature = JSON.stringify([tab.id, tab.command, tab.executionMode]);
+    return record?.signature === signature ? record : null;
   }
 
   sync(tab, { autoRun = true } = {}) {
-    const signature = JSON.stringify([tab.id, tab.command, tab.executionMode]);
-    if (this.record?.signature !== signature) {
-      this.clear();
-      this.record = { signature, state: 'idle', items: [], tab: { ...tab } };
+    if (this.record?.tab.id !== tab.id) this.suspend();
+    let record = this.get(tab);
+    if (!record) {
+      this._discard(tab.id);
+      const signature = JSON.stringify([
+        tab.id,
+        tab.command,
+        tab.executionMode,
+      ]);
+      record = { signature, state: 'idle', items: [], tab: { ...tab } };
+      this.records.set(tab.id, record);
     }
-    if (autoRun && this.record.state === 'idle') this._start();
-    return this.record;
+    this.record = record;
+    if (autoRun && record.state === 'idle') this._start();
+    return record;
   }
 
   refresh(tab) {
-    this.clear();
+    this._discard(tab.id);
     this.sync(tab, { autoRun: false });
     this._start();
   }
@@ -45,7 +61,11 @@ export class GeneratedTabs {
     // partial result or let a superseded command replace a newer snapshot.
     Promise.resolve()
       .then(() => {
-        if (this.record !== record || record.state !== 'pending') return;
+        if (
+          this.records.get(record.tab.id) !== record ||
+          record.state !== 'pending'
+        )
+          return;
         record.running = this.execute(record.tab.command, {
           executionMode: record.tab.executionMode,
           trimTrailingNewlines: false,
@@ -54,14 +74,22 @@ export class GeneratedTabs {
         return record.running.promise;
       })
       .then((text) => {
-        if (this.record !== record || record.state !== 'pending') return;
+        if (
+          this.records.get(record.tab.id) !== record ||
+          record.state !== 'pending'
+        )
+          return;
         record.items = generatedItems(text, record.tab.id);
         record.state = 'ready';
         record.running = null;
         this._notify();
       })
       .catch((error) => {
-        if (this.record !== record || record.state !== 'pending') return;
+        if (
+          this.records.get(record.tab.id) !== record ||
+          record.state !== 'pending'
+        )
+          return;
         record.state = 'error';
         record.error = error;
         record.running = null;
@@ -86,8 +114,25 @@ export class GeneratedTabs {
     record.items = [];
   }
 
+  _discard(id) {
+    const record = this.records.get(id);
+    this.records.delete(id);
+    if (this.record === record) this.record = null;
+    if (record) {
+      record.state = 'stopped';
+      record.running?.cancel();
+      record.running = null;
+      record.items = [];
+    }
+  }
+
+  suspend() {
+    if (this.record?.state === 'pending') this._discard(this.record.tab.id);
+    this.record = null;
+  }
+
   clear() {
-    this.stop();
+    for (const id of this.records.keys()) this._discard(id);
     this.record = null;
   }
 

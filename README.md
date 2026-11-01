@@ -36,7 +36,9 @@ The first item in unfiltered history is the current text clipboard.
 
 - Use **Up/Down** to choose an item and **Enter** to paste, or click an item.
 - Use **Super+1** through **Super+9** to paste a numbered item in the visible tab.
-- Type in the search field to filter items.
+- Type in the search field to filter items. **All tabs** is on by default; turn
+  it off to search only the current tab. Space-separated words are combined
+  with AND, in any order, without regular expressions or fuzzy matching.
 - Use **Left/Right** outside the search field to switch tabs.
 - Press **Esc** to close the panel.
 
@@ -54,6 +56,21 @@ the previous clipboard and history order.
 
 **Plain text only:** formatting, images, and other non-text clipboard data are not
 preserved by pasting through this extension.
+
+## Search across tabs
+
+With **All tabs** enabled, a non-empty query searches history and all paste sets.
+Results are grouped by tab, with number shortcuts assigned to candidates in the
+order shown. Names, text, and command strings are searched; available command
+previews can also match. Results are paged like history.
+
+Search never runs commands. Generated tabs contribute only results already
+obtained during the current panel visit; tabs without cached results are listed
+as not searched. Open their tabs explicitly to load them. Selecting a command
+item is still an explicit execution if no preview was acquired for it.
+
+Clear the search to return to the current tab's normal list. The scope checkbox
+is saved for subsequent sessions.
 
 ## Paste sets
 
@@ -79,8 +96,9 @@ captured text without running the command again.
 Use the refresh button to regenerate the list. While generation is running, that
 button stops it. Searching does not rerun the command; refreshing preserves the
 search and, where possible, the selected text. Generated candidates are read-only.
-Only the tab name, command, and execution mode are saved; results are discarded
-when the panel closes or you switch tabs.
+Only the tab name, command, and execution mode are saved. Completed results stay
+cached across tab switches until the panel closes; switching tabs cancels any
+unfinished generation.
 
 The pause button prevents automatic generation. You can still use **Refresh**
 to run the command explicitly while paused. Private mode blocks both operations.

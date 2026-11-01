@@ -7,6 +7,7 @@ import Meta from 'gi://Meta';
 import Shell from 'gi://Shell';
 import St from 'gi://St';
 import Atk from 'gi://Atk';
+import * as CheckBox from 'resource:///org/gnome/shell/ui/checkBox.js';
 
 import * as Main from 'resource:///org/gnome/shell/ui/main.js';
 import * as MessageTray from 'resource:///org/gnome/shell/ui/messageTray.js';
@@ -27,6 +28,12 @@ import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { CommandPreviews, previewSummary } from './commandPreviews.js';
 import { GeneratedTabs } from './generatedTabs.js';
+import {
+  searchTerms,
+  matchesSearch,
+  newestHistory,
+  collectSearchResults,
+} from './search.js';
 import { CopyFeedback } from './copyFeedback.js';
 import {
   readOverrides,
@@ -170,6 +177,20 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     const header = new St.BoxLayout({ style_class: 'ci-search-header' });
     header.add_child(this.searchEntry);
+    this._allTabsCheck = new CheckBox.CheckBox(_('All tabs'));
+    this._allTabsCheck.checked = this._searchAllTabs;
+    this._allTabsCheck.connect('clicked', () => {
+      const enabled = this._allTabsCheck.checked;
+      if (!this.settings.set_boolean(SettingsFields.SEARCH_ALL_TABS, enabled)) {
+        this._allTabsCheck.checked = this._searchAllTabs;
+        return;
+      }
+      if (enabled !== this._searchAllTabs) {
+        this._searchAllTabs = enabled;
+        this._onSearchTextChanged();
+      }
+    });
+    header.add_child(this._allTabsCheck);
     this.menu.box.add_child(header);
     this._activePasteTab = 'history';
     const tabsScroll = new St.ScrollView({
@@ -204,6 +225,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._commandPreviews?.clear();
         this._generatedTabs?.clear();
         this._generatedSelectionText = undefined;
+        this._searchResultsSection?.removeAll();
         this._stopPasteDragFeedback();
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
@@ -254,6 +276,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._pasteSetContainer.actor.add_child(this._pasteSetScroll);
     this.menu.addMenuItem(this._pasteSetContainer);
     this._pasteSetContainer.actor.hide();
+    this._searchResultsContainer = new PopupMenu.PopupMenuSection();
+    this._searchResultsSection = new PopupMenu.PopupMenuSection();
+    this._searchResultsScroll = new St.ScrollView({
+      style_class: 'ci-history-menu-section',
+      overlay_scrollbars: true,
+    });
+    this._searchResultsScroll.add_child(this._searchResultsSection.actor);
+    this._searchResultsContainer.actor.add_child(this._searchResultsScroll);
+    this.menu.addMenuItem(this._searchResultsContainer);
+    this._searchResultsContainer.actor.hide();
 
     this.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
 
@@ -532,6 +564,10 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _visiblePasteCandidates() {
     if (PRIVATE_MODE) return [];
+    if (this._isCrossTabSearch?.())
+      return this._searchResultsSection
+        ._getMenuItems()
+        .filter((item) => item.entry);
     return (
       this._pasteSets && this._activePasteTab !== 'history'
         ? this._pasteSetSection
@@ -541,18 +577,28 @@ class ClipboardIndicator extends PanelMenu.Button {
       .filter((item) => item.entry);
   }
 
+  _isCrossTabSearch() {
+    return Boolean(
+      this._searchAllTabs &&
+      searchTerms(this.searchEntry?.get_text() || '').length,
+    );
+  }
+
   _applyPasteSetVisibility() {
     if (!this._pasteSets) return;
+    const cross = this._isCrossTabSearch();
     const history = this._activePasteTab === 'history';
-    this.scrollViewMenuSection.actor.visible = history && !PRIVATE_MODE;
-    this._pasteSetContainer.actor.visible = !history && !PRIVATE_MODE;
+    this.scrollViewMenuSection.actor.visible =
+      history && !cross && !PRIVATE_MODE;
+    this._pasteSetContainer.actor.visible = !history && !cross && !PRIVATE_MODE;
+    this._searchResultsContainer.actor.visible = cross && !PRIVATE_MODE;
   }
 
   _switchPasteTab(id) {
     if (this._quickPasteBusy) return;
     if (this._activePasteTab !== id) {
       this._commandPreviews?.clear();
-      this._generatedTabs?.clear();
+      this._generatedTabs?.suspend();
       this._generatedSelectionText = undefined;
     }
     this._activePasteTab = id;
@@ -916,6 +962,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       )
         return;
       this._renderPasteSets();
+      if (this._isCrossTabSearch()) return;
       const record = this._generatedTabs.record;
       if (record?.state !== 'ready') return;
       if (
@@ -958,6 +1005,112 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._generatedTabs.refresh(set);
     }
     this._renderPasteSets();
+  }
+
+  _renderAllTabSearch() {
+    const section = this._searchResultsSection;
+    section.removeAll();
+    if (PRIVATE_MODE || !this.entries) {
+      this._applyPasteSetVisibility();
+      return;
+    }
+    const results = collectSearchResults({
+      query: this.searchEntry.get_text(),
+      history: newestHistory(this.entries),
+      historyName: this._pasteSets.data.historyName || _('History'),
+      sets: this._pasteSets.data.sets,
+      getGenerated: (set) => this._generatedTabs?.get(set),
+      getPreview: (item) => this._commandPreviews?.get(item),
+      offset: this._crossSearchOffset || 0,
+      limit: PAGE_SIZE,
+    });
+    if (!results.count && this._crossSearchOffset > 0) {
+      this._crossSearchOffset = 0;
+      this._renderAllTabSearch();
+      return;
+    }
+    this._crossSearchHasMore = results.hasMore;
+    for (const group of results.groups) {
+      const heading = new PopupMenu.PopupBaseMenuItem({
+        reactive: false,
+        can_focus: false,
+      });
+      const groupLabel = new St.Label({
+        text: group.name,
+        style_class: 'ci-search-group-label',
+      });
+      groupLabel.opacity = 190;
+      heading.add_child(groupLabel);
+      section.addMenuItem(heading);
+      for (const item of group.items) {
+        const history = group.id === 'history';
+        const set = this._pasteSets.data.sets.find(
+          (set) => set.id === group.id,
+        );
+        const entry = history
+          ? item
+          : {
+              ...item,
+              type: DS.TYPE_TEXT,
+              sourceSetId: group.id,
+              pasteSetItem: true,
+              generated: set.kind === 'generated',
+              // A selected command is an explicit execution. Never require a
+              // preview that was not acquired by visiting its source tab.
+              previewOnOpen: Boolean(
+                item.previewOnOpen && this._commandPreviews?.get(item),
+              ),
+            };
+        const label =
+          item.name ||
+          this._truncated(
+            item.kind === 'command' ? item.command : item.text,
+            MAX_VISIBLE_CHARS,
+          );
+        const row = new PopupMenu.PopupMenuItem(label, { hover: false });
+        row.add_style_class_name('ci-clipboard-row');
+        row.label.x_expand = true;
+        this._hideCandidateOrnament(row);
+        row.entry = entry;
+        row.searchGroupName = group.name;
+        row.shortcutLabel = new St.Label({
+          style_class: 'ci-shortcut-number',
+          y_align: Clutter.ActorAlign.CENTER,
+        });
+        row.insert_child_at_index(row.shortcutLabel, 1);
+        row.connect('key-focus-in', () =>
+          ensureActorVisibleInScrollView(this._searchResultsScroll, row),
+        );
+        row.connect('activate', () => {
+          GObject.signal_stop_emission_by_name(row, 'activate');
+          if (!this._quickPasteBusy) this._activatePasteEntry(row.entry);
+        });
+        section.addMenuItem(row);
+      }
+    }
+    if (!results.count)
+      section.addMenuItem(
+        new PopupMenu.PopupMenuItem(_('No matching items'), {
+          reactive: false,
+          can_focus: false,
+        }),
+      );
+    for (const missing of results.missing) {
+      const notice = new PopupMenu.PopupMenuItem(
+        format(
+          _('Generated candidates not searched: %s'),
+          this._truncated(missing.name, 60),
+        ),
+        { reactive: false, can_focus: false },
+      );
+      notice.label.add_style_class_name('ci-search-group-label');
+      notice.label.opacity = 190;
+      section.addMenuItem(notice);
+    }
+    if (this.refreshGeneratedItem) this.refreshGeneratedItem.hide();
+    this._applyPasteSetVisibility();
+    this._updateCandidateNumbers();
+    this._updatePasteTabScroll();
   }
 
   _renderPasteSets() {
@@ -1009,10 +1162,15 @@ class ClipboardIndicator extends PanelMenu.Button {
         button.remove_accessible_state(Atk.StateType.SELECTED);
       }
     }
+    if (this._isCrossTabSearch()) {
+      this._renderAllTabSearch();
+      return;
+    }
+    this._searchResultsSection?.removeAll();
     const set = sets.find((item) => item.id === this._activePasteTab);
     const generated = set?.kind === 'generated';
     const generation = generated ? this._generatedTabRecord(set) : null;
-    if (!generated) this._generatedTabs?.clear();
+    if (!generated) this._generatedTabs?.suspend();
     const sourceItems = generated ? generation?.items || [] : set?.items || [];
     if (this.refreshGeneratedItem) {
       this.refreshGeneratedItem.visible = Boolean(generated && !PRIVATE_MODE);
@@ -1026,6 +1184,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     this._commandPreviews ??= new CommandPreviews((id) => {
       if (this._destroyed || PRIVATE_MODE || !this.menu.isOpen) return;
+      if (this._isCrossTabSearch()) {
+        if (!this._quickPasteBusy) this._renderAllTabSearch();
+        return;
+      }
       const row = this._pasteSetSection
         ._getMenuItems()
         .find((row) => row.entry?.id === id);
@@ -1034,16 +1196,12 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this.menu.isOpen && !PRIVATE_MODE && !this._previewsPaused)
       this._commandPreviews.sync(sourceItems);
     else this._commandPreviews.clear();
-    const query = this.searchEntry.get_text().toLowerCase();
+    const query = this.searchEntry.get_text();
+    const terms = searchTerms(query);
     const previous = new Map();
     if (set) {
-      const items = sourceItems.filter(
-        (item) =>
-          !query ||
-          item.name.toLowerCase().includes(query) ||
-          (item.kind === 'command' ? item.command : item.text)
-            .toLowerCase()
-            .includes(query),
+      const items = sourceItems.filter((item) =>
+        matchesSearch(terms, item.name, item.text, item.command),
       );
       const positions = new Map(
         sourceItems.map((item, index) => [item.id, index]),
@@ -1789,6 +1947,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       for (const child of actor.get_children()) collect(child);
     };
     collect(this.searchEntry);
+    collect(this._allTabsCheck);
     collect(this._tabsBox);
     const rows = this._visiblePasteCandidates();
     for (const row of rows) {
@@ -1814,7 +1973,11 @@ class ClipboardIndicator extends PanelMenu.Button {
     const row = rows.find((item) => item === next || item.contains(next));
     if (row)
       ensureActorVisibleInScrollView(
-        row.entry.pasteSetItem ? this._pasteSetScroll : this.historyScrollView,
+        this._isCrossTabSearch?.()
+          ? this._searchResultsScroll
+          : row.entry.pasteSetItem
+            ? this._pasteSetScroll
+            : this.historyScrollView,
         row,
       );
     return true;
@@ -2392,6 +2555,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         ? format(_('Command: %s'), item.label.get_text())
         : item.label.get_text();
     if (item.previewLabel) description += `. ${item.previewLabel.text}`;
+    if (item.searchGroupName)
+      description = `${item.searchGroupName}. ${description}`;
     item.accessible_name = shortcut
       ? `${item.shortcutLabel.shortcutName || shortcut}. ${description}`
       : description;
@@ -2413,6 +2578,18 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._setCandidateAccessibleName(item);
       });
     }
+    const results =
+      this._searchResultsSection
+        ?._getMenuItems()
+        .filter((item) => item.entry) || [];
+    results.forEach((row, index) => {
+      row.shortcutLabel.shortcutName =
+        index < 9
+          ? `${modifierLabel(this._historyPasteModifiers)}+${index + 1}`
+          : '';
+      row.shortcutLabel.set_text(index < 9 ? String(index + 1) : '');
+      this._setCandidateAccessibleName(row);
+    });
   }
 
   _setEntryLabel(menuItem) {
@@ -2455,6 +2632,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.activeHistoryMenuItems = 0;
 
     Store.resetDatabase(this._currentStateBuilder.bind(this));
+    if (this._isCrossTabSearch?.()) this._renderAllTabSearch();
   }
 
   _removeEntry(entry, fullyDelete, humanGenerated, deferRefresh = false) {
@@ -2475,6 +2653,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _refreshHistoryAfterRemoval() {
+    if (this._isCrossTabSearch?.()) {
+      this._renderAllTabSearch();
+      return;
+    }
     const query = this.searchEntry.get_text();
     if (query) {
       this.searchEntryFront = this.searchEntryBack = this.entries.last();
@@ -2605,6 +2787,14 @@ class ClipboardIndicator extends PanelMenu.Button {
    * oldest whereas `entries` is ordered from oldest to latest.
    */
   _navigatePrevPage() {
+    if (this._isCrossTabSearch?.()) {
+      this._crossSearchOffset = Math.max(
+        0,
+        (this._crossSearchOffset || 0) - PAGE_SIZE,
+      );
+      this._renderAllTabSearch();
+      return;
+    }
     if (this.searchEntryFront) {
       this.populateSearchResults(this.searchEntry.get_text(), false);
       return;
@@ -2626,6 +2816,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _navigateNextPage() {
+    if (this._isCrossTabSearch?.()) {
+      if (this._crossSearchHasMore) {
+        this._crossSearchOffset = (this._crossSearchOffset || 0) + PAGE_SIZE;
+        this._renderAllTabSearch();
+      }
+      return;
+    }
     if (this.searchEntryFront) {
       this.populateSearchResults(this.searchEntry.get_text(), true);
       return;
@@ -2655,6 +2852,13 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSearchTextChanged() {
+    this._crossSearchOffset = 0;
+    if (this._isCrossTabSearch()) {
+      this._renderPasteSets();
+      return;
+    }
+    this._searchResultsSection?.removeAll();
+    this._applyPasteSetVisibility();
     if (this._pasteSets && this._activePasteTab !== 'history') {
       this._renderPasteSets();
       return;
@@ -2680,7 +2884,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       forward = true;
     }
 
-    query = query.toLowerCase();
+    const terms = searchTerms(query);
+    query = terms[0] || '';
     if (!this.entries.last()) {
       this.searchEntryFront = this.searchEntryBack = undefined;
       return;
@@ -2696,7 +2901,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     while (this.activeHistoryMenuItems < PAGE_SIZE) {
       if (entry.type === DS.TYPE_TEXT) {
         const match = entry.text.toLowerCase().indexOf(query);
-        if (match >= 0) {
+        if (matchesSearch(terms, entry.text)) {
           this._addEntry(
             entry,
             entry === this._currentClipboardEntry,
@@ -2905,6 +3110,10 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._highlightCopy();
     }
 
+    if (this.menu?.isOpen && this.searchEntry?.get_text().trim()) {
+      if (this._isCrossTabSearch?.()) this._renderAllTabSearch();
+      else if (this._activePasteTab === 'history') this._onSearchTextChanged();
+    }
     return text;
   }
 
@@ -3067,6 +3276,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._commandPreviews?.clear();
       this._generatedTabs?.clear();
       this._generatedSelectionText = undefined;
+      this._searchResultsSection?.removeAll();
       this._pasteSetDialog?._cancelCommandPreview?.();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
@@ -3080,6 +3290,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._clearCurrentClipboardEntry(false);
       }
       this._queryClipboard(true);
+      if (this._isCrossTabSearch?.()) this._renderAllTabSearch();
     }
   }
 
@@ -3108,6 +3319,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _fetchSettings() {
+    this._searchAllTabs = this.settings.get_boolean(
+      SettingsFields.SEARCH_ALL_TABS,
+    );
+    if (this._allTabsCheck) this._allTabsCheck.checked = this._searchAllTabs;
     this._previewsPaused = this.settings.get_boolean(
       SettingsFields.PAUSE_COMMAND_PREVIEWS,
     );
@@ -3151,8 +3366,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;
     const prevPreviewsPaused = this._previewsPaused;
+    const prevSearchAllTabs = this._searchAllTabs;
 
     this._fetchSettings();
+    if (prevSearchAllTabs !== this._searchAllTabs) this._onSearchTextChanged();
     if (prevPreviewsPaused !== this._previewsPaused)
       this._updatePreviewPauseState();
     if (prevClearOnLogout !== CLEAR_ON_LOGOUT) {
