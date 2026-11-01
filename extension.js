@@ -118,6 +118,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._destroyTabContextMenu();
     this._commandPreviews?.destroy();
     this._generatedTabs?.destroy();
     for (const read of this._clipboardReads || []) read.cancel();
@@ -235,6 +236,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        this._tabContextMenu?.close();
         this._commandPreviews?.clear();
         this._generatedTabs?.clear();
         this._pendingGeneratedRender = false;
@@ -628,6 +630,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _switchPasteTab(id) {
     if (this._quickPasteBusy) return;
+    this._tabContextMenu?.close();
     if (this._activePasteTab !== id) {
       this._commandPreviews?.clear();
       this._generatedTabs?.suspend();
@@ -1235,6 +1238,16 @@ class ClipboardIndicator extends PanelMenu.Button {
         button.set_child(tabContent);
         this._makePasteTabDropTarget(button, id);
         button.connect('clicked', () => this._switchPasteTab(id));
+        button.connect('button-press-event', (_, event) => {
+          if (event.get_button() !== Clutter.BUTTON_SECONDARY)
+            return Clutter.EVENT_PROPAGATE;
+          this._openTabContextMenu(button, id);
+          return Clutter.EVENT_STOP;
+        });
+        button.connect('destroy', () => {
+          if (this._tabContextMenu?.sourceActor === button)
+            this._destroyTabContextMenu();
+        });
         this._tabsBox.add_child(button);
         this._pasteTabButtons.set(id, button);
       }
@@ -1509,9 +1522,55 @@ class ClipboardIndicator extends PanelMenu.Button {
     dialog.open();
   }
 
-  _editCurrentPasteTab() {
-    if (!this._pasteSets || this._quickPasteBusy) return;
-    const id = this._activePasteTab;
+  _destroyTabContextMenu() {
+    this._tabContextMenu?.destroy();
+    this._tabContextMenu = undefined;
+  }
+
+  _openTabContextMenu(button, id) {
+    if (
+      this._destroyed ||
+      this._quickPasteBusy ||
+      !this.menu.isOpen ||
+      !this._pasteSets
+    )
+      return;
+    if (
+      id !== 'history' &&
+      !this._pasteSets.data.sets.some((set) => set.id === id)
+    )
+      return;
+    this._destroyTabContextMenu();
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
+    }
+    const menu = new PopupMenu.PopupMenu(button, 0.5, St.Side.TOP);
+    this._tabContextMenu = menu;
+    Main.uiGroup.add_child(menu.actor);
+    menu.actor.hide();
+    this._tabContextManager ??= new PopupMenu.PopupMenuManager(this);
+    this._tabContextManager.addMenu(menu);
+    const edit = new PopupMenu.PopupMenuItem(_('Edit tab…'));
+    menu.addMenuItem(edit);
+    edit.connect('activate', () => {
+      menu.close();
+      this._editCurrentPasteTab(id);
+    });
+    if (id !== 'history') {
+      const remove = new PopupMenu.PopupMenuItem(_('Delete tab…'));
+      menu.addMenuItem(remove);
+      remove.connect('activate', () => {
+        menu.close();
+        this._confirmPasteSetDelete(id);
+      });
+    }
+    menu.open();
+    edit.grab_key_focus();
+  }
+
+  _editCurrentPasteTab(id = this._activePasteTab) {
+    if (!this._pasteSets || this._quickPasteBusy || this._destroyed) return;
     const set = this._pasteSets.data.sets.find((item) => item.id === id);
     const name =
       id === 'history'

@@ -57,8 +57,9 @@ preserved by this extension's paste operations.
 
 Create a set with the new-tab button at the bottom of the panel. Add history items
 with their add button or drag them onto a tab. Edit their names and content, or
-drag to reorder them. The bottom toolbar's edit button renames or deletes a tab.
-Clearing history keeps your paste sets.
+drag to reorder them. Right-click a tab to edit or delete it, or use the bottom
+toolbar's edit button. Deleting a set requires confirmation; History can only be
+renamed. Clearing history keeps your paste sets.
 
 ## Commands
 
