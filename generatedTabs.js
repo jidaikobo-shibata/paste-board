@@ -123,7 +123,11 @@ export class GeneratedTabs {
         }
         session.pending = record;
         if (record.state === 'pending') await record.completion;
-        else await this._start(record);
+        else {
+          const completion = this._start(record);
+          this._notify();
+          await completion;
+        }
         session.pending = null;
       }
     };

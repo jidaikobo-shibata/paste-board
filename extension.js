@@ -224,6 +224,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       if (!open && !this.menu.isOpen) {
         this._commandPreviews?.clear();
         this._generatedTabs?.clear();
+        this._pendingGeneratedRender = false;
         this._generatedSelectionText = undefined;
         this._searchResultsSection?.removeAll();
         this._searchReturnCandidate = undefined;
@@ -972,29 +973,32 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _ensureGeneratedTabs() {
-    this._generatedTabs ??= new GeneratedTabs(() => {
-      if (
-        this._destroyed ||
-        PRIVATE_MODE ||
-        !this.menu.isOpen ||
-        this._quickPasteBusy
-      )
-        return;
-      this._renderPasteSets();
-      if (this._isCrossTabSearch()) return;
-      const record = this._generatedTabs.record;
-      if (record?.state !== 'ready') return;
-      if (
-        global.stage.get_key_focus() === this.searchEntry.clutter_text &&
-        this.searchEntry.get_text()
-      )
-        return;
-      const rows = this._visiblePasteCandidates();
-      const selected =
-        rows.find((row) => row.entry.text === this._generatedSelectionText) ||
-        rows[0];
-      if (selected) selected.grab_key_focus();
-    });
+    this._generatedTabs ??= new GeneratedTabs(() =>
+      this._onGeneratedTabsChanged(),
+    );
+  }
+
+  _onGeneratedTabsChanged() {
+    if (this._destroyed || PRIVATE_MODE || !this.menu.isOpen) return;
+    if (this._quickPasteBusy) {
+      this._pendingGeneratedRender = true;
+      return;
+    }
+    this._pendingGeneratedRender = false;
+    this._renderPasteSets();
+    if (this._isCrossTabSearch()) return;
+    const record = this._generatedTabs.record;
+    if (record?.state !== 'ready') return;
+    if (
+      global.stage.get_key_focus() === this.searchEntry.clutter_text &&
+      this.searchEntry.get_text()
+    )
+      return;
+    const rows = this._visiblePasteCandidates();
+    const selected =
+      rows.find((row) => row.entry.text === this._generatedSelectionText) ||
+      rows[0];
+    if (selected) selected.grab_key_focus();
   }
 
   _generatedTabRecord(set) {
@@ -1032,8 +1036,16 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _renderAllTabSearch() {
     const section = this._searchResultsSection;
-    section.removeAll();
+    const oldRows = section._getMenuItems().filter((row) => row.entry);
+    const focus = global.stage.get_key_focus();
+    const focused = oldRows.find(
+      (row) => focus && (row === focus || row.contains(focus)),
+    );
+    const pasteFocused = oldRows.find(
+      (row) => row === this._quickPasteFocusedCandidate,
+    );
     if (PRIVATE_MODE || !this.entries) {
+      section.removeAll();
       this._applyPasteSetVisibility();
       return;
     }
@@ -1057,6 +1069,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._renderAllTabSearch();
       return;
     }
+    section.removeAll();
     this._crossSearchHasMore = results.hasMore;
     for (const group of results.groups) {
       const heading = new PopupMenu.PopupBaseMenuItem({
@@ -1126,11 +1139,26 @@ class ClipboardIndicator extends PanelMenu.Button {
     for (const missing of results.missing) {
       const notice = new PopupMenu.PopupMenuItem(
         format(
-          _('Generated candidates not searched: %s'),
+          missing.state === 'pending'
+            ? _('Generating candidates: %s')
+            : missing.state === 'error'
+              ? _('Could not generate candidates: %s')
+              : missing.state === 'stopped'
+                ? _('Generation stopped: %s')
+                : _('Generated candidates not searched: %s'),
           this._truncated(missing.name, 60),
         ),
         { reactive: false, can_focus: false },
       );
+      if (missing.state === 'error') {
+        const set = this._pasteSets.data.sets.find(
+          (set) => set.id === missing.id,
+        );
+        const error = this._generatedTabs?.get(set)?.error;
+        if (error?.message)
+          notice.label.text +=
+            ': ' + this._truncated(error.message.replace(/\s+/gu, ' '), 160);
+      }
       notice.label.add_style_class_name('ci-search-group-label');
       notice.label.opacity = 190;
       section.addMenuItem(notice);
@@ -1139,6 +1167,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
+    // Results may arrive while the user is navigating or a paste temporarily
+    // releases the grab. Restore identity rather than the destroyed actor.
+    const rows = this._visiblePasteCandidates();
+    const restore = (old) =>
+      rows.find(
+        (row) =>
+          row.entry.id === old.entry.id &&
+          row.entry.sourceSetId === old.entry.sourceSetId &&
+          (!old.entry.generated || row.entry.text === old.entry.text),
+      ) || rows[0];
+    if (pasteFocused) this._quickPasteFocusedCandidate = restore(pasteFocused);
+    if (focused) (restore(focused) || this.searchEntry).grab_key_focus();
   }
 
   _renderPasteSets() {
@@ -2424,6 +2464,10 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _endQuickPasteTracking() {
     this._quickPasteBusy = false;
+    if (this._pendingGeneratedRender) {
+      this._pendingGeneratedRender = false;
+      this._onGeneratedTabsChanged();
+    }
     if (this._pendingClipboardCopy) {
       this._pendingClipboardCopy = false;
       if (!this._destroyed) this._queryClipboard(true);

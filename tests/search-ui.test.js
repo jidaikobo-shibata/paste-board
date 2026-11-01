@@ -501,6 +501,96 @@ export default class extends Extension {
       read(root + '/generator-count') === '3',
       'Current-tab search ran commands',
     );
+    await query('');
+    owner.settings.set_boolean('search-all-tabs', true);
+    const delayed = owner._pasteSets.create('Delayed audit regression', {
+      kind: 'generated',
+      executionMode: 'bash',
+      runOnSearch: true,
+      command: "sleep .5; printf 'server audit candidate'",
+    });
+    const tab = () =>
+      owner._pasteSets.data.sets.find((set) => set.id === delayed);
+    const record = () => owner._generatedTabs.get(tab());
+    await query('server');
+    await wait(() => record()?.state === 'pending');
+    assert(
+      notices().some((text) =>
+        text.includes(_('Generating candidates: %s').replace('%s', tab().name)),
+      ),
+      'Running generation is not explained',
+    );
+    const before = rows().find((row) => row.entry.sourceSetId === manual);
+    before.grab_key_focus();
+    await wait(() => record()?.state === 'ready');
+    const restored = rows().find((row) => row.entry.sourceSetId === manual);
+    assert(
+      restored !== before && global.stage.get_key_focus() === restored,
+      'Generated results lost the focused candidate',
+    );
+    await key(Clutter.KEY_Down);
+    assert(
+      rows().includes(global.stage.get_key_focus()),
+      'Navigation failed after generated results arrived',
+    );
+    await query('');
+    await query('server');
+    const pasteCandidate = rows().find(
+      (row) => row.entry.sourceSetId === manual,
+    );
+    owner._quickPasteFocusedCandidate = pasteCandidate;
+    owner.searchEntry.clutter_text.grab_key_focus();
+    owner._quickPasteBusy = true;
+    await wait(() => record()?.state === 'ready');
+    assert(
+      owner._pendingGeneratedRender &&
+        !rows().some((row) => row.entry.text === 'server audit candidate'),
+      'Generation did not defer while pasting',
+    );
+    owner._endQuickPasteTracking();
+    assert(
+      rows().some((row) => row.entry.text === 'server audit candidate') &&
+        !owner._pendingGeneratedRender,
+      'Paste completion did not flush generated results',
+    );
+    assert(
+      owner._quickPasteFocusedCandidate !== pasteCandidate &&
+        owner._quickPasteFocusedCandidate ===
+          rows().find((row) => row.entry.sourceSetId === manual),
+      'Deferred update lost the paste return candidate',
+    );
+    assert(
+      owner._isSearchActor(global.stage.get_key_focus()),
+      'Deferred update stole search focus',
+    );
+    owner._quickPasteFocusedCandidate = undefined;
+    await query('');
+    owner._pasteSets.configure(delayed, tab().name, {
+      kind: 'generated',
+      executionMode: 'bash',
+      runOnSearch: true,
+      command: "printf 'audit failure reason' >&2; exit 1",
+    });
+    await query('audit');
+    await wait(() => record()?.state === 'error');
+    assert(
+      notices().some(
+        (text) =>
+          text.includes(tab().name) &&
+          text.includes(_('The command did not exit successfully.')),
+      ),
+      'Failed generation did not expose its reason',
+    );
+    await query('');
+    await query('audit');
+    owner._quickPasteBusy = true;
+    await wait(() => record()?.state === 'error');
+    owner.menu.close();
+    owner._endQuickPasteTracking();
+    assert(
+      !owner._pendingGeneratedRender && owner._generatedTabs.records.size === 0,
+      'Closing the panel replayed a deferred generation',
+    );
     owner.menu.close();
   }
 }
