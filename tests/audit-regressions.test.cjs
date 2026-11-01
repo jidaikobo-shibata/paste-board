@@ -2331,3 +2331,108 @@ test('pausing while a preview is selected aborts its pending paste quietly', asy
   assert.equal(owner._pasteCommandRun, undefined);
   assert.equal(owner._quickPasteBusy, false);
 });
+
+test('Ctrl+F toggles search and restores a recreated candidate by source and id', () => {
+  let focus;
+  const entry = {};
+  const sameIdOtherTab = {
+    entry: { id: 'same', pasteSetItem: true, sourceSetId: 'other' },
+  };
+  const previous = {
+    entry: { id: 'same', pasteSetItem: true, sourceSetId: 'wanted' },
+  };
+  const [owner, context] = instance(['_handleSearchToggleKeyEvent'], {
+    global: {
+      stage: {
+        get_key_focus: () => focus,
+        set_key_focus: (value) => {
+          focus = value;
+        },
+      },
+    },
+    modifierBits: (bits) => bits,
+    Clutter: { ModifierType: {}, KEY_f: 102, KEY_F: 70 },
+    GLib: { Source: { remove: (id) => assert.equal(id, 123) } },
+  });
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    searchEntry: { clutter_text: entry },
+    _isSearchActor: (actor) => actor === entry,
+    _visiblePasteCandidates: () => [sameIdOtherTab, previous],
+    _searchReturnCandidate: { id: 'same', source: 'wanted' },
+    _initialFocusCallbackId: 123,
+  });
+  focus = previous;
+  const event = { get_state: () => 1, get_key_symbol: () => 102 };
+  assert.equal(owner._handleSearchToggleKeyEvent(event), true);
+  assert.equal(focus, entry);
+  assert.equal(owner._initialFocusCallbackId, undefined);
+  assert.equal(owner._handleSearchToggleKeyEvent(event), true);
+  assert.equal(focus, previous);
+  focus = entry;
+  owner._searchReturnCandidate = { id: 'removed', source: 'wanted' };
+  owner._handleSearchToggleKeyEvent(event);
+  assert.equal(focus, sameIdOtherTab);
+  focus = entry;
+  owner._visiblePasteCandidates = () => [];
+  owner._handleSearchToggleKeyEvent(event);
+  assert.equal(focus, entry);
+});
+
+test('Ctrl+F ignores other modifiers and keys, closed panels, and active pastes', () => {
+  let focused = 0;
+  const [owner] = instance(['_handleSearchToggleKeyEvent'], {
+    global: {
+      stage: { get_key_focus: () => null, set_key_focus: () => focused++ },
+    },
+    modifierBits: (bits) => bits,
+    Clutter: { ModifierType: {}, KEY_f: 102, KEY_F: 70 },
+  });
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    searchEntry: { clutter_text: {} },
+    _isSearchActor: () => false,
+  });
+  for (const bits of [0, 3, 5, 9])
+    assert.equal(
+      owner._handleSearchToggleKeyEvent({
+        get_state: () => bits,
+        get_key_symbol: () => 102,
+      }),
+      false,
+    );
+  assert.equal(
+    owner._handleSearchToggleKeyEvent({
+      get_state: () => 1,
+      get_key_symbol: () => 103,
+    }),
+    false,
+  );
+  owner.menu.isOpen = false;
+  assert.equal(
+    owner._handleSearchToggleKeyEvent({
+      get_state: () => 1,
+      get_key_symbol: () => 102,
+    }),
+    false,
+  );
+  owner.menu.isOpen = true;
+  owner._quickPasteBusy = true;
+  assert.equal(
+    owner._handleSearchToggleKeyEvent({
+      get_state: () => 1,
+      get_key_symbol: () => 102,
+    }),
+    false,
+  );
+  assert.equal(focused, 0);
+  owner._quickPasteBusy = false;
+  assert.equal(
+    owner._handleSearchToggleKeyEvent({
+      get_state: () => 1,
+      get_key_symbol: () => 70,
+    }),
+    true,
+  );
+  assert.equal(focused, 1);
+});

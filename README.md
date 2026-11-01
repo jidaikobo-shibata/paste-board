@@ -40,6 +40,9 @@ The first item in unfiltered history is the current text clipboard.
   it off to search only the current tab. Space-separated words are combined
   with AND, in any order, without regular expressions or fuzzy matching.
 - Use **Left/Right** outside the search field to switch tabs.
+- Use **Ctrl+F** to switch between the search field and your last selected
+  candidate. The query stays in place; if that candidate is no longer visible,
+  the first match is selected. Pressing **/** outside search also focuses it.
 - Press **Esc** to close the panel.
 
 You can change the panel shortcut and the modifier keys for number shortcuts in

@@ -218,6 +218,57 @@ export default class extends Extension {
         read(root + '/command-count') === '0',
       'Query changes reran a command',
     );
+    const ctrlF = async () => {
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Control_L,
+        Clutter.KeyState.PRESSED,
+      );
+      await key(Clutter.KEY_f);
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Control_L,
+        Clutter.KeyState.RELEASED,
+      );
+      await delay(100);
+    };
+    owner.settings.set_boolean('keep-menu-open', false);
+    rows()
+      .find((row) => row.entry.sourceSetId === manual)
+      .grab_key_focus();
+    await ctrlF();
+    assert(
+      owner.menu.isOpen && owner._isSearchActor(global.stage.get_key_focus()),
+      'Ctrl+F did not focus search in an unpinned panel',
+    );
+    assert(
+      owner.searchEntry.get_text() === 'PrOd   SeRvEr',
+      'Ctrl+F changed the query',
+    );
+    await query('prod server');
+    await ctrlF();
+    assert(
+      global.stage.get_key_focus() ===
+        rows().find((row) => row.entry.sourceSetId === manual),
+      'Ctrl+F did not restore a rebuilt result',
+    );
+    await ctrlF();
+    await query('history');
+    await ctrlF();
+    assert(
+      global.stage.get_key_focus() === rows()[0],
+      'Ctrl+F did not fall back to the first result',
+    );
+    await ctrlF();
+    await query('no results xyz');
+    await ctrlF();
+    assert(
+      owner._isSearchActor(global.stage.get_key_focus()),
+      'Ctrl+F left search without candidates',
+    );
+    assert(owner._allTabsCheck.checked, 'Ctrl+F changed the search scope');
+    owner.settings.set_boolean('keep-menu-open', true);
+    owner._pasteAfterAction = 'none';
     await query('server missing');
     assert(rows().length === 0, 'AND query accepted a partial match');
     await query('server prod');

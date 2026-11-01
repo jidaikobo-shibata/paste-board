@@ -226,6 +226,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._generatedTabs?.clear();
         this._generatedSelectionText = undefined;
         this._searchResultsSection?.removeAll();
+        this._searchReturnCandidate = undefined;
         this._stopPasteDragFeedback();
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
@@ -395,6 +396,23 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
     this.menu.actor.connect('key-press-event', (_, event) =>
       this._handleGlobalKeyEvent(event),
+    );
+    global.stage.connectObject(
+      'notify::key-focus',
+      () => {
+        if (!this.menu.isOpen || this._destroyed || PRIVATE_MODE) return;
+        const focused = global.stage.get_key_focus();
+        if (!focused) return;
+        const row = this._visiblePasteCandidates().find(
+          (item) => item === focused || item.contains(focused),
+        );
+        if (row)
+          this._searchReturnCandidate = {
+            id: row.entry.id,
+            source: row.entry.pasteSetItem ? row.entry.sourceSetId : 'history',
+          };
+      },
+      this,
     );
 
     Store.buildClipboardStateFromLog(
@@ -600,6 +618,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._commandPreviews?.clear();
       this._generatedTabs?.suspend();
       this._generatedSelectionText = undefined;
+      this._searchReturnCandidate = undefined;
     }
     this._activePasteTab = id;
     this.searchEntry.set_text('');
@@ -1836,6 +1855,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this.menu.close();
       return Clutter.EVENT_STOP;
     }
+    if (this._handleSearchToggleKeyEvent?.(event)) return Clutter.EVENT_STOP;
     if (this._handleCtrlSelectKeyEvent(event)) return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
     if (
@@ -2419,6 +2439,33 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
 
+    return true;
+  }
+
+  _handleSearchToggleKeyEvent(event) {
+    if (!this.menu.isOpen || this._destroyed || this._quickPasteBusy)
+      return false;
+    if (
+      modifierBits(event.get_state(), Clutter.ModifierType) !== 1 ||
+      ![Clutter.KEY_f, Clutter.KEY_F].includes(event.get_key_symbol())
+    )
+      return false;
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
+    }
+    if (this._isSearchActor(global.stage.get_key_focus())) {
+      const rows = this._visiblePasteCandidates();
+      const previous = this._searchReturnCandidate;
+      const row =
+        rows.find(
+          (item) =>
+            item.entry.id === previous?.id &&
+            (item.entry.pasteSetItem ? item.entry.sourceSetId : 'history') ===
+              previous?.source,
+        ) || rows[0];
+      if (row) global.stage.set_key_focus(row);
+    } else global.stage.set_key_focus(this.searchEntry.clutter_text);
     return true;
   }
 
@@ -3277,6 +3324,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._generatedTabs?.clear();
       this._generatedSelectionText = undefined;
       this._searchResultsSection?.removeAll();
+      this._searchReturnCandidate = undefined;
       this._pasteSetDialog?._cancelCommandPreview?.();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
