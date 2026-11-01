@@ -298,7 +298,12 @@
   margin: 8px 0;
   border-radius: 8px;
   border: 2px solid #e66b65;
-  background-color: rgba(160, 35, 35, 0.25);
-  color: #ffcbc5;
+  background-color: #7a2020;
+  color: #ffffff;
   font-weight: bold;
+}
+
+.ci-editor-error-banner StLabel,
+.ci-editor-error-banner StIcon {
+  color: #ffffff;
 }
