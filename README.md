@@ -72,6 +72,8 @@ Edit a set item and select **Command** to paste its output—for example,
 `date '+%Y-%m-%d'`. It runs when selected unless **Preview output when opening
 this tab** is enabled; then pasting uses the previewed output.
 
+![The Quick text tab shows today's date and a release tag as command output previews.](screenshots/command-items.png)
+
 ### Generated tabs
 
 Create a set, select **Generate from command**, and enter a command. Each non-empty
@@ -94,6 +96,8 @@ This produces candidates such as `ssh staging`. Enable search execution to find
 connections without opening their tab first. Pasting does not execute the SSH
 command. Wildcards and multiple aliases on one line need adjustment; `Include`
 files are not read.
+
+![The SSH connections tab lists four generated paste candidates: ssh staging, ssh production, ssh docs, and ssh backup.](screenshots/generated-tab.png)
 
 ### Execution and safety
 
