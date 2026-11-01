@@ -55,10 +55,14 @@ function snapshot(entries) {
   });
 }
 
-function encodeSnapshot(entries) {
+function encodeSnapshot(entries, limit = MAX_LOG_BYTES) {
   const records = [];
   let size = 0;
   for (const entry of entries) {
+    const required =
+      encoder.encode(entry.text).length + 2 + (entry.archived ? 5 : 0);
+    if (size + required > limit)
+      throw new Error('History snapshot exceeds size limit');
     const text = textRecord(entry.text);
     records.push(text);
     size += text.length;
@@ -82,6 +86,11 @@ class HistoryStore {
     this.directory = GLib.build_filenamev([GLib.get_user_cache_dir(), uuid]);
     this.file = Gio.File.new_for_path(this.directory + '/database.log');
     this.options = options;
+    this.maxLogBytes = Math.min(
+      options.maxLogBytes ?? MAX_LOG_BYTES,
+      MAX_LOG_BYTES,
+    );
+    this.logBytes = 0;
     this.ready = ready;
     this.queue = [];
     this.revision = this.persistedRevision = this.wasted = 0;
@@ -143,7 +152,7 @@ class HistoryStore {
 
   async replace(entries) {
     await this.closeStream();
-    const bytes = encodeSnapshot(entries);
+    const bytes = encodeSnapshot(entries, this.maxLogBytes);
     // GBytes with zero bytes can pass a NULL buffer to GLib's async writer.
     // Atomically create/truncate an empty replacement without issuing a write.
     if (!bytes.length) {
@@ -158,6 +167,7 @@ class HistoryStore {
         null,
       );
       await io(empty, 'close_async', 'close_finish', 0, null);
+      this.logBytes = 0;
       return;
     }
     await io(
@@ -170,15 +180,19 @@ class HistoryStore {
       Gio.FileCreateFlags.PRIVATE,
       null,
     );
+    this.logBytes = bytes.length;
   }
 
-  mutation(write, onComplete = null) {
+  mutation(write, onComplete = null, appendLength = 0) {
     const revision = ++this.revision;
     return this.enqueue(async () => {
       if (this.readBlocked)
         throw new Error('History is read-only after a load failure.');
       if (revision > this.persistedRevision) {
-        if (this.needsSnapshot) {
+        if (
+          this.needsSnapshot ||
+          this.logBytes + appendLength > this.maxLogBytes
+        ) {
           const build = this.options.currentStateBuilder;
           if (!build)
             throw new Error(
@@ -191,6 +205,7 @@ class HistoryStore {
           await this.replace(state);
           this.persistedRevision = covered;
           this.needsSnapshot = false;
+          this.wasted = 0;
         } else {
           await write();
           this.persistedRevision = revision;
@@ -202,32 +217,37 @@ class HistoryStore {
   }
 
   append(bytes) {
-    return this.mutation(async () => {
-      if (!this.stream)
-        this.stream = await io(
-          this.file,
-          'append_to_async',
-          'append_to_finish',
-          Gio.FileCreateFlags.PRIVATE,
-          0,
-          null,
-        );
-      // GLib.Bytes owns the buffer until asynchronous I/O completes. Passing
-      // a temporary marshalled Uint8Array to write_all_async can free it early.
-      let offset = 0;
-      while (offset < bytes.length) {
-        const written = await io(
-          this.stream,
-          'write_bytes_async',
-          'write_bytes_finish',
-          new GLib.Bytes(bytes.subarray(offset)),
-          0,
-          null,
-        );
-        if (written <= 0) throw new Error('Incomplete history write');
-        offset += written;
-      }
-    });
+    return this.mutation(
+      async () => {
+        if (!this.stream)
+          this.stream = await io(
+            this.file,
+            'append_to_async',
+            'append_to_finish',
+            Gio.FileCreateFlags.PRIVATE,
+            0,
+            null,
+          );
+        // GLib.Bytes owns the buffer until asynchronous I/O completes. Passing
+        // a temporary marshalled Uint8Array to write_all_async can free it early.
+        let offset = 0;
+        while (offset < bytes.length) {
+          const written = await io(
+            this.stream,
+            'write_bytes_async',
+            'write_bytes_finish',
+            new GLib.Bytes(bytes.subarray(offset)),
+            0,
+            null,
+          );
+          if (written <= 0) throw new Error('Incomplete history write');
+          offset += written;
+          this.logBytes += written;
+        }
+      },
+      null,
+      bytes.length,
+    );
   }
 
   reset(build, onComplete) {
@@ -257,9 +277,10 @@ class HistoryStore {
         );
         if (
           info.get_file_type() !== Gio.FileType.REGULAR ||
-          info.get_size() > MAX_LOG_BYTES
+          info.get_size() > this.maxLogBytes
         )
           throw new Error('History exceeds size limit');
+        this.logBytes = info.get_size();
         const input = await io(this.file, 'read_async', 'read_finish', 0, null);
         stream = Gio.DataInputStream.new(input);
         stream.set_byte_order(Gio.DataStreamByteOrder.LITTLE_ENDIAN);
@@ -295,7 +316,7 @@ class HistoryStore {
         while (await requireBytes(1, true)) {
           const type = stream.read_byte(null);
           processed++;
-          if (processed > MAX_LOG_BYTES)
+          if (processed > this.maxLogBytes)
             throw new Error('History exceeds size limit');
           if (type === SAVE) {
             const chunks = [];
@@ -307,7 +328,7 @@ class HistoryStore {
               const count = terminator < 0 ? available.length : terminator;
               size += count;
               processed += count + (terminator >= 0 ? 1 : 0);
-              if (processed > MAX_LOG_BYTES)
+              if (processed > this.maxLogBytes)
                 throw new Error('History exceeds size limit');
               if (size > MAX_TEXT_BYTES)
                 throw new Error('History text exceeds size limit');
@@ -337,7 +358,7 @@ class HistoryStore {
               throw new Error('Unknown history record');
             await requireBytes(4);
             processed += 4;
-            if (processed > MAX_LOG_BYTES)
+            if (processed > this.maxLogBytes)
               throw new Error('History exceeds size limit');
             const id = stream.read_uint32(null);
             const entry =

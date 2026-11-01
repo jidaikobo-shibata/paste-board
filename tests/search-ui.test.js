@@ -350,6 +350,7 @@ export default class extends Extension {
       'All-tabs toggle did not restore results',
     );
     owner._switchPasteTab(manual);
+    await wait(() => !owner._initialFocusCallbackId);
     owner._allTabsCheck.grab_key_focus();
     await key(Clutter.KEY_space);
     await query('server prod');
@@ -590,6 +591,45 @@ export default class extends Extension {
     assert(
       !owner._pendingGeneratedRender && owner._generatedTabs.records.size === 0,
       'Closing the panel replayed a deferred generation',
+    );
+    owner.menu.open();
+    await query('');
+    owner.settings.set_boolean('search-all-tabs', true);
+    for (const set of [...owner._pasteSets.data.sets])
+      if (set.kind === 'generated')
+        owner._pasteSets.configure(set.id, set.name, {
+          kind: 'generated',
+          command: set.command,
+          executionMode: set.executionMode,
+          runOnSearch: false,
+        });
+    const previewSet = owner._pasteSets.create('Delayed preview regression');
+    owner._pasteSets.put(previewSet, {
+      kind: 'command',
+      name: 'delayed',
+      command:
+        'sleep .6; printf dW5pcXVlIGF1ZGl0IHByZXZpZXcgcmVzdWx0 | base64 -d',
+      executionMode: 'bash',
+      trimTrailingNewlines: true,
+      previewOnOpen: true,
+    });
+    owner._renderPasteSets();
+    owner._switchPasteTab(previewSet);
+    await wait(() => !owner._initialFocusCallbackId);
+    await query('unique audit preview result');
+    const item = owner._pasteSets.data.sets.find((set) => set.id === previewSet)
+      .items[0];
+    owner._quickPasteBusy = true;
+    await wait(() => owner._commandPreviews.get(item)?.state === 'ready');
+    assert(
+      !rows().some((row) => row.entry.id === item.id),
+      'Preview updated during paste',
+    );
+    owner._endQuickPasteTracking();
+    assert(
+      rows().some((row) => row.entry.id === item.id) &&
+        !owner._pendingGeneratedRender,
+      'Completed preview was not rendered after paste',
     );
     owner.menu.close();
   }

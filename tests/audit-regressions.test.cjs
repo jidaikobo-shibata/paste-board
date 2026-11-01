@@ -25,6 +25,7 @@ function instance(names, globals = {}) {
     PRIVATE_MODE: false,
     ...searchHelpers,
     MAX_TEXT_BYTES: 16 * 1024 * 1024,
+    MAX_LOG_BYTES: 256 * 1024 * 1024,
     textFitsLimit: (text, limit = 16 * 1024 * 1024) =>
       typeof text === 'string' && text.length <= limit,
     console: { log() {} },
@@ -2435,4 +2436,16 @@ test('Ctrl+F ignores other modifiers and keys, closed panels, and active pastes'
     true,
   );
   assert.equal(focused, 1);
+});
+
+test('history capacity reserves archive bytes and record overhead', () => {
+  const { owner, context, copy } = historyFixture();
+  copy('old');
+  copy('new');
+  owner._archivedHistoryEntries = { bytes: 4, length: 1 };
+  context.MAX_LOG_BYTES = 16; // archive 4+7, one text 3+2
+  owner._pruneOldestEntries();
+  assert.equal(owner.entries.length, 1);
+  assert.equal(owner.entries.last().text, 'new');
+  assert.equal(owner._archivedHistoryEntries.bytes, 4);
 });

@@ -187,7 +187,16 @@ export class LLNode {
     }
 
     if (this.type === TYPE_TEXT) {
-      this.list.bytes += this.text.length;
+      if (this._byteLengthText !== this.text) {
+        this._byteLengthText = this.text;
+        this._byteLength = 0;
+        for (const char of this.text) {
+          const code = char.codePointAt(0);
+          this._byteLength +=
+            code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+        }
+      }
+      this.list.bytes += this._byteLength;
     }
 
     let entries = this.list.invertedIndex[hash];
@@ -206,7 +215,7 @@ export class LLNode {
     }
 
     if (this.type === TYPE_TEXT) {
-      this.list.bytes -= this.text.length;
+      this.list.bytes -= this._byteLength;
     }
 
     const entries = this.list.invertedIndex[hash];

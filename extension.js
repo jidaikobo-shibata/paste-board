@@ -41,7 +41,7 @@ import {
   sendShortcut,
 } from './pasteShortcuts.js';
 import { HistorySession } from './historySession.js';
-import { MAX_TEXT_BYTES, textFitsLimit } from './inputLimits.js';
+import { MAX_TEXT_BYTES, MAX_LOG_BYTES, textFitsLimit } from './inputLimits.js';
 import { readClipboardText } from './clipboardRead.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
@@ -1266,7 +1266,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._commandPreviews ??= new CommandPreviews((id) => {
       if (this._destroyed || PRIVATE_MODE || !this.menu.isOpen) return;
       if (this._isCrossTabSearch()) {
-        if (!this._quickPasteBusy) this._renderAllTabSearch();
+        if (this._quickPasteBusy) this._pendingGeneratedRender = true;
+        else this._renderAllTabSearch();
         return;
       }
       const row = this._pasteSetSection
@@ -2787,7 +2788,12 @@ class ClipboardIndicator extends PanelMenu.Button {
     while (
       entry &&
       (this.entries.length > MAX_REGISTRY_LENGTH ||
-        this.entries.bytes > MAX_BYTES)
+        this.entries.bytes > MAX_BYTES ||
+        this.entries.bytes +
+          this.entries.length * 2 +
+          (this._archivedHistoryEntries?.bytes || 0) +
+          (this._archivedHistoryEntries?.length || 0) * 7 >
+          MAX_LOG_BYTES)
     ) {
       const next = entry.next;
       this._removeEntry(entry, true, false, true);

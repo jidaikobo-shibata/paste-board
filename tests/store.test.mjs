@@ -301,6 +301,98 @@ async function faultCases() {
   Store.init('empty-reset-test');
   equal(text((await read()).entries), ['copied after clearing']);
   await Store.destroy();
+  // Keep the same reader/writer limit small so repeated rollover is inexpensive.
+  let live = [{ text: 'protected archive', archived: true, diskId: 1 }];
+  let nextDisk = 2;
+  const buildBounded = () => {
+    live.forEach((entry, index) => (entry.diskId = index + 1));
+    nextDisk = live.length + 1;
+    return live;
+  };
+  const boundedPath = GLib.get_user_cache_dir() + '/capacity-test/database.log';
+  Store.init('capacity-test', {
+    maxLogBytes: 1024,
+    currentStateBuilder: buildBounded,
+  });
+  await read();
+  await Store.resetDatabase(buildBounded);
+  for (let index = 0; index < 18; index++) {
+    const item = { text: `${index}:` + 'あ'.repeat(100), diskId: nextDisk++ };
+    live.push(item);
+    const removed = live.length > 3 ? live.splice(1, 1)[0] : null;
+    const writes = [Store.storeTextEntry(item.text)];
+    if (removed) writes.push(Store.deleteTextEntry(removed.diskId));
+    equal((await Promise.all(writes)).every(Boolean), true);
+    equal(
+      Gio.File.new_for_path(boundedPath)
+        .query_info('standard::size', 0, null)
+        .get_size() <= 1024,
+      true,
+    );
+  }
+  const expectedBounded = live
+    .filter((item) => !item.archived)
+    .map((item) => item.text);
+  await Store.destroy();
+  Store.init('capacity-test', { maxLogBytes: 1024 });
+  const boundedLoaded = await read();
+  equal(text(boundedLoaded.entries), expectedBounded);
+  equal(text(boundedLoaded.archived), ['protected archive']);
+  await Store.destroy();
+
+  // Oversized snapshots must leave the old file intact, including its archives.
+  Store.init('capacity-test', { maxLogBytes: 1024 });
+  await read();
+  const previousBytes = GLib.file_get_contents(boundedPath)[1];
+  equal(
+    await Store.resetDatabase(() => [{ text: 'too big'.repeat(200) }]),
+    false,
+  );
+  equal(
+    Array.from(GLib.file_get_contents(boundedPath)[1]),
+    Array.from(previousBytes),
+  );
+  await Store.destroy();
+  Store.init('capacity-test', { maxLogBytes: 1024 });
+  equal(text((await read()).entries), expectedBounded);
+  await Store.destroy();
+
+  live = [{ text: 'protected archive', archived: true, diskId: 1 }];
+  nextDisk = 2;
+  Store.init('queued-capacity-test', {
+    maxLogBytes: 1024,
+    currentStateBuilder: buildBounded,
+  });
+  await read();
+  await Store.resetDatabase(buildBounded);
+  const queuedWrites = [];
+  for (let index = 0; index < 10; index++) {
+    const item = { text: `${index}:` + 'x'.repeat(300), diskId: nextDisk++ };
+    live.push(item);
+    const removed = live.length > 3 ? live.splice(1, 1)[0] : null;
+    queuedWrites.push(Store.storeTextEntry(item.text));
+    if (removed) queuedWrites.push(Store.deleteTextEntry(removed.diskId));
+  }
+  equal((await Promise.all(queuedWrites)).every(Boolean), true);
+  const queuedExpected = live
+    .filter((item) => !item.archived)
+    .map((item) => item.text);
+  await Store.destroy();
+  Store.init('queued-capacity-test', { maxLogBytes: 1024 });
+  const queuedLoaded = await read();
+  equal(text(queuedLoaded.entries), queuedExpected);
+  equal(text(queuedLoaded.archived), ['protected archive']);
+  await Store.destroy();
+
+  const byteList = new DS.LinkedList();
+  const utf8 = new DS.LLNode();
+  utf8.id = 1;
+  utf8.type = DS.TYPE_TEXT;
+  utf8.text = 'あ🙂';
+  byteList.append(utf8);
+  equal(byteList.bytes, 7);
+  utf8.detach();
+  equal(byteList.bytes, 0);
 }
 
 const timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 10000, () => {

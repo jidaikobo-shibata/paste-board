@@ -78,7 +78,8 @@
       <description>
         Note that this is the maximum number of clipboard item bytes to store, not the maximum file
         size on disk. The clipboard history on disk may be larger than this limit due to storage
-        inefficiencies.
+        inefficiencies. The effective capacity is also bounded by the 256 MiB history log limit,
+        including archived records and record metadata.
       </description>
       <range min="1" max="1024" />
     </key>
