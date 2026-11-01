@@ -69,16 +69,19 @@ for a command and its arguments. Interactive aliases and functions are unavailab
 ### Command items
 
 Edit a set item and select **Command** to paste its output—for example,
-`date '+%Y-%m-%d'`. It runs when selected unless **Preview output when opening
-this tab** is enabled; then pasting uses the previewed output.
+`date '+%Y-%m-%d'`. It runs when selected, or reuses an available preview when
+**Preview output when opening this tab** is enabled. If no preview has been
+loaded—for example, when selecting an unvisited tab's item from search—the command
+runs at that point.
 
 ![The Quick text tab shows today's date and a release tag as command output previews.](screenshots/command-items.png)
 
 ### Generated tabs
 
 Create a set, select **Generate from command**, and enter a command. Each non-empty
-output line becomes a read-only paste candidate. Opening the tab runs the command;
-selecting a candidate pastes the captured text without rerunning it.
+output line becomes a read-only paste candidate. The first opening during a panel
+visit runs the command unless results are already available from search. Revisiting
+the tab reuses those results; selecting a candidate pastes without rerunning it.
 Use **Refresh** to regenerate the list, or stop a running generation.
 
 Enable **Run command during cross-tab search** to load the tab when a non-empty
