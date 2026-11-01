@@ -175,9 +175,15 @@ class ClipboardIndicator extends PanelMenu.Button {
       y_align: Clutter.ActorAlign.CENTER,
     });
 
-    const header = new St.BoxLayout({ style_class: 'ci-search-header' });
+    const header = new St.BoxLayout({
+      style_class: 'ci-search-header',
+      x_expand: true,
+      x_align: Clutter.ActorAlign.FILL,
+    });
     header.add_child(this.searchEntry);
     this._allTabsCheck = new CheckBox.CheckBox(_('All tabs'));
+    this._allTabsCheck.x_expand = false;
+    this._allTabsCheck.x_align = Clutter.ActorAlign.END;
     this._allTabsCheck.y_align = Clutter.ActorAlign.CENTER;
     this._allTabsCheck.y_expand = false;
     // Shell's checkbox aligns its indicator to the first text line. This
