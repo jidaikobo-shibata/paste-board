@@ -382,7 +382,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._updatePrivateModeState();
 
     const clearMenuItem = new PopupMenu.PopupBaseMenuItem();
-    clearMenuItem.accessible_name = _('Clear history');
+    clearMenuItem.accessible_name = _(
+      'Clear history and clipboard (keep paste sets)',
+    );
+    this._connectModeHint(clearMenuItem);
     clearMenuItem.add_child(
       new St.Icon({
         icon_name: 'edit-delete-symbolic',
@@ -392,7 +395,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     actionsBox.add_child(clearMenuItem);
 
     const settingsMenuItem = new PopupMenu.PopupBaseMenuItem();
-    settingsMenuItem.accessible_name = _('Preferences');
+    settingsMenuItem.accessible_name = _('Open preferences');
+    this._connectModeHint(settingsMenuItem);
     settingsMenuItem.add_child(
       new St.Icon({
         icon_name: 'emblem-system-symbolic',
@@ -980,12 +984,16 @@ class ClipboardIndicator extends PanelMenu.Button {
       child: new St.Icon({ icon_name: icon, style_class: 'popup-menu-icon' }),
     });
     button.connect('clicked', action);
+    this._connectModeHint(button);
+    return button;
+  }
+
+  _connectModeHint(button) {
     button.connect('notify::hover', () =>
       button.hover ? this._showModeHint(button) : this._hideModeHint(),
     );
     button.connect('key-focus-in', () => this._showModeHint(button));
     button.connect('key-focus-out', () => this._hideModeHint());
-    return button;
   }
 
   _ensureGeneratedTabs() {

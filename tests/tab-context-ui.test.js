@@ -273,6 +273,48 @@ export default class extends Extension {
       'Rebuilt tabs leaked their context popup',
     );
     await rightClick('history');
+    owner._tabContextMenu.close();
+    await delay(150);
+    pointer.notify_absolute_motion(GLib.get_monotonic_time(), 100, 700);
+    await delay(100);
+    for (const label of [
+      'Clear history and clipboard (keep paste sets)',
+      'Open preferences',
+    ]) {
+      const control = descendants(owner._footerActions).find(
+        (actor) => actor.accessible_name === _(label),
+      );
+      assert(
+        control?.can_focus && control.reactive,
+        'Footer action is not accessible',
+      );
+      control.grab_key_focus();
+      await delay(100);
+      assert(
+        owner._modeHint?.mapped && owner._modeHint.text === _(label),
+        `Keyboard focus did not show footer tooltip: ${label}, hint=${owner._modeHint?.text}, mapped=${owner._modeHint?.mapped}, open=${owner.menu.isOpen}, focus=${global.stage.get_key_focus()?.accessible_name}`,
+      );
+      owner.searchEntry.clutter_text.grab_key_focus();
+      await delay(50);
+      assert(
+        !owner._modeHint,
+        'Footer tooltip remained after focus moved away',
+      );
+      const [x, y] = control.get_transformed_position();
+      const [w, h] = control.get_transformed_size();
+      pointer.notify_absolute_motion(
+        GLib.get_monotonic_time(),
+        x + w / 2,
+        y + h / 2,
+      );
+      await delay(150);
+      assert(
+        owner._modeHint?.mapped && owner._modeHint.text === _(label),
+        'Mouse hover did not show footer tooltip',
+      );
+      pointer.notify_absolute_motion(GLib.get_monotonic_time(), 100, 700);
+      await delay(100);
+    }
     owner.menu.close();
   }
 }
