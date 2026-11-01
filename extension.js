@@ -382,9 +382,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._updatePrivateModeState();
 
     const clearMenuItem = new PopupMenu.PopupBaseMenuItem();
-    clearMenuItem.accessible_name = _(
-      'Clear history and clipboard (keep paste sets)',
-    );
+    this._clearTabAction = clearMenuItem;
+    this._updateClearAction();
     this._connectModeHint(clearMenuItem);
     clearMenuItem.add_child(
       new St.Icon({
@@ -624,6 +623,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _applyPasteSetVisibility() {
+    this._updateClearAction?.();
     const cross = this._isCrossTabSearch();
     const history = !this._pasteSets || this._activePasteTab === 'history';
     this.scrollViewMenuSection.actor.visible =
@@ -2836,19 +2836,54 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
+  _updateClearAction() {
+    const button = this._clearTabAction;
+    if (!button) return;
+    const set = this._pasteSets?.data.sets.find(
+      (set) => set.id === this._activePasteTab,
+    );
+    const generated = set?.kind === 'generated';
+    const history = !this._pasteSets || this._activePasteTab === 'history';
+    button.accessible_name = generated
+      ? _('Generated tabs cannot be emptied')
+      : history
+        ? _('Empty history (keep clipboard)')
+        : _('Empty this paste set');
+    button.setSensitive(!generated && (history || Boolean(set)));
+    if (this._modeHint && (button.hover || button.has_key_focus()))
+      this._showModeHint(button);
+  }
+
   _removeAll() {
-    this._confirmRemoveAll();
+    if (this._destroyed || this._quickPasteBusy) return;
+    const id = this._activePasteTab || 'history';
+    if (id === 'history' || !this._pasteSets) {
+      this._confirmRemoveAll();
+      return;
+    }
+    const set = this._pasteSets.data.sets.find((set) => set.id === id);
+    if (!set || set.kind === 'generated') return;
+    this._confirmPanelAction(
+      _('Empty this paste set?'),
+      set.name,
+      _('All items will be removed. The tab and clipboard will be kept.'),
+      _('Clear'),
+      _('Cancel'),
+      () => {
+        if (!this._destroyed)
+          this._changePasteSet(() => {
+            this._pasteSets.clear(id);
+            this._commandPreviews?.clear();
+          });
+      },
+    );
   }
 
   _confirmRemoveAll() {
-    const title = _('Clear all?');
-    const message = _('Are you sure you want to delete all clipboard items?');
-    const sub_message = _('This operation cannot be undone.');
-
     this._confirmPanelAction(
-      title,
-      message,
-      sub_message,
+      _('Clear history?'),
+      _('All clipboard history will be removed.'),
+      _('The clipboard and paste sets will be kept.'),
       _('Clear'),
       _('Cancel'),
       () => {
@@ -2858,7 +2893,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _clearHistory() {
-    this._clearCurrentClipboardEntry(true);
+    // Reads started before clearing must not repopulate the emptied history.
+    this._clipboardQueryEpoch = (this._clipboardQueryEpoch || 0) + 1;
+    for (const read of this._clipboardReads || []) read.cancel();
+    this._clearCurrentClipboardEntry(false);
     this._lastPrimaryEntry = undefined;
 
     // Paste sets and archived history records are independent of ordinary history.

@@ -329,6 +329,12 @@ export class PasteSets {
     });
   }
 
+  clear(setId) {
+    this.change((sets) => {
+      this._manualSet(sets, setId).items = [];
+    });
+  }
+
   removeItem(setId, itemId) {
     this.change((sets) => {
       const items = this._manualSet(sets, setId).items;

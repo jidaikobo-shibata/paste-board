@@ -278,7 +278,7 @@ export default class extends Extension {
     pointer.notify_absolute_motion(GLib.get_monotonic_time(), 100, 700);
     await delay(100);
     for (const label of [
-      'Clear history and clipboard (keep paste sets)',
+      'Empty history (keep clipboard)',
       'Open preferences',
     ]) {
       const control = descendants(owner._footerActions).find(
@@ -315,6 +315,95 @@ export default class extends Extension {
       pointer.notify_absolute_motion(GLib.get_monotonic_time(), 100, 700);
       await delay(100);
     }
+    const clipboard = St.Clipboard.get_default();
+    const clipboardText = (type) =>
+      new Promise((resolve) =>
+        clipboard.get_text(type, (_, text) => resolve(text)),
+      );
+    clipboard.set_text(St.ClipboardType.CLIPBOARD, 'clipboard must remain');
+    clipboard.set_text(St.ClipboardType.PRIMARY, 'primary must remain');
+    await wait(() => owner.entries.findTextItem('clipboard must remain'));
+    owner._switchPasteTab('history');
+    await delay(100);
+    owner._clearTabAction.emit('activate', null);
+    await delay(150);
+    assert(
+      owner.entries.length > 0 && button(modal, 'Cancel'),
+      'History clear bypassed confirmation',
+    );
+    button(modal, 'Cancel').emit('clicked', 0);
+    await delay(150);
+    assert(owner.entries.length > 0, 'Cancelling history clear erased entries');
+    owner._clearTabAction.emit('activate', null);
+    await delay(150);
+    button(modal, 'Clear').emit('clicked', 0);
+    await delay(150);
+    assert(
+      owner.entries.length === 0 &&
+        (await clipboardText(St.ClipboardType.CLIPBOARD)) ===
+          'clipboard must remain' &&
+        (await clipboardText(St.ClipboardType.PRIMARY)) ===
+          'primary must remain',
+      'History clear changed either clipboard',
+    );
+    const target = owner._pasteSets.create('Target');
+    owner._pasteSets.put(target, { text: 'alpha' });
+    owner._pasteSets.put(target, { text: 'beta' });
+    const other = owner._pasteSets.create('Other');
+    owner._pasteSets.put(other, { text: 'keep other' });
+    owner._renderPasteSets();
+    owner._switchPasteTab(target);
+    await delay(100);
+    owner.settings.set_boolean('search-all-tabs', false);
+    owner.searchEntry.set_text('alpha');
+    await delay(100);
+    assert(
+      owner._clearTabAction.accessible_name === _('Empty this paste set'),
+      'Set tooltip has wrong scope',
+    );
+    owner._clearTabAction.emit('activate', null);
+    await delay(150);
+    button(modal, 'Cancel').emit('clicked', 0);
+    await delay(150);
+    assert(
+      owner._pasteSets.data.sets.find((set) => set.id === target).items
+        .length === 2,
+      'Cancel emptied a set',
+    );
+    owner._clearTabAction.emit('activate', null);
+    await delay(150);
+    button(modal, 'Clear').emit('clicked', 0);
+    await delay(150);
+    assert(
+      owner._pasteSets.data.sets.find((set) => set.id === target).name ===
+        'Target' &&
+        owner._pasteSets.data.sets.find((set) => set.id === target).items
+          .length === 0,
+      'Set clear removed the tab or only cleared filtered items',
+    );
+    assert(
+      owner._pasteSets.data.sets.find((set) => set.id === other).items[0]
+        .text === 'keep other' &&
+        owner.entries.length === 0 &&
+        (await clipboardText(St.ClipboardType.CLIPBOARD)) ===
+          'clipboard must remain',
+      'Set clear changed another tab, history, or clipboard',
+    );
+    owner.settings.set_boolean('pause-command-previews', true);
+    owner._switchPasteTab(generated);
+    await delay(100);
+    assert(
+      !owner._clearTabAction.sensitive &&
+        owner._clearTabAction.accessible_name ===
+          _('Generated tabs cannot be emptied'),
+      'Generated tab clear action is not disabled',
+    );
+    owner._removeAll();
+    await delay(100);
+    assert(
+      !button(modal, 'Clear'),
+      'Generated tab opened a clear confirmation',
+    );
     owner.menu.close();
   }
 }

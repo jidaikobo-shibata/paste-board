@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-01 22:09+0900\n"
+"POT-Creation-Date: 2026-11-01 22:16+0900\n"
 "PO-Revision-Date: 2020-10-05 23:34+0200\n"
 "Last-Translator: Ibai Oihanguren Sala <ibai@oihanguren.com>\n"
 "Language-Team: \n"
@@ -15,7 +15,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: appPastePrefs.js:59 extension.js:1793 extension.js:2853
+#: appPastePrefs.js:59 extension.js:1793 extension.js:2871 extension.js:2888
 #: pasteSetDialog.js:495 pasteSetDialog.js:638
 msgid "Cancel"
 msgstr "Utzi"
@@ -112,7 +112,7 @@ msgstr ""
 msgid "Could not read clipboard text."
 msgstr ""
 
-#: clipboardRead.js:62 extension.js:2308 extension.js:3297
+#: clipboardRead.js:62 extension.js:2308 extension.js:3335
 msgid "Copied text exceeds the size limit."
 msgstr ""
 
@@ -224,40 +224,36 @@ msgstr ""
 msgid "Edit the current tab"
 msgstr ""
 
-#: extension.js:386
-msgid "Clear history and clipboard (keep paste sets)"
-msgstr ""
-
-#: extension.js:398
+#: extension.js:397
 msgid "Open preferences"
 msgstr ""
 
-#: extension.js:509 extension.js:542
+#: extension.js:508 extension.js:541
 msgid "Could not prepare history cleanup on logout"
 msgstr ""
 
-#: extension.js:518 historySession.js:9
+#: extension.js:517 historySession.js:9
 msgid "Cannot identify the login session."
 msgstr ""
 
-#: extension.js:532
+#: extension.js:531
 msgid "Session information was recovered"
 msgstr ""
 
-#: extension.js:534
+#: extension.js:533
 #, javascript-format
 msgid "The original session information was preserved at: %s"
 msgstr ""
 
-#: extension.js:557 extension.js:3622
+#: extension.js:556 extension.js:3660
 msgid "Could not save session metadata"
 msgstr ""
 
-#: extension.js:590 pasteSets.js:123
+#: extension.js:589 pasteSets.js:123
 msgid "Could not save paste sets."
 msgstr ""
 
-#: extension.js:598
+#: extension.js:597
 msgid "Could not load paste sets"
 msgstr ""
 
@@ -460,36 +456,56 @@ msgstr ""
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:2844
-msgid "Clear all?"
-msgstr "Guztia garbitu?"
+#: extension.js:2848
+msgid "Generated tabs cannot be emptied"
+msgstr ""
 
-#: extension.js:2845
-msgid "Are you sure you want to delete all clipboard items?"
-msgstr "Ziur arbeleko elementu guztiak kendu nahi dituzula?"
+#: extension.js:2850
+msgid "Empty history (keep clipboard)"
+msgstr ""
 
-#: extension.js:2846
-msgid "This operation cannot be undone."
-msgstr "Ezin da eragiketa hau desegin."
+#: extension.js:2851
+msgid "Empty this paste set"
+msgstr ""
 
-#: extension.js:2852
+#: extension.js:2867
+msgid "Empty this paste set?"
+msgstr ""
+
+#: extension.js:2869
+msgid "All items will be removed. The tab and clipboard will be kept."
+msgstr ""
+
+#: extension.js:2870 extension.js:2887
 msgid "Clear"
 msgstr "Garbitu"
 
-#: extension.js:3776
+#: extension.js:2884
+msgid "Clear history?"
+msgstr ""
+
+#: extension.js:2885
+msgid "All clipboard history will be removed."
+msgstr ""
+
+#: extension.js:2886
+msgid "The clipboard and paste sets will be kept."
+msgstr ""
+
+#: extension.js:3814
 msgid "Clipboard history was recovered"
 msgstr ""
 
-#: extension.js:3777
+#: extension.js:3815
 msgid "Could not save or load clipboard history"
 msgstr ""
 
-#: extension.js:3781
+#: extension.js:3819
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 
-#: extension.js:3786
+#: extension.js:3824
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
@@ -715,7 +731,7 @@ msgstr ""
 msgid "%s %d"
 msgstr ""
 
-#: pasteSets.js:345
+#: pasteSets.js:351
 msgid "The item to move was not found."
 msgstr ""
 
@@ -834,5 +850,11 @@ msgstr "Biak"
 msgid "Neither"
 msgstr ""
 
-#~ msgid "Clear history"
-#~ msgstr "Garbitu historia"
+#~ msgid "Clear all?"
+#~ msgstr "Guztia garbitu?"
+
+#~ msgid "Are you sure you want to delete all clipboard items?"
+#~ msgstr "Ziur arbeleko elementu guztiak kendu nahi dituzula?"
+
+#~ msgid "This operation cannot be undone."
+#~ msgstr "Ezin da eragiketa hau desegin."

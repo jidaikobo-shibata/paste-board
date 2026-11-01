@@ -1237,7 +1237,7 @@ test('PRIMARY capture with a one-entry limit cannot evict the current clipboard'
   fixture.checkOrder();
 });
 
-test('deleting current history selects the next first item; clearing also clears clipboard', () => {
+test('deleting current history selects the next first item; clearing preserves clipboard', () => {
   const fixture = historyFixture();
   fixture.copy('older');
   fixture.copy('current');
@@ -1246,7 +1246,7 @@ test('deleting current history selects the next first item; clearing also clears
   fixture.checkOrder();
   fixture.owner._clearHistory();
   assert.deepEqual(fixture.order(), []);
-  assert.equal(fixture.clipboard(), '');
+  assert.equal(fixture.clipboard(), 'older');
 });
 
 test('trimmed history and clipboard remain identical while PRIMARY never changes clipboard', () => {
@@ -2571,4 +2571,39 @@ test('type-to-search leaves shortcuts, existing input, and inactive panels alone
   searchFocused = false;
   context.PRIVATE_MODE = true;
   assert.equal(owner._handleTypeToSearch(event('a')), false);
+});
+
+test('emptying a set confirms the captured tab and rejects generated tabs', () => {
+  const [owner] = instance(['_removeAll']);
+  const cleared = [];
+  let accept;
+  let confirmations = 0;
+  Object.assign(owner, {
+    _activePasteTab: 'one',
+    _pasteSets: {
+      data: {
+        sets: [
+          { id: 'one', name: 'One' },
+          { id: 'two', name: 'Two' },
+          { id: 'generated', name: 'Generated', kind: 'generated' },
+        ],
+      },
+      clear: (id) => cleared.push(id),
+    },
+    _confirmPanelAction: (...args) => {
+      confirmations++;
+      accept = args[5];
+    },
+    _changePasteSet: (change) => change(),
+  });
+  owner._removeAll();
+  assert.equal(confirmations, 1);
+  assert.deepEqual(cleared, []);
+  owner._activePasteTab = 'two';
+  accept();
+  assert.deepEqual(cleared, ['one']);
+  owner._activePasteTab = 'generated';
+  owner._removeAll();
+  assert.equal(confirmations, 1);
+  assert.deepEqual(cleared, ['one']);
 });

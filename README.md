@@ -64,7 +64,8 @@ Create a set with the new-tab button at the bottom of the panel. Add history ite
 with their add button or drag them onto a tab. Edit their names and content, or
 drag to reorder them. Right-click a tab to edit or delete it, or use the bottom
 toolbar's edit button. Deleting a set requires confirmation; History can only be
-renamed. Clearing history keeps your paste sets.
+renamed. The trash button empties the active history or manual set after
+confirmation, keeping the clipboard and tab. It is disabled for generated tabs.
 
 ## Commands
 

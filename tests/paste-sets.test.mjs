@@ -51,6 +51,28 @@ try {
   save('Renamed');
   flushSets(owner._pasteSets);
   equal(new PasteSets(directory).data.sets[0].name, 'Renamed');
+  const target = owner._pasteSets.data.sets[0].id;
+  const other = owner._pasteSets.data.sets[1].id;
+  owner._pasteSets.put(other, { text: 'keep other' });
+  owner._pasteSets.clear(target);
+  flushSets(owner._pasteSets);
+  loaded = new PasteSets(directory);
+  equal(loaded.data.sets[0].id, target);
+  equal(loaded.data.sets[0].name, 'Renamed');
+  equal(loaded.data.sets[0].items, []);
+  equal(loaded.data.sets[1].items[0].text, 'keep other');
+  const generated = owner._pasteSets.create('Generated', {
+    kind: 'generated',
+    command: 'date',
+  });
+  let blocked = false;
+  try {
+    owner._pasteSets.clear(generated);
+  } catch {
+    blocked = true;
+  }
+  equal(blocked, true);
+  flushSets(owner._pasteSets);
 } finally {
   GLib.unlink(directory + '/paste-sets.json');
   GLib.rmdir(directory);

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-01 22:09+0900\n"
+"POT-Creation-Date: 2026-11-01 22:16+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -22,7 +22,7 @@ msgstr ""
 "X-Poedit-SearchPath-0: prefs.js\n"
 "X-Poedit-SearchPath-1: extension.js\n"
 
-#: appPastePrefs.js:59 extension.js:1793 extension.js:2853
+#: appPastePrefs.js:59 extension.js:1793 extension.js:2871 extension.js:2888
 #: pasteSetDialog.js:495 pasteSetDialog.js:638
 msgid "Cancel"
 msgstr "キャンセル"
@@ -121,7 +121,7 @@ msgstr "アプリ別の貼り付けキーを保存できません。"
 msgid "Could not read clipboard text."
 msgstr "クリップボードのテキストを読み取れませんでした。"
 
-#: clipboardRead.js:62 extension.js:2308 extension.js:3297
+#: clipboardRead.js:62 extension.js:2308 extension.js:3335
 msgid "Copied text exceeds the size limit."
 msgstr "コピーしたテキストがサイズの上限を超えています。"
 
@@ -231,40 +231,36 @@ msgstr "ペーストセットを追加"
 msgid "Edit the current tab"
 msgstr "表示中のタブを編集"
 
-#: extension.js:386
-msgid "Clear history and clipboard (keep paste sets)"
-msgstr "履歴とクリップボードを消去（ペーストセットは残す）"
-
-#: extension.js:398
+#: extension.js:397
 msgid "Open preferences"
 msgstr "環境設定を開く"
 
-#: extension.js:509 extension.js:542
+#: extension.js:508 extension.js:541
 msgid "Could not prepare history cleanup on logout"
 msgstr "ログアウト時の履歴消去を準備できません"
 
-#: extension.js:518 historySession.js:9
+#: extension.js:517 historySession.js:9
 msgid "Cannot identify the login session."
 msgstr "ログインセッションを識別できません。"
 
-#: extension.js:532
+#: extension.js:531
 msgid "Session information was recovered"
 msgstr "セッション情報を復旧しました"
 
-#: extension.js:534
+#: extension.js:533
 #, javascript-format
 msgid "The original session information was preserved at: %s"
 msgstr "元のセッション情報は次の場所に保全しました：%s"
 
-#: extension.js:557 extension.js:3622
+#: extension.js:556 extension.js:3660
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
-#: extension.js:590 pasteSets.js:123
+#: extension.js:589 pasteSets.js:123
 msgid "Could not save paste sets."
 msgstr "ペーストセットを保存できません。"
 
-#: extension.js:598
+#: extension.js:597
 msgid "Could not load paste sets"
 msgstr "ペーストセットを読み込めません"
 
@@ -467,37 +463,57 @@ msgstr "履歴から削除"
 msgid "Command: %s"
 msgstr "コマンド：%s"
 
-#: extension.js:2844
-msgid "Clear all?"
-msgstr "すべて削除しますか？"
+#: extension.js:2848
+msgid "Generated tabs cannot be emptied"
+msgstr "コマンド生成タブは空にできません"
 
-#: extension.js:2845
-msgid "Are you sure you want to delete all clipboard items?"
-msgstr "クリップボードの履歴を全て削除してよろしいですか？"
+#: extension.js:2850
+msgid "Empty history (keep clipboard)"
+msgstr "履歴を空にする（クリップボードは保持）"
 
-#: extension.js:2846
-msgid "This operation cannot be undone."
-msgstr "削除した履歴は復元できません"
+#: extension.js:2851
+msgid "Empty this paste set"
+msgstr "表示中のペーストセットを空にする"
 
-#: extension.js:2852
+#: extension.js:2867
+msgid "Empty this paste set?"
+msgstr "このペーストセットを空にしますか？"
+
+#: extension.js:2869
+msgid "All items will be removed. The tab and clipboard will be kept."
+msgstr "すべての項目を削除します。タブとクリップボードは保持します。"
+
+#: extension.js:2870 extension.js:2887
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:3776
+#: extension.js:2884
+msgid "Clear history?"
+msgstr "履歴を空にしますか？"
+
+#: extension.js:2885
+msgid "All clipboard history will be removed."
+msgstr "すべてのクリップボード履歴を削除します。"
+
+#: extension.js:2886
+msgid "The clipboard and paste sets will be kept."
+msgstr "クリップボードとペーストセットは保持します。"
+
+#: extension.js:3814
 msgid "Clipboard history was recovered"
 msgstr "クリップボード履歴を復旧しました"
 
-#: extension.js:3777
+#: extension.js:3815
 msgid "Could not save or load clipboard history"
 msgstr "クリップボード履歴を保存または読み込めません"
 
-#: extension.js:3781
+#: extension.js:3819
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 "読み取り可能な履歴を復元しました。元のファイルは次の場所に保全しました：%s"
 
-#: extension.js:3786
+#: extension.js:3824
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
@@ -730,7 +746,7 @@ msgstr "untitled"
 msgid "%s %d"
 msgstr "%s %d"
 
-#: pasteSets.js:345
+#: pasteSets.js:351
 msgid "The item to move was not found."
 msgstr "移動する項目が見つかりません。"
 
@@ -847,5 +863,14 @@ msgstr "両方"
 msgid "Neither"
 msgstr "表示しない"
 
-#~ msgid "Clear history"
-#~ msgstr "すべての履歴を削除"
+#~ msgid "Clear history and clipboard (keep paste sets)"
+#~ msgstr "履歴とクリップボードを消去（ペーストセットは残す）"
+
+#~ msgid "Clear all?"
+#~ msgstr "すべて削除しますか？"
+
+#~ msgid "Are you sure you want to delete all clipboard items?"
+#~ msgstr "クリップボードの履歴を全て削除してよろしいですか？"
+
+#~ msgid "This operation cannot be undone."
+#~ msgstr "削除した履歴は復元できません"
