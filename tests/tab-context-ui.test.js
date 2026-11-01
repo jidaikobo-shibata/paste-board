@@ -160,6 +160,43 @@ export default class extends Extension {
     owner.menu.open();
     await delay(150);
     await rightClick(manual);
+    await key(Clutter.KEY_Return);
+    await wait(() => owner._pasteSetDialog);
+    const conversion = owner._pasteSetDialog;
+    button(conversion, 'Generate from command').emit('clicked', 0);
+    descendants(conversion)
+      .find(
+        (actor) =>
+          actor instanceof St.Entry &&
+          actor.accessible_name === _('Command to execute'),
+      )
+      .set_text('date');
+    button(conversion, 'Save').emit('clicked', 0);
+    await delay(150);
+    const alert = descendants(conversion).find(
+      (actor) => actor.style_class === 'ci-editor-error-banner',
+    );
+    assert(
+      alert?.mapped &&
+        alert.get_parent() === conversion.contentLayout &&
+        global.stage.get_key_focus() === alert,
+      'Conversion error is not prominent and focused outside the scroll area',
+    );
+    assert(
+      alert.accessible_name ===
+        _('Only an empty paste set can be changed to a command tab.'),
+      'Conversion error reason missing',
+    );
+    assert(
+      owner._pasteSets.data.sets.find((set) => set.id === manual).items
+        .length === 1,
+      'Rejected conversion changed saved items',
+    );
+    button(conversion, 'Cancel').emit('clicked', 0);
+    await delay(150);
+    owner.menu.open();
+    await delay(150);
+    await rightClick(manual);
     owner._tabContextMenu._getMenuItems()[1].activate(null);
     await delay(150);
     assert(

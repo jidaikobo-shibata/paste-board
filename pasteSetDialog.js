@@ -450,9 +450,27 @@ export const PasteSetDialog = GObject.registerClass(
         }
         syncEditor = sync;
       }
-      const error = new St.Label({ text: '', style_class: 'ci-set-error' });
+      const error = new St.Label({ text: '', x_expand: true });
       error.clutter_text.line_wrap = true;
-      this.contentLayout.add_child(error);
+      error.clutter_text.line_wrap_mode = Pango.WrapMode.WORD_CHAR;
+      error.clutter_text.ellipsize = Pango.EllipsizeMode.NONE;
+      const errorBanner = new St.BoxLayout({
+        style_class: 'ci-editor-error-banner',
+        visible: false,
+        can_focus: true,
+        reactive: true,
+        accessible_role: Atk.Role.ALERT,
+        x_expand: true,
+      });
+      errorBanner.add_child(
+        new St.Icon({
+          icon_name: 'dialog-error-symbolic',
+          icon_size: 20,
+          y_align: Clutter.ActorAlign.START,
+        }),
+      );
+      errorBanner.add_child(error);
+      this.contentLayout.insert_child_at_index(errorBanner, 1);
       const commit = () => {
         this._cancelCommandPreview();
         try {
@@ -466,8 +484,9 @@ export const PasteSetDialog = GObject.registerClass(
           this.close();
         } catch (e) {
           error.set_text(e.message);
-          if (this._editorScroll)
-            ensureActorVisibleInScrollView(this._editorScroll, error);
+          errorBanner.accessible_name = e.message;
+          errorBanner.show();
+          errorBanner.grab_key_focus();
         }
       };
       if (!body) nameInput.clutter_text.connect('activate', commit);
@@ -494,7 +513,7 @@ export const PasteSetDialog = GObject.registerClass(
         });
         contents.set_vertical(true);
         for (const child of this.contentLayout.get_children()) {
-          if (child === titleLabel) continue;
+          if (child === titleLabel || child === errorBanner) continue;
           this.contentLayout.remove_child(child);
           contents.add_child(child);
         }

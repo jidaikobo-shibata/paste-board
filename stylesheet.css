@@ -291,3 +291,14 @@
 .ci-search-group-label {
   font-size: 0.9em;
 }
+
+.ci-editor-error-banner {
+  spacing: 10px;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 8px;
+  border: 2px solid #e66b65;
+  background-color: rgba(160, 35, 35, 0.25);
+  color: #ffcbc5;
+  font-weight: bold;
+}
