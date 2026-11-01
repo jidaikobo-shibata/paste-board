@@ -47,7 +47,9 @@ export const PasteSetDialog = GObject.registerClass(
         label_actor: nameLabel,
         style_class: 'ci-editor-name',
       });
-      nameInput.clutter_text.set_max_length(text === null ? 100 : 200);
+      nameInput.clutter_text.set_max_length(
+        text === null || options.tabEditor ? 100 : 200,
+      );
       this.contentLayout.add_child(nameInput);
       let body;
       let syncEditor;
@@ -215,6 +217,7 @@ export const PasteSetDialog = GObject.registerClass(
           this._startCommandPreview(body.get_text(), {
             executionMode,
             trimTrailingNewlines,
+            allowEmptyOutput: options.tabEditor === true,
           });
           if (this._editorPreviewRun) this._editorStop.grab_key_focus();
           if (this._editorScroll)
@@ -268,7 +271,13 @@ export const PasteSetDialog = GObject.registerClass(
         const sync = () => {
           this._cancelCommandPreview();
           const command = kind === 'command';
+          warning.text = options.tabEditor
+            ? _('Opening this tab runs the command with your permissions.')
+            : _('Runs with your user permissions.');
           bodyLabel.set_text(command ? _('Command') : _('Body'));
+          if (options.tabEditor) {
+            bodyLabel.visible = scroll.visible = command;
+          }
           body.accessible_name = command
             ? _('Command to execute')
             : _('Text to paste');
@@ -283,19 +292,24 @@ export const PasteSetDialog = GObject.registerClass(
             this._editorStatus.visible =
             outputScroll.visible =
               command;
+          if (options.tabEditor) trim.visible = preview.visible = false;
           explanation.set_text(
             [
-              previewOnOpen
+              options.tabEditor
                 ? _(
-                    'Opening this tab runs the command. Pasting uses the previewed output.',
+                    'Opening this tab runs the command and turns each output line into a paste item.',
                   )
-                : executionMode === 'bash'
+                : previewOnOpen
                   ? _(
-                      'Runs in Bash when pasted. Pipes and variable expansion are supported.',
+                      'Opening this tab runs the command. Pasting uses the previewed output.',
                     )
-                  : _(
-                      'Runs directly when pasted. Pipes and variable expansion are not performed.',
-                    ),
+                  : executionMode === 'bash'
+                    ? _(
+                        'Runs in Bash when pasted. Pipes and variable expansion are supported.',
+                      )
+                    : _(
+                        'Runs directly when pasted. Pipes and variable expansion are not performed.',
+                      ),
               _(
                 'Runs with your permissions and can modify or delete files or access the network. Commands execute even without output. Register only commands you understand and trust.',
               ),
@@ -335,8 +349,11 @@ export const PasteSetDialog = GObject.registerClass(
           }
         };
         for (const [value, label] of [
-          ['text', _('Text')],
-          ['command', _('Command')],
+          ['text', options.tabEditor ? _('Manual paste set') : _('Text')],
+          [
+            'command',
+            options.tabEditor ? _('Generate from command') : _('Command'),
+          ],
         ]) {
           const button = new St.Button({
             accessible_name: label,

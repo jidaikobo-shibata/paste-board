@@ -13,6 +13,14 @@ function equal(actual, expected) {
 }
 equal(_('History'), japanese ? '履歴' : 'History');
 equal(_('Body'), japanese ? '本文' : 'Body');
+equal(
+  _('Generate from command'),
+  japanese ? 'コマンドから生成' : 'Generate from command',
+);
+equal(
+  _('Refresh generated items'),
+  japanese ? '生成候補を更新' : 'Refresh generated items',
+);
 equal(_('Output'), japanese ? '出力' : 'Output');
 equal(
   _('About command execution'),

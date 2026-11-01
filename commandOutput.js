@@ -12,6 +12,7 @@ export function runCommand(
   command,
   {
     trimTrailingNewlines = true,
+    allowEmptyOutput = false,
     executionMode = 'direct',
     timeoutMs = 3000,
     maxOutputBytes = 65536,
@@ -114,7 +115,7 @@ export function runCommand(
             throw new Error(_('Command supervision failed.'));
           let text = response.text;
           if (trimTrailingNewlines) text = text.replace(/(?:\r?\n)+$/, '');
-          if (!text)
+          if (!text && !allowEmptyOutput)
             throw new Error(
               _('The command produced no output; nothing was pasted.'),
             );

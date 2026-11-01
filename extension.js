@@ -26,6 +26,7 @@ import { PasteSets } from './pasteSets.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { CommandPreviews, previewSummary } from './commandPreviews.js';
+import { GeneratedTabs } from './generatedTabs.js';
 import { CopyFeedback } from './copyFeedback.js';
 import {
   readOverrides,
@@ -111,6 +112,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   destroy() {
     this._destroyed = true;
     this._commandPreviews?.destroy();
+    this._generatedTabs?.destroy();
     for (const read of this._clipboardReads || []) read.cancel();
     this._pasteSets?.close().catch((error) => console.error(error));
     if (this._sessionOverSignal) {
@@ -200,6 +202,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       if (!open && !this.menu.isOpen) {
         this._commandPreviews?.clear();
+        this._generatedTabs?.clear();
+        this._generatedSelectionText = undefined;
         this._stopPasteDragFeedback();
         this._cancelPasteCommand();
         this._choosingPasteAction = false;
@@ -299,12 +303,19 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
     this.pausePreviewsItem = this._createModeButton(
       'media-playback-pause-symbolic',
-      _('Pause automatic previews'),
+      _('Pause automatic commands'),
       SettingsFields.PAUSE_COMMAND_PREVIEWS,
     );
     actionsBox.add_child(this.privateModeMenuItem);
     actionsBox.add_child(this.keepMenuOpenItem);
     actionsBox.add_child(this.pausePreviewsItem);
+    this.refreshGeneratedItem = this._setActionButton(
+      'view-refresh-symbolic',
+      _('Refresh generated items'),
+      () => this._refreshGeneratedTab(),
+    );
+    this.refreshGeneratedItem.hide();
+    actionsBox.add_child(this.refreshGeneratedItem);
     actionsBox.add_child(
       this._setActionButton('tab-new-symbolic', _('Add a paste set'), () =>
         this._editPasteSetName(),
@@ -539,7 +550,11 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _switchPasteTab(id) {
     if (this._quickPasteBusy) return;
-    if (this._activePasteTab !== id) this._commandPreviews?.clear();
+    if (this._activePasteTab !== id) {
+      this._commandPreviews?.clear();
+      this._generatedTabs?.clear();
+      this._generatedSelectionText = undefined;
+    }
     this._activePasteTab = id;
     this.searchEntry.set_text('');
     this._renderPasteSets();
@@ -772,7 +787,11 @@ class ClipboardIndicator extends PanelMenu.Button {
       typeof source.getPasteDragContent === 'function' &&
       setId !== 'history' &&
       source.getPasteDragContent().sourceSetId !== setId &&
-      Boolean(this._pasteSets?.data.sets.some((set) => set.id === setId))
+      Boolean(
+        this._pasteSets?.data.sets.some(
+          (set) => set.id === setId && set.kind !== 'generated',
+        ),
+      )
     );
   }
 
@@ -887,6 +906,60 @@ class ClipboardIndicator extends PanelMenu.Button {
     return button;
   }
 
+  _generatedTabRecord(set) {
+    this._generatedTabs ??= new GeneratedTabs(() => {
+      if (
+        this._destroyed ||
+        PRIVATE_MODE ||
+        !this.menu.isOpen ||
+        this._quickPasteBusy
+      )
+        return;
+      this._renderPasteSets();
+      const record = this._generatedTabs.record;
+      if (record?.state !== 'ready') return;
+      if (
+        global.stage.get_key_focus() === this.searchEntry.clutter_text &&
+        this.searchEntry.get_text()
+      )
+        return;
+      const rows = this._visiblePasteCandidates();
+      const selected =
+        rows.find((row) => row.entry.text === this._generatedSelectionText) ||
+        rows[0];
+      if (selected) selected.grab_key_focus();
+    });
+    if (!this.menu.isOpen || PRIVATE_MODE) {
+      this._generatedTabs.clear();
+      return null;
+    }
+    return this._generatedTabs.sync(set, { autoRun: !this._previewsPaused });
+  }
+
+  _refreshGeneratedTab() {
+    if (
+      this._quickPasteBusy ||
+      this._destroyed ||
+      PRIVATE_MODE ||
+      !this.menu.isOpen
+    )
+      return;
+    const set = this._pasteSets?.data.sets.find(
+      (set) => set.id === this._activePasteTab,
+    );
+    if (set?.kind !== 'generated') return;
+    this._generatedTabRecord(set);
+    if (this._generatedTabs.record?.state === 'pending')
+      this._generatedTabs.stop();
+    else {
+      this._generatedSelectionText =
+        this._focusedHistoryCandidate()?.entry.text ??
+        this._generatedSelectionText;
+      this._generatedTabs.refresh(set);
+    }
+    this._renderPasteSets();
+  }
+
   _renderPasteSets() {
     if (!this._pasteSets) return;
     this._clearPasteDropHighlight();
@@ -937,6 +1010,20 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
     }
     const set = sets.find((item) => item.id === this._activePasteTab);
+    const generated = set?.kind === 'generated';
+    const generation = generated ? this._generatedTabRecord(set) : null;
+    if (!generated) this._generatedTabs?.clear();
+    const sourceItems = generated ? generation?.items || [] : set?.items || [];
+    if (this.refreshGeneratedItem) {
+      this.refreshGeneratedItem.visible = Boolean(generated && !PRIVATE_MODE);
+      const pending = generation?.state === 'pending';
+      this.refreshGeneratedItem.accessible_name = pending
+        ? _('Stop generating items')
+        : _('Refresh generated items');
+      this.refreshGeneratedItem.get_child().icon_name = pending
+        ? 'process-stop-symbolic'
+        : 'view-refresh-symbolic';
+    }
     this._commandPreviews ??= new CommandPreviews((id) => {
       if (this._destroyed || PRIVATE_MODE || !this.menu.isOpen) return;
       const row = this._pasteSetSection
@@ -945,12 +1032,12 @@ class ClipboardIndicator extends PanelMenu.Button {
       if (row) this._updateCommandPreviewRow(row);
     });
     if (this.menu.isOpen && !PRIVATE_MODE && !this._previewsPaused)
-      this._commandPreviews.sync(set?.items || []);
+      this._commandPreviews.sync(sourceItems);
     else this._commandPreviews.clear();
     const query = this.searchEntry.get_text().toLowerCase();
     const previous = new Map();
     if (set) {
-      const items = set.items.filter(
+      const items = sourceItems.filter(
         (item) =>
           !query ||
           item.name.toLowerCase().includes(query) ||
@@ -959,7 +1046,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             .includes(query),
       );
       const positions = new Map(
-        set.items.map((item, index) => [item.id, index]),
+        sourceItems.map((item, index) => [item.id, index]),
       );
       const matched = new Map(items.map((item) => [item.id, item]));
       for (const row of this._pasteSetSection._getMenuItems()) {
@@ -967,6 +1054,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (
           item &&
           row.entry.sourceSetId === set.id &&
+          Boolean(row.entry.generated) === generated &&
           [
             'name',
             'text',
@@ -1015,6 +1103,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           type: DS.TYPE_TEXT,
           sourceSetId: set.id,
           pasteSetItem: true,
+          generated,
         };
         if (item.kind === 'command')
           row.insert_child_at_index(
@@ -1040,11 +1129,14 @@ class ClipboardIndicator extends PanelMenu.Button {
           row.insert_child_at_index(content, position);
           this._updateCommandPreviewRow(row);
         }
-        this._makePasteItemDraggable(row);
-        this._makePasteItemDropTarget(row);
-        row.connect('key-focus-in', () =>
-          ensureActorVisibleInScrollView(this._pasteSetScroll, row),
-        );
+        if (!generated) {
+          this._makePasteItemDraggable(row);
+          this._makePasteItemDropTarget(row);
+        }
+        row.connect('key-focus-in', () => {
+          if (generated) this._generatedSelectionText = row.entry.text;
+          ensureActorVisibleInScrollView(this._pasteSetScroll, row);
+        });
         row.shortcutLabel = new St.Label({
           style_class: 'ci-shortcut-number',
           y_align: Clutter.ActorAlign.CENTER,
@@ -1057,38 +1149,41 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._activatePasteEntry(row.entry);
         });
         row._moveButtons = [];
-        for (const [icon, label, action, enabled] of [
-          [
-            'go-up-symbolic',
-            _('Move up'),
-            () =>
-              this._changePasteSet(() =>
-                this._pasteSets.move(set.id, item.id, -1),
-              ),
-            position > 0,
-          ],
-          [
-            'go-down-symbolic',
-            _('Move down'),
-            () =>
-              this._changePasteSet(() =>
-                this._pasteSets.move(set.id, item.id, 1),
-              ),
-            position < set.items.length - 1,
-          ],
-          [
-            'document-edit-symbolic',
-            _('Edit name and content'),
-            () => this._editPasteSetItem(set.id, item),
-            true,
-          ],
-          [
-            'edit-delete-symbolic',
-            _('Delete item'),
-            () => this._confirmPasteSetDelete(set.id, item),
-            true,
-          ],
-        ]) {
+        const rowActions = generated
+          ? []
+          : [
+              [
+                'go-up-symbolic',
+                _('Move up'),
+                () =>
+                  this._changePasteSet(() =>
+                    this._pasteSets.move(set.id, item.id, -1),
+                  ),
+                position > 0,
+              ],
+              [
+                'go-down-symbolic',
+                _('Move down'),
+                () =>
+                  this._changePasteSet(() =>
+                    this._pasteSets.move(set.id, item.id, 1),
+                  ),
+                position < set.items.length - 1,
+              ],
+              [
+                'document-edit-symbolic',
+                _('Edit name and content'),
+                () => this._editPasteSetItem(set.id, item),
+                true,
+              ],
+              [
+                'edit-delete-symbolic',
+                _('Delete item'),
+                () => this._confirmPasteSetDelete(set.id, item),
+                true,
+              ],
+            ];
+        for (const [icon, label, action, enabled] of rowActions) {
           const button = this._setActionButton(icon, label, action);
           button.set_style_class_name('ci-action-btn');
           button.reactive = button.can_focus = enabled;
@@ -1104,7 +1199,22 @@ class ClipboardIndicator extends PanelMenu.Button {
         const empty = new PopupMenu.PopupMenuItem(
           query
             ? _('No matching items')
-            : _('Drag a history item onto this tab to add it'),
+            : generated
+              ? generation?.state === 'pending'
+                ? _('Generating items…')
+                : generation?.state === 'error'
+                  ? format(
+                      _('Could not generate items: %s'),
+                      generation.error.message,
+                    )
+                  : generation?.state === 'idle'
+                    ? _(
+                        'Automatic generation paused. Use Refresh to load items.',
+                      )
+                    : generation?.state === 'stopped'
+                      ? _('Generation stopped. Use Refresh to try again.')
+                      : _('The command returned no items.')
+              : _('Drag a history item onto this tab to add it'),
           { reactive: false, can_focus: false },
         );
         this._pasteSetSection.addMenuItem(empty);
@@ -1166,14 +1276,26 @@ class ClipboardIndicator extends PanelMenu.Button {
       new PasteSetDialog(
         _('Edit tab'),
         name,
-        null,
-        (nextName) => {
+        id === 'history' ? null : set.command || '',
+        (nextName, command, options = {}) => {
           if (this._destroyed) return;
           if (id === 'history') this._pasteSets.renameHistory(nextName);
-          else this._pasteSets.rename(id, nextName);
+          else
+            this._pasteSets.configure(id, nextName, {
+              kind: options.kind === 'command' ? 'generated' : 'manual',
+              command,
+              executionMode: options.executionMode,
+            });
           this._renderPasteSets();
         },
         id === 'history' ? null : () => this._confirmPasteSetDelete(id),
+        {
+          tabEditor: id !== 'history',
+          kind: set?.kind === 'generated' ? 'command' : 'text',
+          executionMode: set?.executionMode || 'direct',
+          trimTrailingNewlines: false,
+          canPreview: () => !PRIVATE_MODE && !this._destroyed,
+        },
       ),
     );
   }
@@ -1185,10 +1307,22 @@ class ClipboardIndicator extends PanelMenu.Button {
       new PasteSetDialog(
         id ? _('Rename paste set') : _('Create paste set'),
         set?.name || '',
-        null,
-        (name) => {
+        initialText === null ? set?.command || '' : null,
+        (name, command, options = {}) => {
           if (this._destroyed) return;
-          if (id) this._pasteSets.rename(id, name);
+          if (initialText === null) {
+            const configuration = {
+              kind: options.kind === 'command' ? 'generated' : 'manual',
+              command,
+              executionMode: options.executionMode,
+            };
+            if (id) this._pasteSets.configure(id, name, configuration);
+            else
+              this._activePasteTab = this._pasteSets.create(
+                name,
+                configuration,
+              );
+          } else if (id) this._pasteSets.rename(id, name);
           else {
             // Create and add atomically when capturing a history item.
             const newId = GLib.uuid_string_random();
@@ -1196,22 +1330,27 @@ class ClipboardIndicator extends PanelMenu.Button {
               sets.push({
                 id: newId,
                 name,
-                items:
-                  initialText === null
-                    ? []
-                    : [
-                        {
-                          id: GLib.uuid_string_random(),
-                          name: '',
-                          kind: 'text',
-                          text: initialText,
-                        },
-                      ],
+                items: [
+                  {
+                    id: GLib.uuid_string_random(),
+                    name: '',
+                    kind: 'text',
+                    text: initialText,
+                  },
+                ],
               }),
             );
             this._activePasteTab = newId;
           }
           this._renderPasteSets();
+        },
+        null,
+        {
+          tabEditor: initialText === null,
+          kind: set?.kind === 'generated' ? 'command' : 'text',
+          executionMode: set?.executionMode || 'direct',
+          trimTrailingNewlines: false,
+          canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
       ),
     );
@@ -1248,12 +1387,15 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _addToPasteSet(text) {
     if (!this._pasteSets || this._quickPasteBusy) return;
-    if (!this._pasteSets.data.sets.length) {
+    const sets = this._pasteSets.data.sets.filter(
+      (set) => set.kind !== 'generated',
+    );
+    if (!sets.length) {
       this._editPasteSetName(null, text);
       return;
     }
     this._openPasteSetDialog(
-      new PasteSetTargetDialog(this._pasteSets.data.sets, (id) => {
+      new PasteSetTargetDialog(sets, (id) => {
         if (this._destroyed) return;
         this._pasteSets.put(id, { name: '', text });
         this._renderPasteSets();
@@ -2923,6 +3065,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (PRIVATE_MODE) {
       for (const read of this._clipboardReads || []) read.cancel();
       this._commandPreviews?.clear();
+      this._generatedTabs?.clear();
+      this._generatedSelectionText = undefined;
       this._pasteSetDialog?._cancelCommandPreview?.();
       this._cancelPasteCommand();
       this._clearCurrentClipboardEntry(false);
@@ -2958,6 +3102,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       // explicitly executed commands keep their normal lifecycle.
       if (this._pasteCommandRun?.preview) this._cancelPasteCommand();
       this._commandPreviews?.clear();
+      this._generatedTabs?.clear();
     }
     if (this._pasteSets) this._renderPasteSets();
   }

@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-10-31 10:42+0900\n"
+"POT-Creation-Date: 2026-11-01 17:00+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -22,8 +22,8 @@ msgstr ""
 "X-Poedit-SearchPath-0: prefs.js\n"
 "X-Poedit-SearchPath-1: extension.js\n"
 
-#: appPastePrefs.js:59 extension.js:1334 extension.js:2299
-#: pasteSetDialog.js:433 pasteSetDialog.js:576
+#: appPastePrefs.js:59 extension.js:1476 extension.js:2441
+#: pasteSetDialog.js:450 pasteSetDialog.js:593
 msgid "Cancel"
 msgstr "キャンセル"
 
@@ -31,7 +31,7 @@ msgstr "キャンセル"
 msgid "Application paste shortcut"
 msgstr "アプリ別の貼り付けキー"
 
-#: appPastePrefs.js:69 pasteSetDialog.js:437
+#: appPastePrefs.js:69 pasteSetDialog.js:454
 msgid "Save"
 msgstr "保存"
 
@@ -98,7 +98,7 @@ msgstr "アプリ別の設定を優先して使います。設定を削除する
 msgid "Add application"
 msgstr "アプリを追加"
 
-#: appPastePrefs.js:277 extension.js:1466
+#: appPastePrefs.js:277 extension.js:1608
 #, javascript-format
 msgid "%s: %s"
 msgstr "%s：%s"
@@ -117,57 +117,57 @@ msgstr "%sの貼り付けキー設定を削除"
 msgid "Could not save application shortcuts."
 msgstr "アプリ別の貼り付けキーを保存できません。"
 
-#: clipboardRead.js:27 clipboardRead.js:75 extension.js:1826
+#: clipboardRead.js:27 clipboardRead.js:75 extension.js:1968
 msgid "Could not read clipboard text."
 msgstr "クリップボードのテキストを読み取れませんでした。"
 
-#: clipboardRead.js:62 extension.js:1834 extension.js:2709
+#: clipboardRead.js:62 extension.js:1976 extension.js:2851
 msgid "Copied text exceeds the size limit."
 msgstr "コピーしたテキストがサイズの上限を超えています。"
 
-#: commandOutput.js:40 commandPreviews.js:89 commandPreviews.js:112
+#: commandOutput.js:41 commandPreviews.js:89 commandPreviews.js:112
 #: commandPreviews.js:126
 msgid "Command execution was cancelled."
 msgstr "コマンドの実行を中止しました。"
 
-#: commandOutput.js:48
+#: commandOutput.js:49
 msgid "Enter a command (up to 8192 characters)."
 msgstr "コマンドを入力してください（8192文字以内）。"
 
-#: commandOutput.js:50
+#: commandOutput.js:51
 msgid "Invalid command execution mode."
 msgstr "コマンドの実行方式が不正です。"
 
-#: commandOutput.js:73 commandOutput.js:106
+#: commandOutput.js:74 commandOutput.js:107
 msgid "Could not start the command."
 msgstr "コマンドを起動できません。"
 
-#: commandOutput.js:86
+#: commandOutput.js:87
 msgid "Command execution timed out."
 msgstr "コマンドの実行が時間制限を超えました。"
 
-#: commandOutput.js:98 commandOutput.js:107 commandOutput.js:110
-#: commandOutput.js:114
+#: commandOutput.js:99 commandOutput.js:108 commandOutput.js:111
+#: commandOutput.js:115
 msgid "Command supervision failed."
 msgstr "コマンド監視処理に失敗しました。"
 
-#: commandOutput.js:102
+#: commandOutput.js:103
 msgid "Command output exceeded the size limit."
 msgstr "コマンドの出力量が上限を超えました。"
 
-#: commandOutput.js:103
+#: commandOutput.js:104
 msgid "The command did not exit successfully."
 msgstr "コマンドが正常に終了しませんでした。"
 
-#: commandOutput.js:104
+#: commandOutput.js:105
 msgid "The output contains a NUL character."
 msgstr "出力にNUL文字が含まれています。"
 
-#: commandOutput.js:105
+#: commandOutput.js:106
 msgid "The output is not valid UTF-8 text."
 msgstr "出力が正しいUTF-8テキストではありません。"
 
-#: commandOutput.js:119
+#: commandOutput.js:120
 msgid "The command produced no output; nothing was pasted."
 msgstr "コマンドの出力が空のため、貼り付けませんでした。"
 
@@ -187,262 +187,295 @@ msgstr "コピーしました"
 msgid "Copied!"
 msgstr "Copied!"
 
-#: extension.js:161
+#: extension.js:163
 msgid "Search items…"
 msgstr "項目を検索…"
 
-#: extension.js:162
+#: extension.js:164
 msgid "Search items in the paste panel"
 msgstr "貼り付けパネルの項目を検索"
 
-#: extension.js:265
+#: extension.js:269
 msgid "Previous page"
 msgstr "前のページ"
 
-#: extension.js:277
+#: extension.js:281
 msgid "Next page"
 msgstr "次のページ"
 
-#: extension.js:292
+#: extension.js:296
 msgid "Private mode: pause history recording"
 msgstr "プライベートモード：履歴の記録を停止"
 
-#: extension.js:297
+#: extension.js:301
 msgid "Pin the panel"
 msgstr "パネルを固定"
 
-#: extension.js:302
-msgid "Pause automatic previews"
-msgstr "自動プレビューを一時停止"
+#: extension.js:306
+msgid "Pause automatic commands"
+msgstr "自動コマンド実行を一時停止"
 
-#: extension.js:309
+#: extension.js:314 extension.js:1022
+msgid "Refresh generated items"
+msgstr "生成候補を更新"
+
+#: extension.js:320
 msgid "Add a paste set"
 msgstr "ペーストセットを追加"
 
-#: extension.js:316
+#: extension.js:327
 msgid "Edit the current tab"
 msgstr "表示中のタブを編集"
 
-#: extension.js:325
+#: extension.js:336
 msgid "Clear history"
 msgstr "すべての履歴を削除"
 
-#: extension.js:335
+#: extension.js:346
 msgid "Preferences"
 msgstr "環境設定"
 
-#: extension.js:428 extension.js:461
+#: extension.js:439 extension.js:472
 msgid "Could not prepare history cleanup on logout"
 msgstr "ログアウト時の履歴消去を準備できません"
 
-#: extension.js:437 historySession.js:9
+#: extension.js:448 historySession.js:9
 msgid "Cannot identify the login session."
 msgstr "ログインセッションを識別できません。"
 
-#: extension.js:451
+#: extension.js:462
 msgid "Session information was recovered"
 msgstr "セッション情報を復旧しました"
 
-#: extension.js:453
+#: extension.js:464
 #, javascript-format
 msgid "The original session information was preserved at: %s"
 msgstr "元のセッション情報は次の場所に保全しました：%s"
 
-#: extension.js:476 extension.js:3018
+#: extension.js:487 extension.js:3163
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
-#: extension.js:509 pasteSets.js:109
+#: extension.js:520 pasteSets.js:121
 msgid "Could not save paste sets."
 msgstr "ペーストセットを保存できません。"
 
-#: extension.js:517
+#: extension.js:528
 msgid "Could not load paste sets"
 msgstr "ペーストセットを読み込めません"
 
-#: extension.js:758
+#: extension.js:773
 msgid "Could not move the item"
 msgstr "項目を移動できません"
 
-#: extension.js:797
+#: extension.js:816
 msgid "Could not add to the paste set"
 msgstr "セットへ追加できません"
 
-#: extension.js:865
+#: extension.js:884
 msgid "Could not create the paste set"
 msgstr "セットを作成できません"
 
-#: extension.js:900 extension.js:1162 pasteSets.js:201
+#: extension.js:973 extension.js:1272 pasteSets.js:257
 msgid "History"
 msgstr "履歴"
 
-#: extension.js:1063
+#: extension.js:1021
+msgid "Stop generating items"
+msgstr "候補の生成を中止"
+
+#: extension.js:1157
 msgid "Move up"
 msgstr "上へ移動"
 
-#: extension.js:1072
+#: extension.js:1166
 msgid "Move down"
 msgstr "下へ移動"
 
-#: extension.js:1081
+#: extension.js:1175
 msgid "Edit name and content"
 msgstr "名前と本文を編集"
 
-#: extension.js:1087
+#: extension.js:1181
 msgid "Delete item"
 msgstr "項目を削除"
 
-#: extension.js:1106
+#: extension.js:1201
 msgid "No matching items"
 msgstr "一致する項目がありません"
 
-#: extension.js:1107
+#: extension.js:1204
+msgid "Generating items…"
+msgstr "候補を生成しています…"
+
+#: extension.js:1207
+#, javascript-format
+msgid "Could not generate items: %s"
+msgstr "候補を生成できませんでした: %s"
+
+#: extension.js:1212
+msgid "Automatic generation paused. Use Refresh to load items."
+msgstr "自動生成は停止中です。更新ボタンで候補を取得できます。"
+
+#: extension.js:1215
+msgid "Generation stopped. Use Refresh to try again."
+msgstr "生成を中止しました。更新ボタンで再実行できます。"
+
+#: extension.js:1216
+msgid "The command returned no items."
+msgstr "コマンドから候補が返されませんでした。"
+
+#: extension.js:1217
 msgid "Drag a history item onto this tab to add it"
 msgstr "履歴の項目をこのタブへドラッグして追加できます"
 
-#: extension.js:1123
+#: extension.js:1233
 msgid "Automatic previews paused"
 msgstr "自動プレビュー停止中"
 
-#: extension.js:1127 extension.js:1938 pasteSetDialog.js:212
+#: extension.js:1237 extension.js:2080 pasteSetDialog.js:214
 msgid "Preview unavailable"
 msgstr "プレビューできません"
 
-#: extension.js:1128
+#: extension.js:1238
 msgid "Generating preview…"
 msgstr "プレビューを生成中…"
 
-#: extension.js:1138
+#: extension.js:1248
 msgid "Could not save paste sets"
 msgstr "ペーストセットを保存できません"
 
-#: extension.js:1167
+#: extension.js:1277
 msgid "Edit tab"
 msgstr "タブを編集"
 
-#: extension.js:1186
+#: extension.js:1308
 msgid "Rename paste set"
 msgstr "セット名を変更"
 
-#: extension.js:1186
+#: extension.js:1308
 msgid "Create paste set"
 msgstr "ペーストセットを作成"
 
-#: extension.js:1223
+#: extension.js:1362
 msgid "Edit paste item"
 msgstr "ペースト項目を編集"
 
-#: extension.js:1223
+#: extension.js:1362
 msgid "Add paste item"
 msgstr "ペースト項目を追加"
 
-#: extension.js:1328
+#: extension.js:1470
 msgid "Delete this item?"
 msgstr "項目を削除しますか？"
 
-#: extension.js:1328
+#: extension.js:1470
 msgid "Delete this paste set?"
 msgstr "セットを削除しますか？"
 
-#: extension.js:1329
+#: extension.js:1471
 msgid "Selected item"
 msgstr "選択した項目"
 
-#: extension.js:1331
+#: extension.js:1473
 msgid "This item will be removed from the paste set."
 msgstr "この項目をセットから削除します。"
 
-#: extension.js:1332
+#: extension.js:1474
 msgid "All items in this paste set will also be deleted."
 msgstr "セット内のすべての項目も削除します。"
 
-#: extension.js:1333
+#: extension.js:1475
 msgid "Delete"
 msgstr "削除"
 
-#: extension.js:1406
+#: extension.js:1548
 msgid "After paste"
 msgstr "貼付後"
 
-#: extension.js:1412
+#: extension.js:1554
 msgid "No action"
 msgstr "そのまま"
 
-#: extension.js:1423
+#: extension.js:1565
 msgid "No key after paste"
 msgstr "貼付後の操作なし"
 
-#: extension.js:1424
+#: extension.js:1566
 #, javascript-format
 msgid "Send %s after paste"
 msgstr "貼付後に%sキーを送る"
 
-#: extension.js:1468
+#: extension.js:1610
 msgid "On"
 msgstr "オン"
 
-#: extension.js:1468
+#: extension.js:1610
 msgid "Off"
 msgstr "オフ"
 
-#: extension.js:1877 extension.js:2008
+#: extension.js:2019 extension.js:2150
 msgid "Could not paste"
 msgstr "貼り付けできません"
 
-#: extension.js:1981 pasteSetDialog.js:529
+#: extension.js:2123 pasteSetDialog.js:546
 msgid "Could not execute the command"
 msgstr "コマンドを実行できません"
 
-#: extension.js:2174
+#: extension.js:2316
 msgid "Add to a paste set"
 msgstr "ペーストセットへ追加"
 
-#: extension.js:2195
+#: extension.js:2337
 msgid "Delete from history"
 msgstr "履歴から削除"
 
-#: extension.js:2250
+#: extension.js:2392
 #, javascript-format
 msgid "Command: %s"
 msgstr "コマンド：%s"
 
-#: extension.js:2290
+#: extension.js:2432
 msgid "Clear all?"
 msgstr "すべて削除しますか？"
 
-#: extension.js:2291
+#: extension.js:2433
 msgid "Are you sure you want to delete all clipboard items?"
 msgstr "クリップボードの履歴を全て削除してよろしいですか？"
 
-#: extension.js:2292
+#: extension.js:2434
 msgid "This operation cannot be undone."
 msgstr "削除した履歴は復元できません"
 
-#: extension.js:2298
+#: extension.js:2440
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:3172
+#: extension.js:3317
 msgid "Clipboard history was recovered"
 msgstr "クリップボード履歴を復旧しました"
 
-#: extension.js:3173
+#: extension.js:3318
 msgid "Could not save or load clipboard history"
 msgstr "クリップボード履歴を保存または読み込めません"
 
-#: extension.js:3177
+#: extension.js:3322
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 "読み取り可能な履歴を復元しました。元のファイルは次の場所に保全しました：%s"
 
-#: extension.js:3182
+#: extension.js:3327
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
 msgstr ""
 "保存先とディスクの空き容量を確認してください。一部のクリップボード履歴を保存"
 "または読み込めなかった可能性があります。"
+
+#: generatedTabs.js:7
+msgid "The command returned more than 1000 items."
+msgstr "コマンドの出力が1000候補を超えました。"
 
 #: historySession.js:11
 msgid "Could not create the session metadata directory."
@@ -456,86 +489,96 @@ msgstr "セッション情報を保存できません。"
 msgid "Name"
 msgstr "名前"
 
-#: pasteSetDialog.js:62
+#: pasteSetDialog.js:64
 msgid "Item type"
 msgstr "項目の種類"
 
-#: pasteSetDialog.js:72 pasteSetDialog.js:274
+#: pasteSetDialog.js:74 pasteSetDialog.js:283
 msgid "Text to paste"
 msgstr "貼り付ける本文"
 
-#: pasteSetDialog.js:105 pasteSetDialog.js:233
+#: pasteSetDialog.js:107 pasteSetDialog.js:236
 msgid "Execution mode"
 msgstr "実行方式"
 
-#: pasteSetDialog.js:118
+#: pasteSetDialog.js:120
 msgid "Trim trailing newlines"
 msgstr "末尾の改行を削除する"
 
-#: pasteSetDialog.js:121
+#: pasteSetDialog.js:123
 msgid "Preview output when opening this tab"
 msgstr "タブを開いたときに出力をプレビューする"
 
-#: pasteSetDialog.js:128
+#: pasteSetDialog.js:130
 msgid "Run and preview"
 msgstr "実行してプレビュー"
 
-#: pasteSetDialog.js:133
+#: pasteSetDialog.js:135
 msgid "Stop"
 msgstr "中止"
 
-#: pasteSetDialog.js:145
+#: pasteSetDialog.js:147
 msgid "About command execution"
 msgstr "コマンド実行について"
 
-#: pasteSetDialog.js:152
+#: pasteSetDialog.js:154
 msgid "Show or hide command execution details."
 msgstr "コマンド実行の説明を表示・非表示にします。"
 
-#: pasteSetDialog.js:172
+#: pasteSetDialog.js:174 pasteSetDialog.js:276
 msgid "Runs with your user permissions."
 msgstr "利用者の権限で実行されます。"
 
-#: pasteSetDialog.js:180 pasteSetDialog.js:509 pasteSetDialog.js:522
+#: pasteSetDialog.js:182 pasteSetDialog.js:526 pasteSetDialog.js:539
 msgid "Output"
 msgstr "出力"
 
-#: pasteSetDialog.js:192 pasteSetDialog.js:193
+#: pasteSetDialog.js:194 pasteSetDialog.js:195
 msgid "Command output"
 msgstr "コマンドの出力"
 
-#: pasteSetDialog.js:225
+#: pasteSetDialog.js:228
 msgid "Preview stopped"
 msgstr "プレビューを中止しました"
 
-#: pasteSetDialog.js:271 pasteSetDialog.js:339
+#: pasteSetDialog.js:275
+msgid "Opening this tab runs the command with your permissions."
+msgstr "このタブを開くと、利用者の権限でコマンドを実行します。"
+
+#: pasteSetDialog.js:277 pasteSetDialog.js:355
 msgid "Command"
 msgstr "コマンド"
 
-#: pasteSetDialog.js:271
+#: pasteSetDialog.js:277
 msgid "Body"
 msgstr "本文"
 
-#: pasteSetDialog.js:273
+#: pasteSetDialog.js:282
 msgid "Command to execute"
 msgstr "実行するコマンド"
 
-#: pasteSetDialog.js:290
+#: pasteSetDialog.js:300
+msgid ""
+"Opening this tab runs the command and turns each output line into a paste "
+"item."
+msgstr "このタブを開くとコマンドを実行し、出力の各行を貼り付け候補にします。"
+
+#: pasteSetDialog.js:304
 msgid "Opening this tab runs the command. Pasting uses the previewed output."
 msgstr ""
 "このタブを開くとコマンドを実行します。貼り付けにはプレビューの出力を使いま"
 "す。"
 
-#: pasteSetDialog.js:294
+#: pasteSetDialog.js:308
 msgid "Runs in Bash when pasted. Pipes and variable expansion are supported."
 msgstr "貼付時にBashで実行します。パイプ・変数展開が使えます。"
 
-#: pasteSetDialog.js:297
+#: pasteSetDialog.js:311
 msgid ""
 "Runs directly when pasted. Pipes and variable expansion are not performed."
 msgstr "貼付時に直接実行します。パイプ・変数展開は行いません。"
 
-#: pasteSetDialog.js:300
+#: pasteSetDialog.js:314
 msgid ""
 "Runs with your permissions and can modify or delete files or access the "
 "network. Commands execute even without output. Register only commands you "
@@ -545,44 +588,52 @@ msgstr ""
 "なくても実行されます。内容を理解し、信頼できるコマンドだけを登録してくださ"
 "い。"
 
-#: pasteSetDialog.js:303
+#: pasteSetDialog.js:317
 msgid ""
 "Commands requiring interactive input, such as password prompts, are not "
 "supported."
 msgstr "パスワード入力など、対話操作が必要なコマンドには対応しません。"
 
-#: pasteSetDialog.js:306
+#: pasteSetDialog.js:320
 msgid ""
 "Limits: 3 seconds and 64 KiB of output. Actions already performed cannot be "
 "undone."
 msgstr "制限は3秒・出力64KiBです。実行済みの操作は取り消せません。"
 
-#: pasteSetDialog.js:314 pasteSetDialog.js:374
+#: pasteSetDialog.js:328 pasteSetDialog.js:391
 msgid "Bash (one-liner)"
 msgstr "Bash（ワンライナー）"
 
-#: pasteSetDialog.js:315 pasteSetDialog.js:373
+#: pasteSetDialog.js:329 pasteSetDialog.js:390
 msgid "Direct execution"
 msgstr "直接実行"
 
-#: pasteSetDialog.js:318
+#: pasteSetDialog.js:332
 #, javascript-format
 msgid "Execution mode: %s"
 msgstr "実行方式: %s"
 
-#: pasteSetDialog.js:338
+#: pasteSetDialog.js:352
+msgid "Manual paste set"
+msgstr "手動のペーストセット"
+
+#: pasteSetDialog.js:352
 msgid "Text"
 msgstr "テキスト"
 
-#: pasteSetDialog.js:441
+#: pasteSetDialog.js:355
+msgid "Generate from command"
+msgstr "コマンドから生成"
+
+#: pasteSetDialog.js:458
 msgid "Delete tab"
 msgstr "タブを削除"
 
-#: pasteSetDialog.js:517
+#: pasteSetDialog.js:534
 msgid "Running command…"
 msgstr "コマンドを実行中…"
 
-#: pasteSetDialog.js:549
+#: pasteSetDialog.js:566
 msgid "Choose a paste set"
 msgstr "追加先のペーストセット"
 
@@ -594,7 +645,7 @@ msgstr "ペーストセットの保存先を作成できません。"
 msgid "Could not read paste sets."
 msgstr "ペーストセットを読み込めません。"
 
-#: pasteSets.js:53 pasteSets.js:72
+#: pasteSets.js:53 pasteSets.js:72 pasteSets.js:74 pasteSets.js:223
 msgid "Invalid paste set format."
 msgstr "ペーストセットの形式が不正です。"
 
@@ -602,32 +653,44 @@ msgstr "ペーストセットの形式が不正です。"
 msgid "Invalid history tab name."
 msgstr "履歴タブ名が不正です。"
 
-#: pasteSets.js:85
+#: pasteSets.js:84
+msgid "Invalid command tab format."
+msgstr "コマンド生成タブの形式が不正です。"
+
+#: pasteSets.js:97
 msgid "Invalid paste item format."
 msgstr "ペースト項目の形式が不正です。"
 
-#: pasteSets.js:97
+#: pasteSets.js:109
 msgid "Invalid command item format."
 msgstr "コマンド項目の形式が不正です。"
 
-#: pasteSets.js:108
+#: pasteSets.js:120
 msgid "Paste sets exceed the storage limit."
 msgstr "ペーストセットの保存容量を超えています。"
 
-#: pasteSets.js:204 pasteSets.js:206
+#: pasteSets.js:226
+msgid "Only an empty paste set can be changed to a command tab."
+msgstr "コマンド生成タブに変更できるのは、空のペーストセットだけです。"
+
+#: pasteSets.js:240 pasteSets.js:247 pasteSets.js:302
+msgid "Paste set not found."
+msgstr "セットが見つかりません。"
+
+#: pasteSets.js:249
+msgid "Generated items cannot be edited."
+msgstr "生成された候補は編集できません。"
+
+#: pasteSets.js:260 pasteSets.js:262
 msgid "untitled"
 msgstr "untitled"
 
-#: pasteSets.js:206
+#: pasteSets.js:262
 #, javascript-format
 msgid "%s %d"
 msgstr "%s %d"
 
-#: pasteSets.js:246
-msgid "Paste set not found."
-msgstr "セットが見つかりません。"
-
-#: pasteSets.js:274
+#: pasteSets.js:330
 msgid "The item to move was not found."
 msgstr "移動する項目が見つかりません。"
 

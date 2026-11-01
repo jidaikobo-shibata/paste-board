@@ -65,6 +65,28 @@ In a set, edit items to change their names or text, and drag them to change thei
 order. Use the bottom toolbar's edit button to rename or delete the set.
 Paste sets remain saved when you clear clipboard history.
 
+## Generated tabs
+
+Create a new paste set, select **Generate from command**, and enter a command.
+You can also change an empty set using the bottom toolbar's edit button.
+Choose **Bash (one-liner)** for pipes or variable expansion.
+
+Opening the tab runs the command. Each non-empty output line becomes a paste
+candidate; spaces are preserved. Candidates appear together after successful
+completion and stay in the command's order. Selecting a candidate pastes the
+captured text without running the command again.
+
+Use the refresh button to regenerate the list. While generation is running, that
+button stops it. Searching does not rerun the command; refreshing preserves the
+search and, where possible, the selected text. Generated candidates are read-only.
+Only the tab name, command, and execution mode are saved; results are discarded
+when the panel closes or you switch tabs.
+
+The pause button prevents automatic generation. You can still use **Refresh**
+to run the command explicitly while paused. Private mode blocks both operations.
+Commands have the same permissions and limits described below, plus a maximum
+of 1000 candidates. Failed commands never publish partial output.
+
 ## Repeated pasting
 
 Click the pin button at the bottom of the panel to keep it open while pasting.
@@ -87,7 +109,8 @@ Pasting uses that same output; search and reordering do not run it again.
 Selecting a pending preview gives it priority and waits at most 6 seconds.
 Closing the panel or switching tabs clears the preview.
 
-Use the pause button in the bottom toolbar to stop automatic previews before
+Use the pause button in the bottom toolbar to stop automatic previews and
+command-generated tabs before
 opening a tab. This setting stays on until you turn it off, including after
 logging in again. Selecting a command manually still runs and pastes its output.
 

@@ -17,7 +17,12 @@ if [[ ${1:-} != --session ]]; then
     "$XDG_DATA_HOME/gnome-shell/extensions/editor-test@local"
   ln -s "$editor_test_repo" \
     "$XDG_DATA_HOME/gnome-shell/extensions/paste-board@jidaikobo.shibata"
-  cp "$editor_test_repo/tests/editor-ui.test.js" \
+  editor_test_file=${PASTE_BOARD_UI_TEST_FILE:-editor-ui.test.js}
+  case "$editor_test_file" in
+    editor-ui.test.js|generated-tabs-ui.test.js) ;;
+    *) echo 'Unknown UI test fixture' >&2; exit 2 ;;
+  esac
+  cp "$editor_test_repo/tests/$editor_test_file" \
     "$XDG_DATA_HOME/gnome-shell/extensions/editor-test@local/extension.js"
   cat > "$XDG_DATA_HOME/gnome-shell/extensions/editor-test@local/metadata.json" <<'JSON'
 {"uuid":"editor-test@local","name":"Editor UI test","description":"Isolated test","shell-version":["50"]}
@@ -29,8 +34,9 @@ fi
 gsettings set org.gnome.shell disable-user-extensions false
 gsettings set org.gnome.shell enabled-extensions \
   '["paste-board@jidaikobo.shibata","editor-test@local"]'
+export PASTE_BOARD_TEST_DISPLAY="paste-board-editor-test-$$"
 gnome-shell --headless --wayland --no-x11 --virtual-monitor=1280x800 \
-  --wayland-display="paste-board-editor-test-$$" \
+  --wayland-display="$PASTE_BOARD_TEST_DISPLAY" \
   > "$XDG_CACHE_HOME/shell.log" 2>&1 &
 editor_test_pid=$!
 trap 'kill "$editor_test_pid" 2>/dev/null || true; wait "$editor_test_pid" 2>/dev/null || true' EXIT

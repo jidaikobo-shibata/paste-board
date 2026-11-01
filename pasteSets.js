@@ -70,6 +70,18 @@ export class PasteSets {
         set.items.length > 1000
       )
         throw new Error(_('Invalid paste set format.'));
+      if (set.kind !== undefined && !['manual', 'generated'].includes(set.kind))
+        throw new Error(_('Invalid paste set format.'));
+      if (
+        set.kind === 'generated' &&
+        (typeof set.command !== 'string' ||
+          !set.command.trim() ||
+          set.command.length > 8192 ||
+          set.command.includes('\0') ||
+          !['direct', 'bash'].includes(set.executionMode) ||
+          set.items.length)
+      )
+        throw new Error(_('Invalid command tab format.'));
       ids.add(set.id);
       for (const item of set.items) {
         if (
@@ -188,10 +200,54 @@ export class PasteSets {
     this.data = next;
   }
 
-  create(name) {
+  create(name, options = {}) {
     const id = GLib.uuid_string_random();
-    this.change((sets) => sets.push({ id, name: name.trim(), items: [] }));
+    this.change((sets) =>
+      sets.push(
+        this._configuredSet(
+          { id, name: name.trim(), items: [] },
+          name,
+          options,
+        ),
+      ),
+    );
     return id;
+  }
+
+  _configuredSet(
+    set,
+    name,
+    { kind = 'manual', command = '', executionMode = 'direct' } = {},
+  ) {
+    if (!['manual', 'generated'].includes(kind))
+      throw new Error(_('Invalid paste set format.'));
+    if (kind === 'generated' && set.items.length)
+      throw new Error(
+        _('Only an empty paste set can be changed to a command tab.'),
+      );
+    const next = { ...set, name: name.trim() };
+    delete next.kind;
+    delete next.command;
+    delete next.executionMode;
+    if (kind === 'generated')
+      Object.assign(next, { kind, command, executionMode });
+    return next;
+  }
+
+  configure(id, name, options) {
+    this.change((sets) => {
+      const index = sets.findIndex((set) => set.id === id);
+      if (index < 0) throw new Error(_('Paste set not found.'));
+      sets[index] = this._configuredSet(sets[index], name, options);
+    });
+  }
+
+  _manualSet(sets, id) {
+    const set = sets.find((entry) => entry.id === id);
+    if (!set) throw new Error(_('Paste set not found.'));
+    if (set.kind === 'generated')
+      throw new Error(_('Generated items cannot be edited.'));
+    return set;
   }
 
   createFromItem(item) {
@@ -250,7 +306,7 @@ export class PasteSets {
 
   put(setId, item) {
     this.change((sets) => {
-      const set = sets.find((set) => set.id === setId);
+      const set = this._manualSet(sets, setId);
       const previous = set.items.find((entry) => entry.id === item.id);
       const next = this._copyItem(item, previous);
       if (previous) set.items[set.items.indexOf(previous)] = next;
@@ -260,7 +316,7 @@ export class PasteSets {
 
   removeItem(setId, itemId) {
     this.change((sets) => {
-      const items = sets.find((set) => set.id === setId).items;
+      const items = this._manualSet(sets, setId).items;
       const index = items.findIndex((item) => item.id === itemId);
       if (index >= 0) items.splice(index, 1);
     });
@@ -268,7 +324,7 @@ export class PasteSets {
 
   moveRelative(setId, itemId, targetId, after) {
     this.change((sets) => {
-      const items = sets.find((set) => set.id === setId)?.items;
+      const items = this._manualSet(sets, setId).items;
       const index = items?.findIndex((item) => item.id === itemId) ?? -1;
       if (index < 0 || !items.some((item) => item.id === targetId))
         throw new Error(_('The item to move was not found.'));
@@ -281,7 +337,7 @@ export class PasteSets {
 
   move(setId, itemId, direction) {
     this.change((sets) => {
-      const items = sets.find((set) => set.id === setId).items;
+      const items = this._manualSet(sets, setId).items;
       const index = items.findIndex((item) => item.id === itemId);
       const target = index + direction;
       if (index >= 0 && target >= 0 && target < items.length)

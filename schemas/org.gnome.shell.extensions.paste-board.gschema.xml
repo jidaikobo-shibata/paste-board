@@ -5,7 +5,7 @@
 
     <key type="b" name="pause-command-previews">
       <default>false</default>
-      <summary>Pause automatic command previews until manually resumed</summary>
+      <summary>Pause automatic previews and generated tabs until manually resumed</summary>
     </key>
 
     <key type="a{s(uu)}" name="application-paste-shortcuts">
