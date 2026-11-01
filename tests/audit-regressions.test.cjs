@@ -2449,3 +2449,30 @@ test('history capacity reserves archive bytes and record overhead', () => {
   assert.equal(owner.entries.last().text, 'new');
   assert.equal(owner._archivedHistoryEntries.bytes, 4);
 });
+
+test('missing paste sets fall back to visible history without losing saved search scope', () => {
+  const [owner, context] = instance([
+    '_isCrossTabSearch',
+    '_applyPasteSetVisibility',
+  ]);
+  Object.assign(owner, {
+    _searchAllTabs: true,
+    _activePasteTab: 'unavailable',
+    searchEntry: { get_text: () => 'server prod' },
+    scrollViewMenuSection: { actor: {} },
+    _pasteSetContainer: { actor: {} },
+    _searchResultsContainer: { actor: {} },
+  });
+  assert.equal(owner._isCrossTabSearch(), false);
+  owner._applyPasteSetVisibility();
+  assert.equal(owner.scrollViewMenuSection.actor.visible, true);
+  assert.equal(owner._pasteSetContainer.actor.visible, false);
+  assert.equal(owner._searchResultsContainer.actor.visible, false);
+  assert.equal(owner._searchAllTabs, true);
+  context.PRIVATE_MODE = true;
+  owner._applyPasteSetVisibility();
+  assert.equal(owner.scrollViewMenuSection.actor.visible, false);
+  context.PRIVATE_MODE = false;
+  owner._pasteSets = { data: { sets: [] } };
+  assert.equal(owner._isCrossTabSearch(), true);
+});

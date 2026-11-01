@@ -276,7 +276,7 @@ export default class extends Extension {
       'Help ran a command or did not collapse',
     );
     const checks = descendants(dialog).filter(
-      (actor) => actor.accessible_role === Atk.Role.CHECK_BOX,
+      (actor) => actor.accessible_role === Atk.Role.CHECK_BOX && actor.visible,
     );
     assert(checks.length === 2, 'Command options are not standard checkboxes');
     checks[0].grab_key_focus();

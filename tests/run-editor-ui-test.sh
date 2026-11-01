@@ -19,9 +19,14 @@ if [[ ${1:-} != --session ]]; then
     "$XDG_DATA_HOME/gnome-shell/extensions/paste-board@jidaikobo.shibata"
   editor_test_file=${PASTE_BOARD_UI_TEST_FILE:-editor-ui.test.js}
   case "$editor_test_file" in
-    editor-ui.test.js|generated-tabs-ui.test.js|search-ui.test.js) ;;
+    editor-ui.test.js|generated-tabs-ui.test.js|search-ui.test.js|history-only-ui.test.js) ;;
     *) echo 'Unknown UI test fixture' >&2; exit 2 ;;
   esac
+  if [[ $editor_test_file == history-only-ui.test.js ]]; then
+    mkdir -p "$XDG_CONFIG_HOME/paste-board@jidaikobo.shibata"
+    printf '%s' '{invalid' > \
+      "$XDG_CONFIG_HOME/paste-board@jidaikobo.shibata/paste-sets.json"
+  fi
   cp "$editor_test_repo/tests/$editor_test_file" \
     "$XDG_DATA_HOME/gnome-shell/extensions/editor-test@local/extension.js"
   cat > "$XDG_DATA_HOME/gnome-shell/extensions/editor-test@local/metadata.json" <<'JSON'

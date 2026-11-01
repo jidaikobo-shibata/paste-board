@@ -611,15 +611,15 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _isCrossTabSearch() {
     return Boolean(
+      this._pasteSets &&
       this._searchAllTabs &&
       searchTerms(this.searchEntry?.get_text() || '').length,
     );
   }
 
   _applyPasteSetVisibility() {
-    if (!this._pasteSets) return;
     const cross = this._isCrossTabSearch();
-    const history = this._activePasteTab === 'history';
+    const history = !this._pasteSets || this._activePasteTab === 'history';
     this.scrollViewMenuSection.actor.visible =
       history && !cross && !PRIVATE_MODE;
     this._pasteSetContainer.actor.visible = !history && !cross && !PRIVATE_MODE;
@@ -1048,6 +1048,12 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _renderAllTabSearch() {
+    if (!this._pasteSets) {
+      this._searchResultsSection?.removeAll();
+      this._applyPasteSetVisibility();
+      if (this.entries && !PRIVATE_MODE) this._onSearchTextChanged();
+      return;
+    }
     const section = this._searchResultsSection;
     const oldRows = section._getMenuItems().filter((row) => row.entry);
     const focus = global.stage.get_key_focus();
