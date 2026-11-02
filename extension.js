@@ -2008,6 +2008,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return Clutter.EVENT_STOP;
     }
     if (this._handleSearchToggleKeyEvent?.(event)) return Clutter.EVENT_STOP;
+    if (this._handleSearchLastKeyEvent?.(event)) return Clutter.EVENT_STOP;
     if (this._handleCtrlSelectKeyEvent(event)) return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
     if (symbol === Clutter.KEY_Escape) {
@@ -2641,6 +2642,55 @@ class ClipboardIndicator extends PanelMenu.Button {
     // Let Clutter/its input method process the original key, including the first
     // character and compose sequences. Consume the outer event to avoid repeats.
     text.event(event, false);
+    return true;
+  }
+
+  _handleSearchLastKeyEvent(event) {
+    if (
+      !this.menu.isOpen ||
+      !this.entries ||
+      this._destroyed ||
+      this._quickPasteBusy ||
+      PRIVATE_MODE ||
+      !this._isSearchActor(global.stage.get_key_focus()) ||
+      ![Clutter.KEY_Up, Clutter.KEY_KP_Up].includes(event.get_key_symbol()) ||
+      modifierBits(event.get_state(), Clutter.ModifierType) !== 0 ||
+      this.searchEntry.clutter_text.has_preedit()
+    )
+      return false;
+    if (this._initialFocusCallbackId) {
+      GLib.Source.remove(this._initialFocusCallbackId);
+      this._initialFocusCallbackId = undefined;
+    }
+    if (this._isCrossTabSearch()) {
+      this._searchRenderLimit =
+        this.entries.length +
+        this._pasteSets.data.sets.reduce(
+          (count, set) =>
+            count +
+            (set.kind === 'generated'
+              ? this._generatedTabs?.get(set)?.items.length || 0
+              : set.items.length),
+          0,
+        );
+      this._renderAllTabSearch();
+    } else if (this._pasteSets && this._activePasteTab !== 'history') {
+      const set = this._pasteSets.data.sets.find(
+        (set) => set.id === this._activePasteTab,
+      );
+      this._pasteSetRenderLimit =
+        set?.kind === 'generated'
+          ? this._generatedTabs?.get(set)?.items.length
+          : set?.items.length;
+      this._renderPasteSets();
+    } else {
+      this._historyRenderLimit = this.entries.length;
+      if (this.searchEntry.get_text())
+        this.populateSearchResults(this.searchEntry.get_text());
+      else this._ensureHistoryRows();
+    }
+    const rows = this._visiblePasteCandidates();
+    rows[rows.length - 1]?.grab_key_focus();
     return true;
   }
 

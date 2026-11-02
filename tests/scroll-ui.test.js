@@ -258,6 +258,82 @@ export default class extends Extension {
       'Raised limit failed to recover cached output',
     );
     owner.settings.set_int('history-size', 1000);
+    owner._switchPasteTab(id);
+    owner._searchAllTabs = false;
+    owner.searchEntry.set_text('');
+    owner._onSearchTextChanged();
+    await delay(150);
+    assert(
+      rows().length === 50,
+      'Tail navigation test did not start with a partial list',
+    );
+    const keyboard = Clutter.get_default_backend()
+      .get_default_seat()
+      .create_virtual_device(Clutter.InputDeviceType.KEYBOARD_DEVICE);
+    const up = async () => {
+      owner.searchEntry.clutter_text.grab_key_focus();
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Up,
+        Clutter.KeyState.PRESSED,
+      );
+      keyboard.notify_keyval(
+        GLib.get_monotonic_time(),
+        Clutter.KEY_Up,
+        Clutter.KeyState.RELEASED,
+      );
+      await delay(250);
+    };
+    await up();
+    assert(
+      rows().length === 120 && global.stage.get_key_focus() === rows()[119],
+      'Search Up did not reach the unrendered manual tail',
+    );
+    assert(
+      owner._pasteSetScroll.vadjustment.value > 0,
+      'Tail was not scrolled into view',
+    );
+    owner._switchPasteTab(generatedId);
+    await delay(100);
+    await up();
+    assert(
+      rows().at(-1)?.entry.text === 'ssh host119' &&
+        global.stage.get_key_focus() === rows().at(-1),
+      'Search Up did not reach generated tail',
+    );
+    owner._switchPasteTab('history');
+    await delay(100);
+    await up();
+    assert(
+      rows().length === owner.entries.length &&
+        global.stage.get_key_focus() === rows().at(-1),
+      'Search Up did not reach history tail',
+    );
+    owner.searchEntry.set_text('scroll item');
+    await delay(100);
+    await up();
+    assert(
+      rows().length === owner.entries.length &&
+        rows().at(-1)?.entry === owner.entries.head,
+      'Search Up did not reach the filtered history tail',
+    );
+    owner.searchEntry.set_text('candidate');
+    owner._searchAllTabs = true;
+    owner._onSearchTextChanged();
+    await delay(100);
+    await up();
+    assert(
+      rows().at(-1)?.entry.text === 'manual candidate 119' &&
+        global.stage.get_key_focus() === rows().at(-1),
+      'Search Up did not reach global result tail',
+    );
+    owner.searchEntry.set_text('no such tail result');
+    await delay(100);
+    await up();
+    assert(
+      global.stage.get_key_focus() === owner.searchEntry.clutter_text,
+      'Empty results moved focus away from search',
+    );
     console.log(
       `SCROLL_UI: 1000 rows reachable; largest batch overhead ${worst.toFixed(1)} ms`,
     );

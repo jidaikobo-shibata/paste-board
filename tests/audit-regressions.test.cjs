@@ -2700,3 +2700,50 @@ test('unassigned input and IME keys keep the panel open; Escape explicitly close
     assert.equal(closes, 1);
   }
 });
+
+test('Up in search focuses the full history tail and respects IME preedit', () => {
+  let focus = 'search',
+    preedit = false,
+    rendered = 0;
+  const last = {
+    grab_key_focus: () => {
+      focus = last;
+    },
+  };
+  const [owner] = instance(['_handleSearchLastKeyEvent'], {
+    Clutter: { KEY_Up: 1, KEY_KP_Up: 2, ModifierType: {} },
+    modifierBits: (state) => state,
+    global: { stage: { get_key_focus: () => focus } },
+  });
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    entries: { length: 1000 },
+    searchEntry: {
+      clutter_text: { has_preedit: () => preedit },
+      get_text: () => '',
+    },
+    _isSearchActor: (actor) => actor === 'search',
+    _isCrossTabSearch: () => false,
+    _ensureHistoryRows: () => {
+      rendered = owner._historyRenderLimit;
+    },
+    _visiblePasteCandidates: () => [last],
+  });
+  const event = { get_key_symbol: () => 1, get_state: () => 0 };
+  preedit = true;
+  assert.equal(owner._handleSearchLastKeyEvent(event), false);
+  assert.equal(rendered, 0);
+  preedit = false;
+  assert.equal(owner._handleSearchLastKeyEvent(event), true);
+  assert.equal(rendered, 1000);
+  assert.equal(focus, last);
+  assert.equal(owner._handleSearchLastKeyEvent(event), false);
+  focus = 'search';
+  owner._visiblePasteCandidates = () => [];
+  assert.equal(owner._handleSearchLastKeyEvent(event), true);
+  assert.equal(focus, 'search');
+  assert.equal(
+    owner._handleSearchLastKeyEvent({ ...event, get_state: () => 4 }),
+    false,
+  );
+});
