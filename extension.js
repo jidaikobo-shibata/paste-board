@@ -2010,6 +2010,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (this._handleSearchToggleKeyEvent?.(event)) return Clutter.EVENT_STOP;
     if (this._handleCtrlSelectKeyEvent(event)) return Clutter.EVENT_STOP;
     const symbol = event.get_key_symbol();
+    if (symbol === Clutter.KEY_Escape) {
+      this.menu.close();
+      return Clutter.EVENT_STOP;
+    }
     if (
       this._pasteSets &&
       [
@@ -2106,10 +2110,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     )
       return Clutter.EVENT_STOP;
     if (this._handleTypeToSearch(event)) return Clutter.EVENT_STOP;
-    this.menu.close();
-    // Propagation inside Shell does not forward this already captured key to
-    // the Wayland client. Consume it rather than synthesize arbitrary input.
-    return Clutter.EVENT_STOP;
+    // Unassigned keys belong to the focused Shell control/input method.
+    // Close only on explicit actions, never by guessing an unfamiliar key.
+    return Clutter.EVENT_PROPAGATE;
   }
 
   _focusNextMenuControl(backward) {

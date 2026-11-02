@@ -34,7 +34,8 @@ Enable them and choose your keys in preferences if desired.
 - Scroll to browse items; more rows load as you approach the bottom. Number shortcuts stay assigned to the first nine items in the list.
 - **Ctrl+F**: switch between search and the last selected candidate.
   **/** outside search also focuses it.
-- **Esc**: close the panel.
+- **Esc** or **your chosen modifiers + 0**: close the panel. Unassigned keys
+  do not close it; they are left to the focused control or input method.
 
 Type letters or digits anywhere in the panel to start searching, including the
 first character. Enabled number shortcuts still paste.

@@ -2603,3 +2603,56 @@ test('emptying a set confirms the captured tab and rejects generated tabs', () =
   assert.equal(confirmations, 1);
   assert.deepEqual(cleared, ['one']);
 });
+
+test('unassigned input and IME keys keep the panel open; Escape explicitly closes it', () => {
+  for (const searchFocused of [false, true]) {
+    let closes = 0;
+    const [owner] = instance(['_captureQuickPasteKey'], {
+      modifierBits: (value) => value,
+      St: { Button: class {} },
+      global: { stage: { get_key_focus: () => null } },
+      Clutter: {
+        EventType: { KEY_PRESS: 1, KEY_RELEASE: 2 },
+        KEY_Escape: 65307,
+        EVENT_STOP: true,
+        EVENT_PROPAGATE: false,
+      },
+    });
+    Object.assign(owner, {
+      menu: { isOpen: true, close: () => closes++ },
+      _quickPasteKeysHeld: new Set(),
+      _handleCtrlSelectKeyEvent: () => false,
+      _handleTypeToSearch: () => false,
+      _isSearchActor: () => searchFocused,
+    });
+    for (const [symbol, bits, unicode] of [
+      [65314, 0, ''],
+      [65315, 0, ''],
+      [65473, 1, ''],
+      [119, 1, 'w'],
+      [65361, 2, ''],
+    ]) {
+      assert.equal(
+        owner._captureQuickPasteKey({
+          type: () => 1,
+          get_key_code: () => 100,
+          get_state: () => bits,
+          get_key_symbol: () => symbol,
+          get_key_unicode: () => unicode,
+        }),
+        false,
+      );
+      assert.equal(closes, 0);
+    }
+    assert.equal(
+      owner._captureQuickPasteKey({
+        type: () => 1,
+        get_key_code: () => 9,
+        get_state: () => 0,
+        get_key_symbol: () => 65307,
+      }),
+      true,
+    );
+    assert.equal(closes, 1);
+  }
+});

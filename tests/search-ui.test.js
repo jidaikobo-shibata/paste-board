@@ -685,6 +685,36 @@ export default class extends Extension {
         !owner._pendingGeneratedRender,
       'Completed preview was not rendered after paste',
     );
+    await query('');
+    rows()[0]?.grab_key_focus();
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Control_L,
+      Clutter.KeyState.PRESSED,
+    );
+    await key(Clutter.KEY_w);
+    await key(Clutter.KEY_F4);
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Control_L,
+      Clutter.KeyState.RELEASED,
+    );
+    assert(owner.menu.isOpen, 'Unassigned control keys closed the panel');
+    owner.searchEntry.clutter_text.grab_key_focus();
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Control_L,
+      Clutter.KeyState.PRESSED,
+    );
+    await key(Clutter.KEY_w);
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Control_L,
+      Clutter.KeyState.RELEASED,
+    );
+    assert(owner.menu.isOpen, 'Search editing key closed the panel');
+    await key(Clutter.KEY_Escape);
+    assert(!owner.menu.isOpen, 'Escape did not close the panel from search');
     owner.menu.close();
   }
 }
