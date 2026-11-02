@@ -39,7 +39,8 @@
     </key>
     <key type="i" name="history-size">
       <default>1000</default>
-      <summary>The maximum number of items to remember</summary>
+      <summary>Maximum number of items in history and in each paste set</summary>
+      <description>Old history is removed at the limit. Existing paste set items are kept when lowering it; additions are blocked. Generated output exceeding the limit is rejected.</description>
       <range min="1" max="100000" />
     </key>
 

@@ -7,7 +7,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-02 12:18+0900\n"
+"POT-Creation-Date: 2026-11-02 12:36+0900\n"
 "PO-Revision-Date: 2023-04-12 17:22+0200\n"
 "Last-Translator: Kryštof Černý <cleerline1mc@gmail.com>\n"
 "Language-Team: \n"
@@ -17,7 +17,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "X-Generator: Poedit 3.2.2\n"
 
-#: appPastePrefs.js:59 extension.js:1766 extension.js:2830 extension.js:2847
+#: appPastePrefs.js:59 extension.js:1794 extension.js:2858 extension.js:2875
 #: pasteSetDialog.js:495 pasteSetDialog.js:638
 msgid "Cancel"
 msgstr "Storno"
@@ -91,7 +91,7 @@ msgstr ""
 msgid "Add application"
 msgstr ""
 
-#: appPastePrefs.js:277 extension.js:1897
+#: appPastePrefs.js:277 extension.js:1925
 #, javascript-format
 msgid "%s: %s"
 msgstr ""
@@ -110,11 +110,11 @@ msgstr ""
 msgid "Could not save application shortcuts."
 msgstr ""
 
-#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2272
+#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2300
 msgid "Could not read clipboard text."
 msgstr ""
 
-#: clipboardRead.js:62 extension.js:2280 extension.js:3252
+#: clipboardRead.js:62 extension.js:2308 extension.js:3292
 msgid "Copied text exceeds the size limit."
 msgstr ""
 
@@ -192,319 +192,320 @@ msgstr ""
 msgid "All tabs"
 msgstr ""
 
-#: extension.js:323
+#: extension.js:324
 msgid "Private mode: pause history recording"
 msgstr ""
 
-#: extension.js:328
+#: extension.js:329
 msgid "Pin the panel"
 msgstr ""
 
-#: extension.js:333
+#: extension.js:334
 msgid "Pause automatic commands"
 msgstr ""
 
-#: extension.js:341 extension.js:1261
+#: extension.js:342 extension.js:1266
 msgid "Refresh generated items"
 msgstr ""
 
-#: extension.js:347
+#: extension.js:348
 msgid "Add a paste set"
 msgstr ""
 
-#: extension.js:354
+#: extension.js:355
 msgid "Edit the current tab"
 msgstr ""
 
-#: extension.js:375
+#: extension.js:376
 msgid "Open preferences"
 msgstr ""
 
-#: extension.js:486 extension.js:519
+#: extension.js:487 extension.js:520
 msgid "Could not prepare history cleanup on logout"
 msgstr ""
 
-#: extension.js:495 historySession.js:9
+#: extension.js:496 historySession.js:9
 msgid "Cannot identify the login session."
 msgstr ""
 
-#: extension.js:509
+#: extension.js:510
 msgid "Session information was recovered"
 msgstr ""
 
-#: extension.js:511
+#: extension.js:512
 #, javascript-format
 msgid "The original session information was preserved at: %s"
 msgstr ""
 
-#: extension.js:534 extension.js:3577
+#: extension.js:535 extension.js:3620
 msgid "Could not save session metadata"
 msgstr ""
 
-#: extension.js:567 pasteSets.js:123
+#: extension.js:569 pasteSets.js:124
 msgid "Could not save paste sets."
 msgstr ""
 
-#: extension.js:575
+#: extension.js:577
 msgid "Could not load paste sets"
 msgstr ""
 
-#: extension.js:838
+#: extension.js:842
 msgid "Could not move the item"
 msgstr ""
 
-#: extension.js:881
+#: extension.js:885
 msgid "Could not add to the paste set"
 msgstr ""
 
-#: extension.js:949
+#: extension.js:953
 msgid "Could not create the paste set"
 msgstr ""
 
-#: extension.js:1069 extension.js:1197 extension.js:1558 pasteSets.js:272
+#: extension.js:1074 extension.js:1202 extension.js:1586 pasteSets.js:287
 msgid "History"
 msgstr ""
 
-#: extension.js:1137 extension.js:1441
+#: extension.js:1142 extension.js:1469
 msgid "No matching items"
-msgstr ""
-
-#: extension.js:1146
-#, javascript-format
-msgid "Generating candidates: %s"
-msgstr ""
-
-#: extension.js:1148
-#, javascript-format
-msgid "Could not generate candidates: %s"
-msgstr ""
-
-#: extension.js:1150
-#, javascript-format
-msgid "Generation stopped: %s"
 msgstr ""
 
 #: extension.js:1151
 #, javascript-format
+msgid "Generating candidates: %s"
+msgstr ""
+
+#: extension.js:1153
+#, javascript-format
+msgid "Could not generate candidates: %s"
+msgstr ""
+
+#: extension.js:1155
+#, javascript-format
+msgid "Generation stopped: %s"
+msgstr ""
+
+#: extension.js:1156
+#, javascript-format
 msgid "Generated candidates not searched: %s"
 msgstr ""
 
-#: extension.js:1260
+#: extension.js:1265
 msgid "Stop generating items"
 msgstr ""
 
-#: extension.js:1397
+#: extension.js:1425
 msgid "Move up"
 msgstr ""
 
-#: extension.js:1406
+#: extension.js:1434
 msgid "Move down"
 msgstr ""
 
-#: extension.js:1415
+#: extension.js:1443
 msgid "Edit name and content"
 msgstr ""
 
-#: extension.js:1421
+#: extension.js:1449
 msgid "Delete item"
 msgstr ""
 
-#: extension.js:1444
+#: extension.js:1472
 msgid "Generating items…"
 msgstr ""
 
-#: extension.js:1447
+#: extension.js:1475
 #, javascript-format
 msgid "Could not generate items: %s"
 msgstr ""
 
-#: extension.js:1452
+#: extension.js:1480
 msgid "Automatic generation paused. Use Refresh to load items."
 msgstr ""
 
-#: extension.js:1455
+#: extension.js:1483
 msgid "Generation stopped. Use Refresh to try again."
 msgstr ""
 
-#: extension.js:1456
+#: extension.js:1484
 msgid "The command returned no items."
 msgstr ""
 
-#: extension.js:1457
+#: extension.js:1485
 msgid "Drag a history item onto this tab to add it"
 msgstr ""
 
-#: extension.js:1473
+#: extension.js:1501
 msgid "Automatic previews paused"
 msgstr ""
 
-#: extension.js:1477 extension.js:2384 pasteSetDialog.js:234
+#: extension.js:1505 extension.js:2412 pasteSetDialog.js:234
 msgid "Preview unavailable"
 msgstr ""
 
-#: extension.js:1478
+#: extension.js:1506
 msgid "Generating preview…"
 msgstr ""
 
-#: extension.js:1488
+#: extension.js:1516
 msgid "Could not save paste sets"
 msgstr ""
 
-#: extension.js:1535
+#: extension.js:1563
 msgid "Edit tab…"
 msgstr ""
 
-#: extension.js:1542
+#: extension.js:1570
 msgid "Delete tab…"
 msgstr ""
 
-#: extension.js:1563
+#: extension.js:1591
 msgid "Edit tab"
 msgstr ""
 
-#: extension.js:1596
+#: extension.js:1624
 msgid "Rename paste set"
 msgstr ""
 
-#: extension.js:1596
+#: extension.js:1624
 msgid "Create paste set"
 msgstr ""
 
-#: extension.js:1652
+#: extension.js:1680
 msgid "Edit paste item"
 msgstr ""
 
-#: extension.js:1652
+#: extension.js:1680
 msgid "Add paste item"
 msgstr ""
 
-#: extension.js:1760
+#: extension.js:1788
 msgid "Delete this item?"
 msgstr ""
 
-#: extension.js:1760
+#: extension.js:1788
 msgid "Delete this paste set?"
 msgstr ""
 
-#: extension.js:1761
+#: extension.js:1789
 msgid "Selected item"
 msgstr ""
 
-#: extension.js:1763
+#: extension.js:1791
 msgid "This item will be removed from the paste set."
 msgstr ""
 
-#: extension.js:1764
+#: extension.js:1792
 msgid "All items in this paste set will also be deleted."
 msgstr ""
 
-#: extension.js:1765
+#: extension.js:1793
 msgid "Delete"
 msgstr ""
 
-#: extension.js:1837
+#: extension.js:1865
 msgid "After paste"
 msgstr ""
 
-#: extension.js:1843
+#: extension.js:1871
 msgid "No action"
 msgstr ""
 
-#: extension.js:1854
+#: extension.js:1882
 msgid "No key after paste"
 msgstr ""
 
-#: extension.js:1855
+#: extension.js:1883
 #, javascript-format
 msgid "Send %s after paste"
 msgstr ""
 
-#: extension.js:1899
+#: extension.js:1927
 msgid "On"
 msgstr ""
 
-#: extension.js:1899 prefs.js:195
+#: extension.js:1927 prefs.js:203
 msgid "Off"
 msgstr ""
 
-#: extension.js:2323 extension.js:2454
+#: extension.js:2351 extension.js:2482
 msgid "Could not paste"
 msgstr ""
 
-#: extension.js:2427 pasteSetDialog.js:591
+#: extension.js:2455 pasteSetDialog.js:591
 msgid "Could not execute the command"
 msgstr ""
 
-#: extension.js:2667
+#: extension.js:2695
 msgid "Add to a paste set"
 msgstr ""
 
-#: extension.js:2688
+#: extension.js:2716
 msgid "Delete from history"
 msgstr ""
 
-#: extension.js:2743
+#: extension.js:2771
 #, javascript-format
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:2807
+#: extension.js:2835
 msgid "Generated tabs cannot be emptied"
 msgstr ""
 
-#: extension.js:2809
+#: extension.js:2837
 msgid "Empty history (keep clipboard)"
 msgstr ""
 
-#: extension.js:2810
+#: extension.js:2838
 msgid "Empty this paste set"
 msgstr ""
 
-#: extension.js:2826
+#: extension.js:2854
 msgid "Empty this paste set?"
 msgstr ""
 
-#: extension.js:2828
+#: extension.js:2856
 msgid "All items will be removed. The tab and clipboard will be kept."
 msgstr ""
 
-#: extension.js:2829 extension.js:2846
+#: extension.js:2857 extension.js:2874
 msgid "Clear"
 msgstr "Vyčistit"
 
-#: extension.js:2843
+#: extension.js:2871
 msgid "Clear history?"
 msgstr ""
 
-#: extension.js:2844
+#: extension.js:2872
 msgid "All clipboard history will be removed."
 msgstr ""
 
-#: extension.js:2845
+#: extension.js:2873
 msgid "The clipboard and paste sets will be kept."
 msgstr ""
 
-#: extension.js:3731
+#: extension.js:3774
 msgid "Clipboard history was recovered"
 msgstr ""
 
-#: extension.js:3732
+#: extension.js:3775
 msgid "Could not save or load clipboard history"
 msgstr ""
 
-#: extension.js:3736
+#: extension.js:3779
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 
-#: extension.js:3741
+#: extension.js:3784
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."
 msgstr ""
 
-#: generatedTabs.js:7
-msgid "The command returned more than 1000 items."
+#: generatedTabs.js:8
+#, javascript-format
+msgid "The command returned more than %d items."
 msgstr ""
 
 #: historySession.js:11
@@ -670,60 +671,65 @@ msgstr ""
 msgid "Choose a paste set"
 msgstr ""
 
-#: pasteSets.js:17
+#: pasteSets.js:18
 msgid "Could not create the paste set directory."
 msgstr ""
 
-#: pasteSets.js:23
+#: pasteSets.js:24
 msgid "Could not read paste sets."
 msgstr ""
 
-#: pasteSets.js:53 pasteSets.js:72 pasteSets.js:76 pasteSets.js:232
+#: pasteSets.js:54 pasteSets.js:73 pasteSets.js:77 pasteSets.js:247
 msgid "Invalid paste set format."
 msgstr ""
 
-#: pasteSets.js:60
+#: pasteSets.js:61
 msgid "Invalid history tab name."
 msgstr ""
 
-#: pasteSets.js:74 pasteSets.js:86 pasteSets.js:230
+#: pasteSets.js:75 pasteSets.js:87 pasteSets.js:245
 msgid "Invalid command tab format."
 msgstr ""
 
-#: pasteSets.js:99
+#: pasteSets.js:100
 msgid "Invalid paste item format."
 msgstr ""
 
-#: pasteSets.js:111
+#: pasteSets.js:112
 msgid "Invalid command item format."
 msgstr ""
 
-#: pasteSets.js:122
+#: pasteSets.js:123
 msgid "Paste sets exceed the storage limit."
 msgstr ""
 
-#: pasteSets.js:235
+#: pasteSets.js:213
+#, javascript-format
+msgid "This paste set has reached the limit of %d items."
+msgstr ""
+
+#: pasteSets.js:250
 msgid "Only an empty paste set can be changed to a command tab."
 msgstr ""
 
-#: pasteSets.js:255 pasteSets.js:262 pasteSets.js:317
+#: pasteSets.js:270 pasteSets.js:277 pasteSets.js:332
 msgid "Paste set not found."
 msgstr ""
 
-#: pasteSets.js:264
+#: pasteSets.js:279
 msgid "Generated items cannot be edited."
 msgstr ""
 
-#: pasteSets.js:275 pasteSets.js:277
+#: pasteSets.js:290 pasteSets.js:292
 msgid "untitled"
 msgstr ""
 
-#: pasteSets.js:277
+#: pasteSets.js:292
 #, javascript-format
 msgid "%s %d"
 msgstr ""
 
-#: pasteSets.js:351
+#: pasteSets.js:366
 msgid "The item to move was not found."
 msgstr ""
 
@@ -739,104 +745,117 @@ msgstr ""
 msgid "Invalid paste shortcut."
 msgstr ""
 
-#: prefs.js:65
-msgid "Do not show"
-msgstr ""
-
-#: prefs.js:66
-msgid "Highlight the icon"
-msgstr ""
-
-#: prefs.js:67
-msgid "Highlight the icon and show a bubble"
-msgstr ""
-
-#: prefs.js:68
-msgid "Highlight the entire top bar"
-msgstr ""
-
-#: prefs.js:69
-msgid "System notification"
+#: prefs.js:42
+msgid ""
+"Lowering the limit keeps existing paste set items but prevents further "
+"additions until the set is below the limit."
 msgstr ""
 
 #: prefs.js:70
+msgid "Do not show"
+msgstr ""
+
+#: prefs.js:71
+msgid "Highlight the icon"
+msgstr ""
+
+#: prefs.js:72
+msgid "Highlight the icon and show a bubble"
+msgstr ""
+
+#: prefs.js:73
+msgid "Highlight the entire top bar"
+msgstr ""
+
+#: prefs.js:74
+msgid "System notification"
+msgstr ""
+
+#: prefs.js:75
 msgid "Highlight the entire top bar and show a bubble"
 msgstr ""
 
-#: prefs.js:81
+#: prefs.js:86
 msgid "Open the panel"
 msgstr ""
 
-#: prefs.js:90
-msgid "Max number of items"
-msgstr "Maximální počet položek"
+#: prefs.js:96
+msgid "Item limit for history and paste sets"
+msgstr ""
 
-#: prefs.js:95
+#: prefs.js:98
+msgid "Applies to history and each paste set."
+msgstr ""
+
+#: prefs.js:103
 msgid "Panel width (%)"
 msgstr ""
 
-#: prefs.js:100
+#: prefs.js:108
 msgid ""
 "Clear history on logout\n"
 "(Paste sets are kept)"
 msgstr ""
 
-#: prefs.js:105
+#: prefs.js:113
 msgid "Copy feedback"
 msgstr ""
 
-#: prefs.js:110
+#: prefs.js:118
 msgid "Panel opening shortcut"
 msgstr ""
 
-#: prefs.js:115
+#: prefs.js:123
 msgid "Number of characters in status bar"
 msgstr "Počet znaků v horní liště"
 
-#: prefs.js:120
+#: prefs.js:128
 msgid "What to show in status bar"
 msgstr "Zobrazit v horní liště"
 
-#: prefs.js:125
+#: prefs.js:133
 msgid "Remove down arrow in status bar"
 msgstr "Odebrat šipku dolů v horní liště"
 
-#: prefs.js:130
+#: prefs.js:138
 msgid "Trim leading and trailing whitespace"
 msgstr ""
 
-#: prefs.js:135
+#: prefs.js:143
 msgid "Paste on Enter or click"
 msgstr ""
 
-#: prefs.js:140
+#: prefs.js:148
 msgid "Also save selected text to history"
 msgstr ""
 
-#: prefs.js:192
+#: prefs.js:200
 msgid "Modifiers for number-key paste"
 msgstr ""
 
-#: prefs.js:199
+#: prefs.js:207
 #, javascript-format
 msgid "%s+number"
 msgstr ""
 
-#: prefs.js:315
+#: prefs.js:323
 msgid "Icon"
 msgstr "Ikona"
 
-#: prefs.js:316
+#: prefs.js:324
 msgid "Clipboard contents"
 msgstr "Obsah schránky"
 
-#: prefs.js:317
+#: prefs.js:325
 msgid "Both"
 msgstr "Obojí"
 
-#: prefs.js:318
+#: prefs.js:326
 msgid "Neither"
 msgstr "Ani jedno"
+
+#~ msgid "Max number of items"
+#~ msgstr "Maximální počet položek"
 
 #, fuzzy
 #~ msgid "Previous page"

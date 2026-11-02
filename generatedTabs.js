@@ -1,10 +1,15 @@
-import { _ } from './i18n.js';
+import { _, format } from './i18n.js';
 import { runCommand } from './commandOutput.js';
 
-export function generatedItems(text, tabId) {
+export function generatedItems(text, tabId, limit = 1000) {
   const lines = text.split(/\r?\n/).filter((line) => line.length > 0);
-  if (lines.length > 1000)
-    throw new Error(_('The command returned more than 1000 items.'));
+  if (lines.length > limit) {
+    const error = new Error(
+      format(_('The command returned more than %d items.'), limit),
+    );
+    error.code = 'item-limit';
+    throw error;
+  }
   return lines.map((line, index) => ({
     id: `${tabId}:generated:${index}`,
     kind: 'text',
@@ -16,7 +21,11 @@ export function generatedItems(text, tabId) {
 // A panel visit owns tab snapshots. Only completed results survive tab switches.
 // Results never enter persisted sets.
 export class GeneratedTabs {
-  constructor(onChange, { execute = runCommand } = {}) {
+  constructor(
+    onChange,
+    { execute = runCommand, getItemLimit = () => 1000 } = {},
+  ) {
+    this._getItemLimit = getItemLimit;
     this.onChange = onChange;
     this.execute = execute;
     this.record = null;
@@ -78,7 +87,12 @@ export class GeneratedTabs {
           record.state !== 'pending'
         )
           return;
-        record.items = generatedItems(text, record.tab.id);
+        record.output = text;
+        record.items = generatedItems(
+          text,
+          record.tab.id,
+          this._getItemLimit(),
+        );
         record.state = 'ready';
         record.running = null;
         this._notify();
@@ -94,6 +108,35 @@ export class GeneratedTabs {
         record.running = null;
         this._notify();
       }));
+  }
+
+  refreshItemLimit() {
+    // Revalidate cached output without running a command merely because a
+    // preference changed. Pending runs read the current limit on completion.
+    for (const record of this.records.values()) {
+      if (
+        typeof record.output !== 'string' ||
+        !(
+          record.state === 'ready' ||
+          (record.state === 'error' && record.error?.code === 'item-limit')
+        )
+      )
+        continue;
+      try {
+        record.items = generatedItems(
+          record.output,
+          record.tab.id,
+          this._getItemLimit(),
+        );
+        record.state = 'ready';
+        record.error = null;
+      } catch (error) {
+        record.items = [];
+        record.state = 'error';
+        record.error = error;
+      }
+    }
+    this._notify();
   }
 
   // One sequential batch per nonempty cross-tab search. Query edits only filter.
@@ -158,6 +201,7 @@ export class GeneratedTabs {
     record.running?.cancel();
     record.running = null;
     record.items = [];
+    delete record.output;
   }
 
   _discard(id) {
@@ -169,6 +213,7 @@ export class GeneratedTabs {
       record.running?.cancel();
       record.running = null;
       record.items = [];
+      delete record.output;
     }
   }
 

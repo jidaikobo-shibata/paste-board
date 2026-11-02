@@ -356,6 +356,51 @@ async function main() {
     GLib.unlink(directory + '/paste-sets.json');
     GLib.rmdir(directory);
   }
+  // Changing the limit only revalidates snapshots, never executes commands.
+  let limit = 3;
+  let executions = 0;
+  let resolvePending;
+  const bounded = new GeneratedTabs(() => {}, {
+    getItemLimit: () => limit,
+    execute: () => {
+      executions++;
+      return {
+        promise: new Promise((resolve) => {
+          resolvePending = resolve;
+        }),
+        cancel() {},
+      };
+    },
+  });
+  const snapshot = bounded.sync({
+    id: 'bounded',
+    command: 'fake',
+    executionMode: 'direct',
+  });
+  await tick();
+  limit = 2;
+  resolvePending('one\ntwo\nthree\n');
+  await snapshot.completion;
+  equal(snapshot.state, 'error');
+  equal(snapshot.items, []);
+  equal(snapshot.error.code, 'item-limit');
+  equal(snapshot.error.message.includes('2'), true);
+  limit = 3;
+  bounded.refreshItemLimit();
+  equal(snapshot.state, 'ready');
+  equal(snapshot.items.length, 3);
+  limit = 1;
+  bounded.refreshItemLimit();
+  equal(snapshot.state, 'error');
+  equal(snapshot.items, []);
+  equal(executions, 1);
+  bounded.stop();
+  limit = 5;
+  bounded.refreshItemLimit();
+  equal(snapshot.state, 'stopped');
+  equal(snapshot.items, []);
+  bounded.destroy();
+  equal(generatedItems('x\n'.repeat(1001), 'large', 1001).length, 1001);
   print(`Generated tabs: ${checks} checks passed`);
 }
 const loop = GLib.MainLoop.new(null, false);

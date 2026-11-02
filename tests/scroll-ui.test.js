@@ -128,6 +128,120 @@ export default class extends Extension {
       rows().length === 50 && owner.historyScrollView.vadjustment.value === 0,
       'Reopening did not restore bounded history at the top',
     );
+    const id = owner._pasteSets.create('Long manual set');
+    owner._pasteSets.change((sets) => {
+      sets.find((set) => set.id === id).items = Array.from(
+        { length: 120 },
+        (_, i) => ({
+          id: `manual-${i}`,
+          name: '',
+          kind: 'text',
+          text: `manual candidate ${i}`,
+        }),
+      );
+    });
+    await owner._pasteSets.flush();
+    owner._switchPasteTab(id);
+    await delay(200);
+    assert(rows().length === 50, 'Manual set built all rows at once');
+    const manualFirst = rows()[0];
+    a = owner._pasteSetScroll.vadjustment;
+    a.value = a.upper - a.page_size;
+    await delay(100);
+    assert(
+      rows().length === 100 && rows()[0] === manualFirst,
+      'Manual set did not append',
+    );
+    const boundary = rows()[99];
+    boundary._moveButtons[1].grab_key_focus();
+    boundary._moveButtons[1].emit('clicked', 0);
+    await delay(100);
+    assert(
+      rows().length === 120 &&
+        rows()[100] === boundary &&
+        boundary.contains(global.stage.get_key_focus()),
+      'Keyboard reorder lost the focused item at the rendering boundary',
+    );
+    // Reset the budget before checking an item outside the first rendered batch.
+    owner._switchPasteTab('history');
+    owner._switchPasteTab(id);
+    await delay(100);
+    owner._searchAllTabs = false;
+    owner.searchEntry.set_text('candidate 119');
+    await delay(100);
+    assert(
+      rows().length === 1 && rows()[0].entry.text === 'manual candidate 119',
+      'Local search missed unrendered manual data',
+    );
+    owner.settings.set_int('history-size', 2);
+    assert(
+      owner._pasteSets.data.sets.find((set) => set.id === id).items.length ===
+        120,
+      'Lowering limit destroyed manual items',
+    );
+    let rejected = false;
+    try {
+      owner._pasteSets.put(id, { text: 'blocked' });
+    } catch {
+      rejected = true;
+    }
+    assert(rejected, 'Configured limit did not block additions');
+    owner.settings.set_int('history-size', 120);
+    owner.settings.set_boolean('pause-command-previews', false);
+    const generatedId = owner._pasteSets.create('Generated hosts', {
+      kind: 'generated',
+      executionMode: 'bash',
+      runOnSearch: true,
+      command: 'for ((i=0;i<120;i++)); do printf "ssh host%03d\\n" "$i"; done',
+    });
+    owner._switchPasteTab(generatedId);
+    for (
+      let i = 0;
+      i < 100 &&
+      owner._generatedTabs.get(
+        owner._pasteSets.data.sets.find((set) => set.id === generatedId),
+      )?.state !== 'ready';
+      i++
+    )
+      await delay(40);
+    await delay(100);
+    assert(rows().length === 50, 'Generated tab did not bound rendering');
+    a = owner._pasteSetScroll.vadjustment;
+    a.value = a.upper - a.page_size;
+    await delay(100);
+    assert(rows().length === 100, 'Generated tab did not append');
+    owner.searchEntry.set_text('host119');
+    await delay(100);
+    assert(
+      rows().length === 1 && rows()[0].entry.text === 'ssh host119',
+      'Local search missed unrendered generated host',
+    );
+    owner._searchAllTabs = true;
+    owner._onSearchTextChanged();
+    for (let i = 0; i < 100 && rows().length !== 1; i++) await delay(40);
+    await delay(200);
+    assert(
+      rows().length === 1 && rows()[0].entry.text === 'ssh host119',
+      'Cross-tab search missed unrendered generated host',
+    );
+    owner.settings.set_int('history-size', 119);
+    await delay(100);
+    const generatedSet = owner._pasteSets.data.sets.find(
+      (set) => set.id === generatedId,
+    );
+    assert(
+      owner._generatedTabs.get(generatedSet)?.state === 'error' &&
+        rows().length === 0,
+      'Lowered limit exposed partial generated output',
+    );
+    owner.settings.set_int('history-size', 120);
+    await delay(100);
+    assert(
+      owner._generatedTabs.get(generatedSet)?.state === 'ready' &&
+        rows().length === 1,
+      'Raised limit failed to recover cached output',
+    );
+    owner.settings.set_int('history-size', 1000);
     console.log(
       `SCROLL_UI: 1000 rows reachable; largest batch overhead ${worst.toFixed(1)} ms`,
     );

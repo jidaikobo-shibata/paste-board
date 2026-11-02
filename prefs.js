@@ -37,6 +37,11 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         step_increment: 100,
       }),
     });
+    field_size.set_tooltip_text(
+      _(
+        'Lowering the limit keeps existing paste set items but prevents further additions until the set is below the limit.',
+      ),
+    );
     const window_width_percentage = new Gtk.SpinButton({
       adjustment: new Gtk.Adjustment({
         lower: 0,
@@ -87,7 +92,10 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     });
 
     const sizeLabel = new Gtk.Label({
-      label: _('Max number of items'),
+      label:
+        _('Item limit for history and paste sets') +
+        '\n' +
+        _('Applies to history and each paste set.'),
       hexpand: true,
       halign: Gtk.Align.START,
     });

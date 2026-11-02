@@ -73,6 +73,75 @@ try {
   }
   equal(blocked, true);
   flushSets(owner._pasteSets);
+  const limitedDirectory = directory + '/limits';
+  let limit = 3;
+  let limited = new PasteSets(limitedDirectory, { getItemLimit: () => limit });
+  try {
+    const id = limited.create('Mixed');
+    limited.put(id, { text: 'first' });
+    limited.put(id, {
+      kind: 'command',
+      command: 'date',
+      executionMode: 'direct',
+      trimTrailingNewlines: true,
+    });
+    limited.put(id, { text: 'third' });
+    const original = JSON.stringify(limited.data);
+    const reject = (action) => {
+      let message = '';
+      try {
+        action();
+      } catch (error) {
+        message = error.message;
+      }
+      equal(message.includes(String(limit)), true);
+    };
+    reject(() => limited.put(id, { text: 'fourth' }));
+    equal(JSON.stringify(limited.data), original);
+    limit = 1;
+    flushSets(limited);
+    limited.close();
+    limited = new PasteSets(limitedDirectory, { getItemLimit: () => limit });
+    equal(limited.data.sets[0].items.length, 3);
+    const item = limited.data.sets[0].items[0];
+    limited.put(id, { ...item, text: 'edited' });
+    limited.move(id, item.id, 1);
+    equal(limited.data.sets[0].items[1].text, 'edited');
+    limited.rename(id, 'Still editable');
+    reject(() => limited.put(id, { text: 'blocked' }));
+    reject(() =>
+      limited.change((sets) =>
+        sets[0].items.push({ ...item, id: 'direct-copy' }),
+      ),
+    );
+    limited.removeItem(id, item.id);
+    equal(limited.data.sets[0].items.length, 2);
+    limited.clear(id);
+    limited.put(id, { text: 'allowed again' });
+    reject(() => limited.put(id, { text: 'blocked again' }));
+    limit = 1001;
+    limited.change((sets) => {
+      sets[0].items = Array.from({ length: 1001 }, (_, index) => ({
+        id: `large-${index}`,
+        kind: 'text',
+        name: '',
+        text: String(index),
+      }));
+    });
+    flushSets(limited);
+    limited.close();
+    limit = 1;
+    limited = new PasteSets(limitedDirectory, { getItemLimit: () => limit });
+    equal(limited.data.sets[0].items.length, 1001);
+    limited.move(id, limited.data.sets[0].items[0].id, 1);
+    flushSets(limited);
+    equal(limited.data.sets[0].items.length, 1001);
+  } finally {
+    flushSets(limited);
+    limited.close();
+    GLib.unlink(limitedDirectory + '/paste-sets.json');
+    GLib.rmdir(limitedDirectory);
+  }
 } finally {
   GLib.unlink(directory + '/paste-sets.json');
   GLib.rmdir(directory);

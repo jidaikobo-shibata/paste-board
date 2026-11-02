@@ -31,7 +31,7 @@ Enable them and choose your keys in preferences if desired.
 - **Up/Down**, then **Enter**, or a click: paste an item.
 - **Your chosen modifiers + 1–9**: paste a numbered candidate, when enabled.
 - **Left/Right** outside search: switch tabs.
-- Scroll to browse older items; more history loads as you approach the bottom. Number shortcuts stay assigned to the first nine items in the list.
+- Scroll to browse items; more rows load as you approach the bottom. Number shortcuts stay assigned to the first nine items in the list.
 - **Ctrl+F**: switch between search and the last selected candidate.
   **/** outside search also focuses it.
 - **Esc**: close the panel.
@@ -120,8 +120,12 @@ still works while paused. Private mode blocks command execution.
 network, or launch applications—even without output. Add only commands you
 understand and trust. Stopping a command does not undo its actions.**
 
-Commands are limited to 3 seconds and 64 KiB of output; generated tabs allow up to
-1000 candidates. Interactive commands and password prompts are unsupported.
+The item limit in preferences applies to history and each paste set (default: 1000).
+Old history is discarded at the limit; manual sets refuse additions, and generated
+tabs report an error if output exceeds it. Lowering the limit keeps existing manual
+set items.
+
+Commands are limited to 3 seconds and 64 KiB of output. Interactive commands and password prompts are unsupported.
 Failed commands are not pasted.
 
 ## Privacy

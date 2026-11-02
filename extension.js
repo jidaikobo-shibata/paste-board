@@ -291,6 +291,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       style_class: 'ci-history-menu-section',
     });
     this._pasteSetScroll.add_child(this._pasteSetSection.actor);
+    this._watchHistoryScroll(this._pasteSetScroll, 'set');
     this._pasteSetContainer.actor.add_child(this._pasteSetScroll);
     this.menu.addMenuItem(this._pasteSetContainer);
     this._pasteSetContainer.actor.hide();
@@ -561,6 +562,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._pasteSets = new PasteSets(
         GLib.build_filenamev([GLib.get_user_config_dir(), this.extension.uuid]),
         {
+          getItemLimit: () => MAX_REGISTRY_LENGTH,
           onError: (error) => {
             if (!this._destroyed)
               this._showNotification(
@@ -620,6 +622,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._searchReturnCandidate = undefined;
     }
     this._activePasteTab = id;
+    this._pasteSetRenderLimit = HISTORY_BATCH_SIZE;
+    this._pasteSetScroll.vadjustment.value = 0;
     this.searchEntry.set_text('');
     this._renderPasteSets();
     if (id === 'history') {
@@ -976,8 +980,9 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _ensureGeneratedTabs() {
-    this._generatedTabs ??= new GeneratedTabs(() =>
-      this._onGeneratedTabsChanged(),
+    this._generatedTabs ??= new GeneratedTabs(
+      () => this._onGeneratedTabsChanged(),
+      { getItemLimit: () => MAX_REGISTRY_LENGTH },
     );
   }
 
@@ -1282,9 +1287,32 @@ class ClipboardIndicator extends PanelMenu.Button {
     const terms = searchTerms(query);
     const previous = new Map();
     if (set) {
-      const items = sourceItems.filter((item) =>
+      // Filter all source data before applying the rendering budget. Offscreen
+      // items must remain searchable in both local and cross-tab searches.
+      const matchingItems = sourceItems.filter((item) =>
         matchesSearch(terms, item.name, item.text, item.command),
       );
+      const focus = global.stage.get_key_focus();
+      const focusedRow = this._pasteSetSection
+        ._getMenuItems()
+        .find(
+          (row) =>
+            row.entry?.sourceSetId === set.id &&
+            focus &&
+            (row === focus || row.contains(focus)),
+        );
+      const focusedIndex = matchingItems.findIndex(
+        (item) => item.id === focusedRow?.entry.id,
+      );
+      if (focusedIndex >= (this._pasteSetRenderLimit || HISTORY_BATCH_SIZE))
+        this._pasteSetRenderLimit =
+          Math.ceil((focusedIndex + 1) / HISTORY_BATCH_SIZE) *
+          HISTORY_BATCH_SIZE;
+      const items = matchingItems.slice(
+        0,
+        this._pasteSetRenderLimit || HISTORY_BATCH_SIZE,
+      );
+      this._pasteSetHasMore = matchingItems.length > items.length;
       const positions = new Map(
         sourceItems.map((item, index) => [item.id, index]),
       );
@@ -3045,6 +3073,16 @@ class ClipboardIndicator extends PanelMenu.Button {
           (this._searchRenderLimit || HISTORY_BATCH_SIZE) + HISTORY_BATCH_SIZE;
         this._renderAllTabSearch();
       } else if (
+        kind === 'set' &&
+        !this._isCrossTabSearch() &&
+        this._activePasteTab !== 'history'
+      ) {
+        if (!this._pasteSetHasMore) return;
+        this._pasteSetRenderLimit =
+          (this._pasteSetRenderLimit || HISTORY_BATCH_SIZE) +
+          HISTORY_BATCH_SIZE;
+        this._renderPasteSets();
+      } else if (
         kind === 'history' &&
         !this._isCrossTabSearch() &&
         (!this._pasteSets || this._activePasteTab === 'history')
@@ -3072,6 +3110,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!this._isCrossTabSearch()) this._generatedTabs?.endSearch();
     this._historyRenderLimit = HISTORY_BATCH_SIZE;
     this._searchRenderLimit = HISTORY_BATCH_SIZE;
+    this._pasteSetRenderLimit = HISTORY_BATCH_SIZE;
+    this._pasteSetScroll.vadjustment.value = 0;
     this.historyScrollView.vadjustment.value = 0;
     this._searchResultsScroll.vadjustment.value = 0;
     if (this._isCrossTabSearch()) {
@@ -3560,12 +3600,15 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSettingsChange() {
+    const prevItemLimit = MAX_REGISTRY_LENGTH;
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;
     const prevPreviewsPaused = this._previewsPaused;
     const prevSearchAllTabs = this._searchAllTabs;
 
     this._fetchSettings();
+    if (prevItemLimit !== MAX_REGISTRY_LENGTH)
+      this._generatedTabs?.refreshItemLimit();
     if (prevSearchAllTabs !== this._searchAllTabs) this._onSearchTextChanged();
     if (prevPreviewsPaused !== this._previewsPaused)
       this._updatePreviewPauseState();

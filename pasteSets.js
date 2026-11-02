@@ -10,7 +10,8 @@ export class PasteSets {
     while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
   }
 
-  constructor(directory, { onError = null } = {}) {
+  constructor(directory, { onError = null, getItemLimit = () => 1000 } = {}) {
+    this._getItemLimit = getItemLimit;
     this._onError = onError;
     this.path = GLib.build_filenamev([directory, 'paste-sets.json']);
     if (GLib.mkdir_with_parents(directory, 0o700) !== 0)
@@ -67,7 +68,7 @@ export class PasteSets {
         !set.name.trim() ||
         set.name.length > 100 ||
         !Array.isArray(set.items) ||
-        set.items.length > 1000
+        set.items.length > 100000
       )
         throw new Error(_('Invalid paste set format.'));
       if (set.runOnSearch !== undefined && typeof set.runOnSearch !== 'boolean')
@@ -198,6 +199,20 @@ export class PasteSets {
       })),
     };
     update(next.sets);
+    const limit = this._getItemLimit();
+    // A lower setting must not delete saved items or prevent editing/removal.
+    const lengths = new Map(
+      this.data.sets.map((set) => [set.id, set.items.length]),
+    );
+    for (const set of next.sets) {
+      if (
+        set.items.length > limit &&
+        set.items.length > (lengths.get(set.id) || 0)
+      )
+        throw new Error(
+          format(_('This paste set has reached the limit of %d items.'), limit),
+        );
+    }
     this._save(next);
     this.data = next;
   }

@@ -22,6 +22,18 @@ equal(
   _('Refresh generated items'),
   japanese ? '生成候補を更新' : 'Refresh generated items',
 );
+equal(
+  _('Item limit for history and paste sets'),
+  japanese
+    ? '履歴・ペーストセットの項目数上限'
+    : 'Item limit for history and paste sets',
+);
+equal(
+  format(_('The command returned more than %d items.'), 12),
+  japanese
+    ? 'コマンドが12件を超える項目を返しました。'
+    : 'The command returned more than 12 items.',
+);
 equal(_('Output'), japanese ? '出力' : 'Output');
 equal(
   _('About command execution'),
