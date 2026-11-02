@@ -114,12 +114,28 @@ export default class extends Extension {
     owner._onSearchTextChanged();
     await delay(150);
     assert(rows().length === 50, 'Global initial batch is not bounded');
+    rows()[0].grab_key_focus();
+    await delay(150);
     a = owner._searchResultsScroll.vadjustment;
     a.value = a.upper - a.page_size;
-    await delay(100);
+    await delay(250);
     assert(
       rows().length === 100 && rows()[0].entry.text === 'scroll item 999',
       'Global search did not append in order',
+    );
+    assert(
+      a.value > 100,
+      'Appending search results jumped back to the focused first item',
+    );
+    assert(
+      global.stage.get_key_focus() === rows()[0],
+      'Appending results lost the selected candidate',
+    );
+    rows()[1].grab_key_focus();
+    await delay(200);
+    assert(
+      a.value < 100,
+      'Normal keyboard focus no longer scrolls the candidate into view',
     );
     owner.menu.close();
     owner.menu.open();

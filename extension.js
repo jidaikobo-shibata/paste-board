@@ -1127,9 +1127,10 @@ class ClipboardIndicator extends PanelMenu.Button {
           y_align: Clutter.ActorAlign.CENTER,
         });
         row.insert_child_at_index(row.shortcutLabel, 1);
-        row.connect('key-focus-in', () =>
-          ensureActorVisibleInScrollView(this._searchResultsScroll, row),
-        );
+        row.connect('key-focus-in', () => {
+          if (!this._restoringSearchScroll)
+            ensureActorVisibleInScrollView(this._searchResultsScroll, row);
+        });
         row.connect('activate', () => {
           GObject.signal_stop_emission_by_name(row, 'activate');
           if (!this._quickPasteBusy) this._activatePasteEntry(row.entry);
@@ -1186,7 +1187,16 @@ class ClipboardIndicator extends PanelMenu.Button {
           (!old.entry.generated || row.entry.text === old.entry.text),
       ) || rows[0];
     if (pasteFocused) this._quickPasteFocusedCandidate = restore(pasteFocused);
-    if (focused) (restore(focused) || this.searchEntry).grab_key_focus();
+    if (focused) {
+      // Loading more rows must not scroll back to an offscreen focused row.
+      // Keyboard navigation still reveals the row on the next focus change.
+      this._restoringSearchScroll = Boolean(this._loadingScrollRows);
+      try {
+        (restore(focused) || this.searchEntry).grab_key_focus();
+      } finally {
+        this._restoringSearchScroll = false;
+      }
+    }
   }
 
   _renderPasteSets() {
