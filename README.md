@@ -31,6 +31,7 @@ Enable them and choose your keys in preferences if desired.
 - **Up/Down**, then **Enter**, or a click: paste an item.
 - **Your chosen modifiers + 1–9**: paste a numbered candidate, when enabled.
 - **Left/Right** outside search: switch tabs.
+- Scroll to browse older items; more history loads as you approach the bottom. Number shortcuts stay assigned to the first nine items in the list.
 - **Ctrl+F**: switch between search and the last selected candidate.
   **/** outside search also focuses it.
 - **Esc**: close the panel.

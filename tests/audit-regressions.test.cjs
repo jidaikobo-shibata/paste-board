@@ -64,7 +64,7 @@ const noop = () => {};
 function clipboardGlobals(writes) {
   return {
     DS: { TYPE_TEXT: 1 },
-    PAGE_SIZE: 50,
+    HISTORY_BATCH_SIZE: 50,
     PRIVATE_MODE: false,
     PASTE_ON_SELECTION: true,
     St: { ClipboardType: { CLIPBOARD: 1, PRIMARY: 2 } },
@@ -105,25 +105,23 @@ test('initial display and private-mode transitions preserve the clipboard', () =
 test('rebuilding visible history does not write the selected item to clipboard', () => {
   const writes = [];
   const [owner] = instance(
-    [
-      '_maybeRestoreMenuPages',
-      '_setCurrentClipboardEntry',
-      '_setClipboardText',
-    ],
+    ['_ensureHistoryRows', '_setCurrentClipboardEntry', '_setClipboardText'],
     clipboardGlobals(writes),
   );
   const entry = { type: 1, text: 'selected' };
   Object.assign(owner, {
     activeHistoryMenuItems: 0,
+    historySection: { _getMenuItems: () => [] },
     entries: { last: () => entry },
     _currentClipboardEntry: entry,
     _updateButtonText: noop,
+    _updateCandidateNumbers: noop,
     _addEntry(item, select, update) {
       this.activeHistoryMenuItems++;
       if (select) this._setCurrentClipboardEntry(item, update);
     },
   });
-  owner._maybeRestoreMenuPages();
+  owner._ensureHistoryRows();
   assert.equal(owner.activeHistoryMenuItems, 1);
   assert.deepEqual(writes, []);
 });
@@ -1139,7 +1137,7 @@ function historyFixture(options = {}) {
     menu: { close: noop },
     _updateButtonText: noop,
     _updateCandidateNumbers: noop,
-    _maybeRestoreMenuPages: noop,
+    _ensureHistoryRows: noop,
     _currentStateBuilder: noop,
     historySection: {
       moveMenuItem: (row, index) => {
@@ -1442,7 +1440,7 @@ test('existing copy-feedback notification keeps mode 4 without visual overlays',
 test('history search treats regex metacharacters as literal text without blocking', () => {
   const [owner, context] = instance(['populateSearchResults'], {
     DS: { TYPE_TEXT: 'text' },
-    PAGE_SIZE: 50,
+    HISTORY_BATCH_SIZE: 50,
     MAX_VISIBLE_CHARS: 200,
   });
   const text = 'a'.repeat(28) + '!';
@@ -1459,19 +1457,19 @@ test('history search treats regex metacharacters as literal text without blockin
   const matches = [];
   Object.assign(owner, {
     historySection: {
+      _getMenuItems: () => [],
       removeAll() {
         owner.activeHistoryMenuItems = 0;
       },
     },
     entries: { last: () => entry },
-    searchEntryFront: entry,
-    searchEntryBack: entry,
     _addEntry(item) {
       matches.push(item);
       this.activeHistoryMenuItems++;
       item.menuItem = { label: { set_text: noop } };
     },
     _truncated: (value) => value,
+    _updateCandidateNumbers: noop,
   });
   entry.list = owner.entries;
   context.owner = owner;
@@ -1614,7 +1612,7 @@ test('history cleanup subscribes independently and honors cleanup policy after m
     }
 });
 
-test('deleting a search result preserves filtering and refreshes detached pagination references', () => {
+test('deleting a search result preserves filtering when loading more history', () => {
   const dsContext = vm.createContext({});
   const DS = vm.runInContext(
     fs
@@ -1627,11 +1625,11 @@ test('deleting a search result preserves filtering and refreshes detached pagina
       '_removeEntry',
       '_refreshHistoryAfterRemoval',
       'populateSearchResults',
-      '_navigateNextPage',
+      '_loadMoreScrollRows',
     ],
     {
       DS,
-      PAGE_SIZE: 50,
+      HISTORY_BATCH_SIZE: 50,
       MAX_VISIBLE_CHARS: 200,
       Store: { deleteTextEntry: noop },
     },
@@ -1657,26 +1655,24 @@ test('deleting a search result preserves filtering and refreshes detached pagina
       },
     },
     _updateCandidateNumbers: noop,
-    _maybeRestoreMenuPages: () => assert.fail('unfiltered rows restored'),
+    _ensureHistoryRows: () => assert.fail('unfiltered rows restored'),
+    _isCrossTabSearch: () => false,
     _truncated: (x) => x,
     _addEntry(entry) {
       rows.push(entry);
       this.activeHistoryMenuItems++;
       entry.menuItem = { label: { set_text: noop }, destroy: noop };
     },
-    searchEntryFront: entries.last(),
-    searchEntryBack: entries.last(),
   });
   const removed = entries.last();
   owner._removeEntry(removed, true, false);
   assert.equal(rows.length, 0);
-  owner._navigateNextPage();
+  owner._loadMoreScrollRows('history');
   assert.equal(rows.length, 0);
-  owner.searchEntryFront = owner.searchEntryBack = removed;
   owner.populateSearchResults('match newest');
   assert.equal(rows.length, 0);
   owner._removeEntry(entries.last(), true, false);
-  owner._navigateNextPage();
+  owner._loadMoreScrollRows('history');
   assert.equal(rows.length, 0);
 });
 

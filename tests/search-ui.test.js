@@ -452,21 +452,19 @@ export default class extends Extension {
       rows().length === 50 && owner._crossSearchHasMore,
       'Global search did not bound the first page',
     );
-    owner._navigateNextPage();
+    await delay(100);
+    const adjustment = owner._searchResultsScroll.vadjustment;
+    adjustment.value = adjustment.upper - adjustment.page_size;
+    await wait(() => rows().length === 65);
     assert(
-      rows().length === 15 &&
-        rows()[0].entry.text === 'pagination match 50' &&
+      rows()[0].entry.text === 'pagination match 0' &&
         !owner._crossSearchHasMore,
-      'Global next page is wrong',
+      'Scrolling did not append global results',
     );
     assert(
-      rows()[0].shortcutLabel.text === '1',
-      'Next-page numbering did not restart',
-    );
-    owner._navigatePrevPage();
-    assert(
-      rows().length === 50 && rows()[0].entry.text === 'pagination match 0',
-      'Global previous page is wrong',
+      rows()[0].shortcutLabel.text === '1' &&
+        rows()[9].shortcutLabel.text === '',
+      'Scrolling changed shortcut numbering',
     );
     owner.searchEntry.grab_key_focus();
     owner._focusNextMenuControl(false);
@@ -484,7 +482,7 @@ export default class extends Extension {
     owner.settings.set_boolean('private-mode', false);
     await delay(150);
     assert(
-      rows().length === 50 && read(root + '/generator-count') === '1',
+      rows().length === 65 && read(root + '/generator-count') === '1',
       'Leaving private mode executed a generator or lost search',
     );
     await query('server prod');

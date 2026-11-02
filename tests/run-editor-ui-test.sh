@@ -19,7 +19,7 @@ if [[ ${1:-} != --session ]]; then
     "$XDG_DATA_HOME/gnome-shell/extensions/paste-board@jidaikobo.shibata"
   editor_test_file=${PASTE_BOARD_UI_TEST_FILE:-editor-ui.test.js}
   case "$editor_test_file" in
-    editor-ui.test.js|generated-tabs-ui.test.js|search-ui.test.js|history-only-ui.test.js|tab-context-ui.test.js) ;;
+    scroll-ui.test.js|editor-ui.test.js|generated-tabs-ui.test.js|search-ui.test.js|history-only-ui.test.js|tab-context-ui.test.js) ;;
     *) echo 'Unknown UI test fixture' >&2; exit 2 ;;
   esac
   if [[ $editor_test_file == history-only-ui.test.js ]]; then

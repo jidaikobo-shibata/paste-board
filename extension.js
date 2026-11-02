@@ -60,7 +60,7 @@ function VirtualKeyboard() {
 const SETTING_KEY_TOGGLE_MENU = 'toggle-menu';
 const INDICATOR_ICON = 'edit-paste-symbolic';
 
-const PAGE_SIZE = 50;
+const HISTORY_BATCH_SIZE = 50;
 const MAX_VISIBLE_CHARS = 200;
 
 let MAX_REGISTRY_LENGTH;
@@ -255,7 +255,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._setMenuWidth();
         const wasEmpty = this.entries && !this.searchEntry.get_text();
         this.searchEntry.set_text('');
-        // Reopening after pagination must start at the actual clipboard item.
+        // Reopening starts with the latest history and a bounded initial batch.
         if (wasEmpty) this._onSearchTextChanged();
         this._initialFocusCallbackId = GLib.timeout_add(
           GLib.PRIORITY_DEFAULT,
@@ -280,6 +280,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       overlay_scrollbars: true,
     });
     this.historyScrollView.add_child(this.historySection.actor);
+    this._watchHistoryScroll(this.historyScrollView, 'history');
 
     this.scrollViewMenuSection.actor.add_child(this.historyScrollView);
 
@@ -300,6 +301,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       overlay_scrollbars: true,
     });
     this._searchResultsScroll.add_child(this._searchResultsSection.actor);
+    this._watchHistoryScroll(this._searchResultsScroll, 'search');
     this._searchResultsContainer.actor.add_child(this._searchResultsScroll);
     this.menu.addMenuItem(this._searchResultsContainer);
     this._searchResultsContainer.actor.hide();
@@ -314,30 +316,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     actionsSection.actor.add_child(actionsBox);
     this._footerActions = actionsBox;
     this.menu.addMenuItem(actionsSection);
-    const prevPage = new PopupMenu.PopupBaseMenuItem();
-    prevPage.accessible_name = _('Previous page');
-    prevPage.add_child(
-      new St.Icon({
-        icon_name: 'go-previous-symbolic',
-        style_class: 'popup-menu-icon',
-      }),
-    );
-    prevPage.add_style_class_name('ci-page-button');
-    prevPage.connect('activate', this._navigatePrevPage.bind(this));
-    actionsBox.add_child(prevPage);
-
-    const nextPage = new PopupMenu.PopupBaseMenuItem();
-    nextPage.accessible_name = _('Next page');
-    nextPage.add_child(
-      new St.Icon({
-        icon_name: 'go-next-symbolic',
-        style_class: 'popup-menu-icon',
-      }),
-    );
-    nextPage.add_style_class_name('ci-page-button');
-    nextPage.connect('activate', this._navigateNextPage.bind(this));
-    actionsBox.add_child(nextPage);
-
     actionsBox.add_child(new St.BoxLayout({ x_expand: true }));
 
     this.privateModeMenuItem = this._createModeButton(
@@ -455,7 +433,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this.nextDiskId = nextDiskId || nextId;
         /**
          * DS.LinkedList is the actual clipboard history and source of truth. Never use historySection
-         * as the source of truth as it may get outdated during pagination.
+         * as the source of truth: older rows are created only when needed.
          *
          * Entries *may* have a menuItem attached, meaning they are currently visible. On the other
          * hand, menu items must always have an entry attached.
@@ -465,7 +443,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         if (discard) this._saveClearedSessionHistory();
 
         this._currentClipboardEntry = undefined;
-        this._maybeRestoreMenuPages();
+        this._ensureHistoryRows();
         await this._setupPasteSets();
         if (this._destroyed) return;
 
@@ -645,9 +623,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.searchEntry.set_text('');
     this._renderPasteSets();
     if (id === 'history') {
+      this._historyRenderLimit = HISTORY_BATCH_SIZE;
+      this.historyScrollView.vadjustment.value = 0;
       this.historySection.removeAll();
-      this.searchEntryFront = this.searchEntryBack = undefined;
-      this._maybeRestoreMenuPages();
+      this._ensureHistoryRows();
     }
     if (this._initialFocusCallbackId)
       GLib.Source.remove(this._initialFocusCallbackId);
@@ -1091,14 +1070,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       sets: this._pasteSets.data.sets,
       getGenerated: (set) => this._generatedTabs?.get(set),
       getPreview: (item) => this._commandPreviews?.get(item),
-      offset: this._crossSearchOffset || 0,
-      limit: PAGE_SIZE,
+      limit: this._searchRenderLimit || HISTORY_BATCH_SIZE,
     });
-    if (!results.count && this._crossSearchOffset > 0) {
-      this._crossSearchOffset = 0;
-      this._renderAllTabSearch();
-      return;
-    }
     section.removeAll();
     this._crossSearchHasMore = results.hasMore;
     for (const group of results.groups) {
@@ -1816,7 +1789,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     return (
       this._handleCtrlSelectKeyEvent(event) ||
       this._handleSettingsKeyEvent(event) ||
-      this._handleNavigationKeyEvent(event) ||
       this._handleFocusSearchKeyEvent(event)
     );
   }
@@ -2579,22 +2551,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     return true;
   }
 
-  _handleNavigationKeyEvent(event) {
-    if (!event.has_control_modifier()) {
-      return;
-    }
-
-    if (event.get_key_unicode() === 'n') {
-      this._navigateNextPage();
-    } else if (event.get_key_unicode() === 'p') {
-      this._navigatePrevPage();
-    } else {
-      return;
-    }
-
-    return true;
-  }
-
   _handleTypeToSearch(event) {
     if (
       !this.menu.isOpen ||
@@ -2661,12 +2617,15 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _addEntry(entry, selectEntry, updateClipboard, insertIndex) {
-    if (this.activeHistoryMenuItems >= PAGE_SIZE) {
+    if (
+      this.activeHistoryMenuItems >=
+      (this._historyRenderLimit || HISTORY_BATCH_SIZE)
+    ) {
       const items = this.historySection._getMenuItems();
       const item = items[items.length - 1];
       this._rewriteMenuItem(item, entry);
       this.historySection.moveMenuItem(item, 0);
-      this._updateCandidateNumbers();
+      if (!this._addingHistoryBatch) this._updateCandidateNumbers();
 
       if (selectEntry) {
         this._setCurrentClipboardEntry(entry, updateClipboard);
@@ -2749,7 +2708,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this.historySection.addMenuItem(menuItem, insertIndex);
     this.activeHistoryMenuItems++;
 
-    this._updateCandidateNumbers();
+    if (!this._addingHistoryBatch) this._updateCandidateNumbers();
     if (selectEntry) {
       this._setCurrentClipboardEntry(entry, updateClipboard);
     }
@@ -2932,9 +2891,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     const query = this.searchEntry.get_text();
     if (query) {
-      this.searchEntryFront = this.searchEntryBack = this.entries.last();
       this.populateSearchResults(query);
-    } else this._maybeRestoreMenuPages();
+    } else this._ensureHistoryRows();
   }
 
   _pruneOldestEntries() {
@@ -3036,88 +2994,69 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
-  _maybeRestoreMenuPages() {
-    if (this.activeHistoryMenuItems > 0) {
-      return;
-    }
-
-    for (
-      let entry = this.entries.last();
-      entry && this.activeHistoryMenuItems < PAGE_SIZE;
-      entry = entry.prev
-    ) {
-      this._addEntry(entry, this._currentClipboardEntry === entry, false);
-    }
-  }
-
-  /**
-   * Our pagination implementation is purposefully "broken." The idea is simply to do no unnecessary
-   * work. As a consequence, if a user navigates to some page and then starts copying/moving items,
-   * those items will appear on the currently visible page even though they don't belong there. This
-   * could kind of be considered a feature since it means you can go back to some cluster of copied
-   * items and start copying stuff from the same cluster and have it all show up together.
-   *
-   * Note that over time (as the user copies items), the page reclamation process will morph the
-   * current page into the first page. This is the only way to make the user-visible state match our
-   * backing store after changing pages.
-   *
-   * Also note that the use of `last` and `next` is correct. Menu items are ordered from latest to
-   * oldest whereas `entries` is ordered from oldest to latest.
-   */
-  _navigatePrevPage() {
-    if (this._isCrossTabSearch?.()) {
-      this._crossSearchOffset = Math.max(
-        0,
-        (this._crossSearchOffset || 0) - PAGE_SIZE,
-      );
-      this._renderAllTabSearch();
-      return;
-    }
-    if (this.searchEntryFront) {
-      this.populateSearchResults(this.searchEntry.get_text(), false);
-      return;
-    }
-
+  _ensureHistoryRows() {
     const items = this.historySection._getMenuItems();
-    if (items.length === 0) {
-      return;
-    }
-
-    const start = items[0].entry;
-    for (
-      let entry = start.nextCyclic(), i = items.length - 1;
-      entry !== start && i >= 0;
-      entry = entry.nextCyclic()
-    ) {
-      this._rewriteMenuItem(items[i--], entry);
-    }
-  }
-
-  _navigateNextPage() {
-    if (this._isCrossTabSearch?.()) {
-      if (this._crossSearchHasMore) {
-        this._crossSearchOffset = (this._crossSearchOffset || 0) + PAGE_SIZE;
-        this._renderAllTabSearch();
+    let entry = items.length
+      ? items[items.length - 1].entry.prev
+      : this.entries.last();
+    const limit = this._historyRenderLimit || HISTORY_BATCH_SIZE;
+    this._addingHistoryBatch = true;
+    try {
+      while (entry && this.activeHistoryMenuItems < limit) {
+        this._addEntry(entry, this._currentClipboardEntry === entry, false);
+        entry = entry.prev;
       }
-      return;
+    } finally {
+      this._addingHistoryBatch = false;
+      this._updateCandidateNumbers();
     }
-    if (this.searchEntryFront) {
-      this.populateSearchResults(this.searchEntry.get_text(), true);
-      return;
-    }
+  }
 
-    const items = this.historySection._getMenuItems();
-    if (items.length === 0) {
-      return;
-    }
+  _watchHistoryScroll(scroll, kind) {
+    scroll.vadjustment.connect('notify::value', () => {
+      const adjustment = scroll.vadjustment;
+      if (
+        !this.menu.isOpen ||
+        PRIVATE_MODE ||
+        this._quickPasteBusy ||
+        this._destroyed ||
+        this._loadingScrollRows ||
+        adjustment.upper <= adjustment.page_size ||
+        adjustment.value + adjustment.page_size < adjustment.upper - 80
+      )
+        return;
+      this._loadMoreScrollRows(kind);
+    });
+  }
 
-    const start = items[items.length - 1].entry;
-    for (
-      let entry = start.prevCyclic(), i = 0;
-      entry !== start && i < items.length;
-      entry = entry.prevCyclic()
-    ) {
-      this._rewriteMenuItem(items[i++], entry);
+  _loadMoreScrollRows(kind) {
+    if (
+      this._loadingScrollRows ||
+      this._destroyed ||
+      PRIVATE_MODE ||
+      this._quickPasteBusy
+    )
+      return;
+    this._loadingScrollRows = true;
+    try {
+      if (kind === 'search' && this._isCrossTabSearch()) {
+        if (!this._crossSearchHasMore) return;
+        this._searchRenderLimit =
+          (this._searchRenderLimit || HISTORY_BATCH_SIZE) + HISTORY_BATCH_SIZE;
+        this._renderAllTabSearch();
+      } else if (
+        kind === 'history' &&
+        !this._isCrossTabSearch() &&
+        (!this._pasteSets || this._activePasteTab === 'history')
+      ) {
+        this._historyRenderLimit =
+          (this._historyRenderLimit || HISTORY_BATCH_SIZE) + HISTORY_BATCH_SIZE;
+        if (this.searchEntry.get_text())
+          this.populateSearchResults(this.searchEntry.get_text());
+        else this._ensureHistoryRows();
+      }
+    } finally {
+      this._loadingScrollRows = false;
     }
   }
 
@@ -3131,7 +3070,10 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _onSearchTextChanged() {
     if (!this._isCrossTabSearch()) this._generatedTabs?.endSearch();
-    this._crossSearchOffset = 0;
+    this._historyRenderLimit = HISTORY_BATCH_SIZE;
+    this._searchRenderLimit = HISTORY_BATCH_SIZE;
+    this.historyScrollView.vadjustment.value = 0;
+    this._searchResultsScroll.vadjustment.value = 0;
     if (this._isCrossTabSearch()) {
       this._renderPasteSets();
       return;
@@ -3147,70 +3089,45 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!query) {
       this.historySection.removeAll();
 
-      this.searchEntryFront = this.searchEntryBack = undefined;
-      this._maybeRestoreMenuPages();
+      this._ensureHistoryRows();
       return;
     }
 
-    this.searchEntryFront = this.searchEntryBack = this.entries.last();
     this.populateSearchResults(query);
   }
 
-  populateSearchResults(query, forward) {
-    this.historySection.removeAll();
-
-    if (typeof forward !== 'boolean') {
-      forward = true;
-    }
-
+  populateSearchResults(query) {
     const terms = searchTerms(query);
-    query = terms[0] || '';
-    if (!this.entries.last()) {
-      this.searchEntryFront = this.searchEntryBack = undefined;
-      return;
-    }
-    if (
-      this.searchEntryFront?.list !== this.entries ||
-      this.searchEntryBack?.list !== this.entries
-    )
-      this.searchEntryFront = this.searchEntryBack = this.entries.last();
-    const start = forward ? this.searchEntryFront : this.searchEntryBack;
-    let entry = start;
-
-    while (this.activeHistoryMenuItems < PAGE_SIZE) {
-      if (entry.type === DS.TYPE_TEXT) {
-        const match = entry.text.toLowerCase().indexOf(query);
-        if (matchesSearch(terms, entry.text)) {
-          this._addEntry(
-            entry,
-            entry === this._currentClipboardEntry,
-            false,
-            forward ? undefined : 0,
-          );
-          entry.menuItem.label.set_text(
-            this._truncated(
-              entry.text,
-              match - 40,
-              match + MAX_VISIBLE_CHARS - 40,
-            ),
-          );
-        }
-      } else {
+    const firstTerm = terms[0] || '';
+    const matches = [];
+    const limit = this._historyRenderLimit || HISTORY_BATCH_SIZE;
+    for (
+      let entry = this.entries.last();
+      entry && matches.length < limit;
+      entry = entry.prev
+    ) {
+      if (entry.type !== DS.TYPE_TEXT)
         throw new TypeError('Unknown type: ' + entry.type);
-      }
-
-      entry = forward ? entry.prevCyclic() : entry.nextCyclic();
-      if (entry === start) {
-        break;
-      }
+      if (matchesSearch(terms, entry.text)) matches.push(entry);
     }
-
-    if (forward) {
-      this.searchEntryBack = this.searchEntryFront.nextCyclic();
-      this.searchEntryFront = entry;
-    } else {
-      this.searchEntryFront = this.searchEntryBack.prevCyclic();
-      this.searchEntryBack = entry;
+    const rows = this.historySection._getMenuItems();
+    const append =
+      rows.length <= matches.length &&
+      rows.every((row, index) => row.entry === matches[index]);
+    if (!append) this.historySection.removeAll();
+    this._addingHistoryBatch = true;
+    try {
+      for (const entry of matches.slice(append ? rows.length : 0))
+        this._addEntry(entry, entry === this._currentClipboardEntry, false);
+    } finally {
+      this._addingHistoryBatch = false;
+      this._updateCandidateNumbers();
+    }
+    for (const entry of matches) {
+      const match = entry.text.toLowerCase().indexOf(firstTerm);
+      entry.menuItem.label.set_text(
+        this._truncated(entry.text, match - 40, match + MAX_VISIBLE_CHARS - 40),
+      );
     }
   }
 
