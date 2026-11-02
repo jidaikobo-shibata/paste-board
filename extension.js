@@ -1994,6 +1994,16 @@ class ClipboardIndicator extends PanelMenu.Button {
         : Clutter.EVENT_PROPAGATE;
     }
     this._quickPasteKeysHeld.add(code);
+    // Escape first cancels IME composition; only a later Escape closes.
+    if (
+      event.get_key_symbol() === Clutter.KEY_Escape &&
+      this._isSearchActor(global.stage.get_key_focus()) &&
+      this.searchEntry?.clutter_text?.has_preedit()
+    ) {
+      // Keep PopupMenu's own Escape handler from closing during composition.
+      this.searchEntry.clutter_text.event(event, false);
+      return Clutter.EVENT_STOP;
+    }
     if (this._quickPasteBusy) {
       // Allow closing while a command or paste is in progress.
       const bits = modifierBits(event.get_state(), Clutter.ModifierType);

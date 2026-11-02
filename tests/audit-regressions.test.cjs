@@ -2747,3 +2747,48 @@ test('Up in search focuses the full history tail and respects IME preedit', () =
     false,
   );
 });
+
+test('Escape is forwarded only to search during preedit, then closes after composition ends', () => {
+  const forwarded = [];
+  let preedit = true,
+    closes = 0,
+    searchFocused = true;
+  const [owner] = instance(['_captureQuickPasteKey'], {
+    Clutter: {
+      EventType: { KEY_PRESS: 1, KEY_RELEASE: 2 },
+      KEY_Escape: 65307,
+      EVENT_STOP: true,
+      EVENT_PROPAGATE: false,
+    },
+    global: { stage: { get_key_focus: () => null } },
+  });
+  Object.assign(owner, {
+    menu: { isOpen: true, close: () => closes++ },
+    _quickPasteKeysHeld: new Set(),
+    _isSearchActor: () => searchFocused,
+    searchEntry: {
+      clutter_text: {
+        has_preedit: () => preedit,
+        event: (event, capture) => forwarded.push([event, capture]),
+      },
+    },
+    _handleCtrlSelectKeyEvent: () => false,
+  });
+  const event = {
+    type: () => 1,
+    get_key_code: () => 9,
+    get_key_symbol: () => 65307,
+  };
+  assert.equal(owner._captureQuickPasteKey(event), true);
+  assert.equal(forwarded.length, 1);
+  assert.equal(forwarded[0][0], event);
+  assert.equal(forwarded[0][1], false);
+  assert.equal(closes, 0);
+  preedit = false;
+  assert.equal(owner._captureQuickPasteKey(event), true);
+  assert.equal(closes, 1);
+  preedit = true;
+  searchFocused = false;
+  assert.equal(owner._captureQuickPasteKey(event), true);
+  assert.equal(closes, 2);
+});

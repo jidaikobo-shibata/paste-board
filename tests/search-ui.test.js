@@ -713,6 +713,14 @@ export default class extends Extension {
       Clutter.KeyState.RELEASED,
     );
     assert(owner.menu.isOpen, 'Search editing key closed the panel');
+    owner.searchEntry.clutter_text.set_preedit_string('あ', null, 1);
+    assert(
+      owner.searchEntry.clutter_text.has_preedit(),
+      'Preedit simulation was not active',
+    );
+    await key(Clutter.KEY_Escape);
+    assert(owner.menu.isOpen, 'Escape closed the panel during preedit');
+    owner.searchEntry.clutter_text.set_preedit_string('', null, 0);
     await key(Clutter.KEY_Escape);
     assert(!owner.menu.isOpen, 'Escape did not close the panel from search');
     owner.menu.close();

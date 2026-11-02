@@ -37,6 +37,7 @@ Enable them and choose your keys in preferences if desired.
   **/** outside search also focuses it.
 - **Esc** or **your chosen modifiers + 0**: close the panel. Unassigned keys
   do not close it; they are left to the focused control or input method.
+  During IME composition, Esc is left to the input method.
 
 Type letters or digits anywhere in the panel to start searching, including the
 first character. Dedicated input-mode keys (such as Henkan and Muhenkan) also
