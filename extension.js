@@ -2602,12 +2602,35 @@ class ClipboardIndicator extends PanelMenu.Button {
     )
       return false;
     const bits = modifierBits(event.get_state(), Clutter.ModifierType);
-    if (bits !== 0 && bits !== 4) return false;
     const symbol = event.get_key_symbol();
+    // Dedicated input-mode keysyms, not user-specific shortcuts such as Ctrl+Space.
+    // Some standard modes (e.g. Romaji) are produced with an Alt modifier.
+    const inputMode = [
+      Clutter.KEY_Kanji,
+      Clutter.KEY_Muhenkan,
+      Clutter.KEY_Henkan_Mode,
+      Clutter.KEY_Romaji,
+      Clutter.KEY_Hiragana,
+      Clutter.KEY_Katakana,
+      Clutter.KEY_Hiragana_Katakana,
+      Clutter.KEY_Zenkaku,
+      Clutter.KEY_Hankaku,
+      Clutter.KEY_Zenkaku_Hankaku,
+      Clutter.KEY_Kana_Lock,
+      Clutter.KEY_Kana_Shift,
+      Clutter.KEY_Eisu_Shift,
+      Clutter.KEY_Eisu_toggle,
+      Clutter.KEY_Hangul,
+    ].some((key) => key !== undefined && symbol === key);
+    if (!inputMode && bits !== 0 && bits !== 4) return false;
     const composing =
       symbol === Clutter.KEY_Multi_key ||
       (symbol >= Clutter.KEY_dead_grave && symbol <= Clutter.KEY_dead_currency);
-    if (!composing && !/^[\p{L}\p{N}]$/u.test(event.get_key_unicode()))
+    if (
+      !inputMode &&
+      !composing &&
+      !/^[\p{L}\p{N}]$/u.test(event.get_key_unicode())
+    )
       return false;
     if (this._initialFocusCallbackId) {
       GLib.Source.remove(this._initialFocusCallbackId);

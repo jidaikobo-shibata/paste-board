@@ -2484,6 +2484,25 @@ test('type-to-search forwards the first original key and cancels deferred focus'
       KEY_Multi_key: 1000,
       KEY_dead_grave: 1100,
       KEY_dead_currency: 1200,
+      ...Object.fromEntries(
+        [
+          'Kanji',
+          'Muhenkan',
+          'Henkan_Mode',
+          'Romaji',
+          'Hiragana',
+          'Katakana',
+          'Hiragana_Katakana',
+          'Zenkaku',
+          'Hankaku',
+          'Zenkaku_Hankaku',
+          'Kana_Lock',
+          'Kana_Shift',
+          'Eisu_Shift',
+          'Eisu_toggle',
+          'Hangul',
+        ].map((name, index) => [`KEY_${name}`, 2000 + index]),
+      ),
     },
     global: {
       stage: {
@@ -2507,6 +2526,8 @@ test('type-to-search forwards the first original key and cancels deferred focus'
     ['é', 0, 233],
     ['', 0, 1000],
     ['', 0, 1100],
+    ...Array.from({ length: 15 }, (_, index) => ['', 0, 2000 + index]),
+    ['', 2, 2003],
   ]) {
     focus = null;
     owner._initialFocusCallbackId = 42;
@@ -2521,7 +2542,7 @@ test('type-to-search forwards the first original key and cancels deferred focus'
     assert.equal(forwarded.at(-1)[1], false);
     assert.equal(owner._initialFocusCallbackId, undefined);
   }
-  assert.equal(removed.length, 7);
+  assert.equal(removed.length, 23);
 });
 
 test('type-to-search leaves shortcuts, existing input, and inactive panels alone', () => {
@@ -2533,6 +2554,25 @@ test('type-to-search leaves shortcuts, existing input, and inactive panels alone
       KEY_Multi_key: 1000,
       KEY_dead_grave: 1100,
       KEY_dead_currency: 1200,
+      ...Object.fromEntries(
+        [
+          'Kanji',
+          'Muhenkan',
+          'Henkan_Mode',
+          'Romaji',
+          'Hiragana',
+          'Katakana',
+          'Hiragana_Katakana',
+          'Zenkaku',
+          'Hankaku',
+          'Zenkaku_Hankaku',
+          'Kana_Lock',
+          'Kana_Shift',
+          'Eisu_Shift',
+          'Eisu_toggle',
+          'Hangul',
+        ].map((name, index) => [`KEY_${name}`, 2000 + index]),
+      ),
     },
     global: {
       stage: {
@@ -2545,18 +2585,20 @@ test('type-to-search leaves shortcuts, existing input, and inactive panels alone
     menu: { isOpen: true },
     _isSearchActor: () => searchFocused,
   });
-  const event = (value, bits = 0) => ({
+  const event = (value, bits = 0, symbol = 97) => ({
     get_state: () => bits,
     get_key_unicode: () => value,
-    get_key_symbol: () => 97,
+    get_key_symbol: () => symbol,
   });
   for (const value of [' ', '/', '!', '\n', ''])
     assert.equal(owner._handleTypeToSearch(event(value)), false);
   for (const bits of [1, 2, 8, 5, 12])
     assert.equal(owner._handleTypeToSearch(event('a', bits)), false);
+  assert.equal(owner._handleTypeToSearch(event('', 1, 32)), false);
   for (const field of ['_destroyed', '_quickPasteBusy']) {
     owner[field] = true;
     assert.equal(owner._handleTypeToSearch(event('a')), false);
+    assert.equal(owner._handleTypeToSearch(event('', 0, 2001)), false);
     owner[field] = false;
   }
   owner.menu.isOpen = false;
@@ -2564,9 +2606,11 @@ test('type-to-search leaves shortcuts, existing input, and inactive panels alone
   owner.menu.isOpen = true;
   searchFocused = true;
   assert.equal(owner._handleTypeToSearch(event('a')), false);
+  assert.equal(owner._handleTypeToSearch(event('', 0, 2001)), false);
   searchFocused = false;
   context.PRIVATE_MODE = true;
   assert.equal(owner._handleTypeToSearch(event('a')), false);
+  assert.equal(owner._handleTypeToSearch(event('', 0, 2001)), false);
 });
 
 test('emptying a set confirms the captured tab and rejects generated tabs', () => {

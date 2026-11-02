@@ -38,7 +38,8 @@ Enable them and choose your keys in preferences if desired.
   do not close it; they are left to the focused control or input method.
 
 Type letters or digits anywhere in the panel to start searching, including the
-first character. Enabled number shortcuts still paste.
+first character. Dedicated input-mode keys (such as Henkan and Muhenkan) also
+focus search and are passed to the input method. Enabled number shortcuts still paste.
 
 Search covers **All tabs** by default; uncheck it to search only the current tab.
 Space-separated words use AND matching, in any order. Results are grouped by tab
