@@ -2701,45 +2701,52 @@ test('unassigned input and IME keys keep the panel open; Escape explicitly close
   }
 });
 
-test('Up in search focuses the full history tail and respects IME preedit', () => {
+test('Up in search selects the visible lower row without rendering or scrolling', () => {
   let focus = 'search',
-    preedit = false,
-    rendered = 0;
-  const last = {
-    grab_key_focus: () => {
-      focus = last;
-    },
-  };
+    preedit = false;
   const [owner] = instance(['_handleSearchLastKeyEvent'], {
     Clutter: { KEY_Up: 1, KEY_KP_Up: 2, ModifierType: {} },
     modifierBits: (state) => state,
     global: { stage: { get_key_focus: () => focus } },
   });
+  const row = (y, height = 20) => ({
+    mapped: true,
+    get_transformed_position: () => [0, y],
+    get_transformed_size: () => [100, height],
+    grab_key_focus() {
+      assert.equal(owner._focusingVisibleSearchTail, true);
+      focus = this;
+    },
+  });
+  let rows = [row(-10), row(10), row(30), row(50), row(70)];
   Object.assign(owner, {
     menu: { isOpen: true },
     entries: { length: 1000 },
-    searchEntry: {
-      clutter_text: { has_preedit: () => preedit },
-      get_text: () => '',
+    searchEntry: { clutter_text: { has_preedit: () => preedit } },
+    historyScrollView: {
+      get_transformed_position: () => [0, 0],
+      get_transformed_size: () => [100, 60],
     },
     _isSearchActor: (actor) => actor === 'search',
     _isCrossTabSearch: () => false,
-    _ensureHistoryRows: () => {
-      rendered = owner._historyRenderLimit;
-    },
-    _visiblePasteCandidates: () => [last],
+    _ensureHistoryRows: () => assert.fail('Must not render history'),
+    _visiblePasteCandidates: () => rows,
   });
   const event = { get_key_symbol: () => 1, get_state: () => 0 };
   preedit = true;
   assert.equal(owner._handleSearchLastKeyEvent(event), false);
-  assert.equal(rendered, 0);
   preedit = false;
   assert.equal(owner._handleSearchLastKeyEvent(event), true);
-  assert.equal(rendered, 1000);
-  assert.equal(focus, last);
+  assert.equal(focus, rows[2]);
+  assert.equal(owner._focusingVisibleSearchTail, false);
+  assert.equal(owner._historyRenderLimit, undefined);
   assert.equal(owner._handleSearchLastKeyEvent(event), false);
   focus = 'search';
-  owner._visiblePasteCandidates = () => [];
+  rows = [row(-10, 100)];
+  assert.equal(owner._handleSearchLastKeyEvent(event), true);
+  assert.equal(focus, rows[0]);
+  focus = 'search';
+  rows = [];
   assert.equal(owner._handleSearchLastKeyEvent(event), true);
   assert.equal(focus, 'search');
   assert.equal(

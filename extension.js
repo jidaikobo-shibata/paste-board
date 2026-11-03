@@ -1128,7 +1128,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         });
         row.insert_child_at_index(row.shortcutLabel, 1);
         row.connect('key-focus-in', () => {
-          if (!this._restoringSearchScroll)
+          if (!this._restoringSearchScroll && !this._focusingVisibleSearchTail)
             ensureActorVisibleInScrollView(this._searchResultsScroll, row);
         });
         row.connect('activate', () => {
@@ -1413,7 +1413,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         }
         row.connect('key-focus-in', () => {
           if (generated) this._generatedSelectionText = row.entry.text;
-          ensureActorVisibleInScrollView(this._pasteSetScroll, row);
+          if (!this._focusingVisibleSearchTail)
+            ensureActorVisibleInScrollView(this._pasteSetScroll, row);
         });
         row.shortcutLabel = new St.Label({
           style_class: 'ci-shortcut-number',
@@ -2672,35 +2673,35 @@ class ClipboardIndicator extends PanelMenu.Button {
       GLib.Source.remove(this._initialFocusCallbackId);
       this._initialFocusCallbackId = undefined;
     }
-    if (this._isCrossTabSearch()) {
-      this._searchRenderLimit =
-        this.entries.length +
-        this._pasteSets.data.sets.reduce(
-          (count, set) =>
-            count +
-            (set.kind === 'generated'
-              ? this._generatedTabs?.get(set)?.items.length || 0
-              : set.items.length),
-          0,
-        );
-      this._renderAllTabSearch();
-    } else if (this._pasteSets && this._activePasteTab !== 'history') {
-      const set = this._pasteSets.data.sets.find(
-        (set) => set.id === this._activePasteTab,
-      );
-      this._pasteSetRenderLimit =
-        set?.kind === 'generated'
-          ? this._generatedTabs?.get(set)?.items.length
-          : set?.items.length;
-      this._renderPasteSets();
-    } else {
-      this._historyRenderLimit = this.entries.length;
-      if (this.searchEntry.get_text())
-        this.populateSearchResults(this.searchEntry.get_text());
-      else this._ensureHistoryRows();
+    const scroll = this._isCrossTabSearch()
+      ? this._searchResultsScroll
+      : this._pasteSets && this._activePasteTab !== 'history'
+        ? this._pasteSetScroll
+        : this.historyScrollView;
+    const [, top] = scroll.get_transformed_position();
+    const [, height] = scroll.get_transformed_size();
+    const bottom = top + height;
+    let lastFull, lastPartial;
+    for (const row of this._visiblePasteCandidates()) {
+      if (!row.mapped) continue;
+      const [, y] = row.get_transformed_position();
+      const [, rowHeight] = row.get_transformed_size();
+      if (y >= bottom) break;
+      if (rowHeight <= 0 || y + rowHeight <= top) continue;
+      lastPartial = row;
+      if (y >= top - 1 && y + rowHeight <= bottom + 1) lastFull = row;
     }
-    const rows = this._visiblePasteCandidates();
-    rows[rows.length - 1]?.grab_key_focus();
+    // Prefer a readable, fully visible row. A very tall row may only be
+    // partially visible; focusing it must not move or extend the viewport.
+    const target = lastFull || lastPartial;
+    if (target) {
+      this._focusingVisibleSearchTail = true;
+      try {
+        target.grab_key_focus();
+      } finally {
+        this._focusingVisibleSearchTail = false;
+      }
+    }
     return true;
   }
 
@@ -2826,7 +2827,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       this.activeHistoryMenuItems--;
     });
     menuItem.connect('key-focus-in', () => {
-      ensureActorVisibleInScrollView(this.historyScrollView, menuItem);
+      if (!this._focusingVisibleSearchTail)
+        ensureActorVisibleInScrollView(this.historyScrollView, menuItem);
     });
 
     this.historySection.addMenuItem(menuItem, insertIndex);

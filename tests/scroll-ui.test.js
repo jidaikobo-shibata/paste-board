@@ -284,49 +284,66 @@ export default class extends Extension {
       );
       await delay(250);
     };
-    await up();
-    assert(
-      rows().length === 120 && global.stage.get_key_focus() === rows()[119],
-      'Search Up did not reach the unrendered manual tail',
-    );
-    assert(
-      owner._pasteSetScroll.vadjustment.value > 0,
-      'Tail was not scrolled into view',
-    );
+    const verifyVisibleUp = async (scroll, label) => {
+      const original = rows();
+      const value = scroll.vadjustment.value;
+      const [, top] = scroll.get_transformed_position();
+      const [, height] = scroll.get_transformed_size();
+      const fullyVisible = original.filter((row) => {
+        const [, y] = row.get_transformed_position();
+        const [, h] = row.get_transformed_size();
+        return y >= top - 1 && y + h <= top + height + 1;
+      });
+      const target = fullyVisible.at(-1);
+      assert(
+        target && target !== original.at(-1),
+        `${label}: test needs offscreen rows`,
+      );
+      await up();
+      assert(
+        rows().length === original.length && rows()[0] === original[0],
+        `${label}: Up rendered or replaced rows`,
+      );
+      assert(
+        global.stage.get_key_focus() === target,
+        `${label}: Up did not select the visible lower row`,
+      );
+      assert(
+        Math.abs(scroll.vadjustment.value - value) < 1,
+        `${label}: Up scrolled the list`,
+      );
+    };
+    await verifyVisibleUp(owner._pasteSetScroll, 'Manual');
+    owner._pasteSetScroll.vadjustment.value = 250;
+    await delay(150);
+    await verifyVisibleUp(owner._pasteSetScroll, 'Scrolled manual');
     owner._switchPasteTab(generatedId);
-    await delay(100);
-    await up();
-    assert(
-      rows().at(-1)?.entry.text === 'ssh host119' &&
-        global.stage.get_key_focus() === rows().at(-1),
-      'Search Up did not reach generated tail',
-    );
+    await delay(150);
+    await verifyVisibleUp(owner._pasteSetScroll, 'Generated');
+    // Earlier limit tests deliberately reduced history to two items; reseed
+    // enough data to verify that visible-tail navigation cannot load all rows.
+    owner.historySection.removeAll();
+    owner.entries = new DS.LinkedList();
+    for (let i = 0; i < 1000; i++) {
+      const entry = new DS.LLNode();
+      Object.assign(entry, {
+        id: 10000 + i,
+        type: DS.TYPE_TEXT,
+        text: `scroll item ${i}`,
+      });
+      owner.entries.append(entry);
+    }
     owner._switchPasteTab('history');
-    await delay(100);
-    await up();
-    assert(
-      rows().length === owner.entries.length &&
-        global.stage.get_key_focus() === rows().at(-1),
-      'Search Up did not reach history tail',
-    );
+    await delay(150);
+    await verifyVisibleUp(owner.historyScrollView, 'History');
     owner.searchEntry.set_text('scroll item');
-    await delay(100);
-    await up();
-    assert(
-      rows().length === owner.entries.length &&
-        rows().at(-1)?.entry === owner.entries.head,
-      'Search Up did not reach the filtered history tail',
-    );
+    await delay(150);
+    await verifyVisibleUp(owner.historyScrollView, 'Filtered history');
     owner.searchEntry.set_text('candidate');
     owner._searchAllTabs = true;
     owner._onSearchTextChanged();
-    await delay(100);
-    await up();
-    assert(
-      rows().at(-1)?.entry.text === 'manual candidate 119' &&
-        global.stage.get_key_focus() === rows().at(-1),
-      'Search Up did not reach global result tail',
-    );
+    await delay(150);
+    await verifyVisibleUp(owner._searchResultsScroll, 'Global search');
     owner.searchEntry.set_text('no such tail result');
     await delay(100);
     await up();
