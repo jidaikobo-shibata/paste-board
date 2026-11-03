@@ -2737,7 +2737,7 @@ test('Up in search selects the visible lower row without rendering or scrolling'
   assert.equal(owner._handleSearchLastKeyEvent(event), false);
   preedit = false;
   assert.equal(owner._handleSearchLastKeyEvent(event), true);
-  assert.equal(focus, rows[2]);
+  assert.equal(focus, rows[3]);
   assert.equal(owner._focusingVisibleSearchTail, false);
   assert.equal(owner._historyRenderLimit, undefined);
   assert.equal(owner._handleSearchLastKeyEvent(event), false);

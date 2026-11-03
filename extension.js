@@ -2681,19 +2681,17 @@ class ClipboardIndicator extends PanelMenu.Button {
     const [, top] = scroll.get_transformed_position();
     const [, height] = scroll.get_transformed_size();
     const bottom = top + height;
-    let lastFull, lastPartial;
+    let target;
     for (const row of this._visiblePasteCandidates()) {
       if (!row.mapped) continue;
       const [, y] = row.get_transformed_position();
       const [, rowHeight] = row.get_transformed_size();
       if (y >= bottom) break;
       if (rowHeight <= 0 || y + rowHeight <= top) continue;
-      lastPartial = row;
-      if (y >= top - 1 && y + rowHeight <= bottom + 1) lastFull = row;
+      target = row;
     }
-    // Prefer a readable, fully visible row. A very tall row may only be
-    // partially visible; focusing it must not move or extend the viewport.
-    const target = lastFull || lastPartial;
+    // A partly clipped bottom row is still visible. Focus it without
+    // scrolling it fully into view or extending the list.
     if (target) {
       this._focusingVisibleSearchTail = true;
       try {

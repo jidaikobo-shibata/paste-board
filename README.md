@@ -29,7 +29,7 @@ and number-paste shortcuts are off by default to avoid desktop shortcut conflict
 Enable them and choose your keys in preferences if desired.
 
 - **Up/Down**, then **Enter**, or a click: paste an item.
-  **Up** in search selects the bottom fully visible candidate without scrolling
+  **Up** in search selects the bottom visible candidate, even if partly clipped, without scrolling
   (except during IME composition).
 - **Your chosen modifiers + 1–9**: paste a numbered candidate, when enabled.
 - **Left/Right** outside search: switch tabs.

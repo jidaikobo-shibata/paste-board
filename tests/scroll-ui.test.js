@@ -289,12 +289,12 @@ export default class extends Extension {
       const value = scroll.vadjustment.value;
       const [, top] = scroll.get_transformed_position();
       const [, height] = scroll.get_transformed_size();
-      const fullyVisible = original.filter((row) => {
+      const visible = original.filter((row) => {
         const [, y] = row.get_transformed_position();
         const [, h] = row.get_transformed_size();
-        return y >= top - 1 && y + h <= top + height + 1;
+        return h > 0 && y < top + height && y + h > top;
       });
-      const target = fullyVisible.at(-1);
+      const target = visible.at(-1);
       assert(
         target && target !== original.at(-1),
         `${label}: test needs offscreen rows`,
