@@ -54,7 +54,7 @@ Click the **pin** button to keep the panel open for repeated pastes. Choose
 **nothing**, **Enter**, or **Tab** after each paste—for example, Tab to fill
 successive form fields.
 
-Preferences let you customize shortcuts, history size, trimming, and copy feedback.
+Preferences let you customize shortcuts, item limit, trimming, and copy feedback.
 **Application paste shortcuts** overrides the paste keys sent to a target app;
 match them to that app's settings. Turning off **Paste on Enter or click** makes
 those actions copy only; number shortcuts still paste.
