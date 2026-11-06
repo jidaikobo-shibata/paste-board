@@ -66,8 +66,10 @@ export class ClipboardDebug {
                   this.check(generation)
                     .then((confirmed) => {
                       if (!this.valid(generation)) return;
-                      if (confirmed) this.notify();
-                      else next();
+                      if (confirmed) {
+                        this.record('empty-confirmed');
+                        return this.notify(() => this.valid(generation));
+                      } else next();
                     })
                     .catch(() => this.failure());
                   return GLib.SOURCE_REMOVE;
@@ -88,12 +90,13 @@ export class ClipboardDebug {
 
   failure() {
     // Error strings from applications could contain private data.
+    this.record('probe-error');
+  }
+
+  record(result) {
     this.log(
       '[Paste Board clipboard-debug] ' +
-        JSON.stringify({
-          time: new Date().toISOString(),
-          result: 'probe-error',
-        }),
+        JSON.stringify({ time: new Date().toISOString(), result }),
     );
   }
 

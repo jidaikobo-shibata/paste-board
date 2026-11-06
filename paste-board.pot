@@ -861,3 +861,15 @@ msgstr ""
 #: extension.js
 msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
 msgstr ""
+
+#: extension.js
+msgid "Clipboard recovery failed"
+msgstr ""
+
+#: extension.js
+msgid "Clipboard recovered from history"
+msgstr ""
+
+#: extension.js
+msgid "Plain text is available for pasting. Other applications control whether it is inserted."
+msgstr ""

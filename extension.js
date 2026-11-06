@@ -120,6 +120,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   destroy() {
     this._destroyed = true;
     this._clipboardDebug?.cancel();
+    this._debugRecoveryRead?.cancel();
     this._destroyTabContextMenu();
     this._commandPreviews?.destroy();
     this._generatedTabs?.destroy();
@@ -3501,6 +3502,94 @@ class ClipboardIndicator extends PanelMenu.Button {
     return state;
   }
 
+  async _recoverDebugClipboard(isCurrent) {
+    const log = (result) => this._clipboardDebug.record(result);
+    const active = () =>
+      !this._destroyed &&
+      !PRIVATE_MODE &&
+      !this._quickPasteBusy &&
+      !this._quickPasteRestoring &&
+      this.settings.get_boolean('debug-clipboard');
+    if (!active() || !isCurrent()) {
+      log('recovery-skipped-stale');
+      return;
+    }
+    const types =
+      this.selection.get_mimetypes(Meta.SelectionType.SELECTION_CLIPBOARD) ||
+      [];
+    const textOnly =
+      types.length > 0 &&
+      types.every((type) =>
+        /^(text\/plain(?:;.*)?|UTF8_STRING|STRING|TEXT)$/i.test(type),
+      );
+    const entry = this.entries?.last();
+    if (!textOnly || !entry?.text || this._debugRecoveryRead) {
+      log(
+        !textOnly
+          ? 'recovery-skipped-other-formats'
+          : 'recovery-skipped-unavailable',
+      );
+      this._showNotification(
+        _('Clipboard availability problem detected'),
+        _(
+          'The clipboard source returned empty text in every advertised text format. Previously copied text remains in history.',
+        ),
+      );
+      return;
+    }
+    // No asynchronous gap between the final owner check and replacement.
+    if (!active() || !isCurrent()) {
+      log('recovery-skipped-stale');
+      return;
+    }
+    log('recovery-started');
+    try {
+      Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
+      log('recovery-write-succeeded');
+    } catch {
+      log('recovery-write-failed');
+      this._showNotification(_('Clipboard recovery failed'), '');
+      return;
+    }
+    const generation = this._clipboardGeneration;
+    const reading = readClipboardText(
+      this.selection,
+      Meta.SelectionType.SELECTION_CLIPBOARD,
+    );
+    this._debugRecoveryRead = reading;
+    try {
+      const text = await reading.promise;
+      if (!active() || generation !== this._clipboardGeneration) {
+        log('recovery-verification-cancelled');
+        return;
+      }
+      const matches = text === entry.text;
+      log(matches ? 'recovery-verified' : 'recovery-verification-mismatch');
+      this._showNotification(
+        matches
+          ? _('Clipboard recovered from history')
+          : _('Clipboard recovery failed'),
+        matches
+          ? _(
+              'Plain text is available for pasting. Other applications control whether it is inserted.',
+            )
+          : '',
+      );
+    } catch {
+      const cancelled = !active() || generation !== this._clipboardGeneration;
+      log(
+        cancelled
+          ? 'recovery-verification-cancelled'
+          : 'recovery-verification-failed',
+      );
+      if (!cancelled)
+        this._showNotification(_('Clipboard recovery failed'), '');
+    } finally {
+      if (this._debugRecoveryRead === reading)
+        this._debugRecoveryRead = undefined;
+    }
+  }
+
   _setupSelectionChangeListener() {
     this.selection = Shell.Global.get().get_display().get_selection();
     this._clipboardDebug = new ClipboardDebug(
@@ -3512,19 +3601,14 @@ class ClipboardIndicator extends PanelMenu.Button {
         !this._quickPasteBusy &&
         !this._quickPasteRestoring &&
         this.settings.get_boolean('debug-clipboard'),
-      () =>
-        this._showNotification(
-          _('Clipboard availability problem detected'),
-          _(
-            'The clipboard source returned empty text in every advertised text format. Previously copied text remains in history.',
-          ),
-        ),
+      (isCurrent) => this._recoverDebugClipboard(isCurrent),
     );
     this._selectionOwnerChangedId = this.selection.connect(
       'owner-changed',
       (_, selectionType) => {
         if (selectionType === Meta.SelectionType.SELECTION_CLIPBOARD) {
           this._clipboardDebug?.cancel();
+          this._debugRecoveryRead?.cancel();
           this._clipboardGeneration = (this._clipboardGeneration || 0) + 1;
           if (this._quickPasteRestoring) return;
           if (this._quickPasteState) {
@@ -3632,6 +3716,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     if (PRIVATE_MODE) {
       this._clipboardDebug?.cancel();
+      this._debugRecoveryRead?.cancel();
       for (const read of this._clipboardReads || []) read.cancel();
       this._commandPreviews?.clear();
       this._generatedTabs?.clear();
@@ -3724,8 +3809,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSettingsChange() {
-    if (!this.settings.get_boolean('debug-clipboard'))
+    if (!this.settings.get_boolean('debug-clipboard')) {
       this._clipboardDebug?.cancel();
+      this._debugRecoveryRead?.cancel();
+    }
     const prevItemLimit = MAX_REGISTRY_LENGTH;
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;

@@ -898,3 +898,15 @@ msgstr "クリップボードの異常を検出"
 #: extension.js
 msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
 msgstr "コピー元が提示するすべてのテキスト形式が空でした。取得済みの内容は履歴に残っています。"
+
+#: extension.js
+msgid "Clipboard recovery failed"
+msgstr "クリップボードを復旧できませんでした"
+
+#: extension.js
+msgid "Clipboard recovered from history"
+msgstr "履歴からクリップボードを復旧しました"
+
+#: extension.js
+msgid "Plain text is available for pasting. Other applications control whether it is inserted."
+msgstr "プレインテキストを貼り付けられる状態にしました。実際の挿入は貼り付け先のアプリが行います。"
