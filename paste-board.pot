@@ -853,3 +853,11 @@ msgstr ""
 #: prefs.js:326
 msgid "Neither"
 msgstr ""
+
+#: extension.js
+msgid "Clipboard availability problem detected"
+msgstr ""
+
+#: extension.js
+msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
+msgstr ""

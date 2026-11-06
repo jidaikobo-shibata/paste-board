@@ -3,6 +3,11 @@
       id="org.gnome.shell.extensions.paste-board"
       path="/org/gnome/shell/extensions/paste-board/">
 
+    <key type="b" name="debug-clipboard">
+      <default>false</default>
+      <summary>Enable local clipboard availability diagnostics without recording contents</summary>
+    </key>
+
     <key type="b" name="search-all-tabs">
       <default>true</default>
       <summary>Search all tabs when the panel search field is not empty</summary>

@@ -43,6 +43,7 @@ import {
 import { HistorySession } from './historySession.js';
 import { MAX_TEXT_BYTES, MAX_LOG_BYTES, textFitsLimit } from './inputLimits.js';
 import { readClipboardText } from './clipboardRead.js';
+import { ClipboardDebug } from './clipboardDebug.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
@@ -118,6 +119,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._clipboardDebug?.cancel();
     this._destroyTabContextMenu();
     this._commandPreviews?.destroy();
     this._generatedTabs?.destroy();
@@ -3329,6 +3331,13 @@ class ClipboardIndicator extends PanelMenu.Button {
         }
       }
       this._processClipboardContent(text, true, externalCopy);
+      if (
+        text &&
+        generation === (this._clipboardGeneration || 0) &&
+        !this._quickPasteBusy &&
+        !this._quickPasteRestoring
+      )
+        this._clipboardDebug?.observe();
     });
   }
 
@@ -3494,10 +3503,28 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _setupSelectionChangeListener() {
     this.selection = Shell.Global.get().get_display().get_selection();
+    this._clipboardDebug = new ClipboardDebug(
+      this.selection,
+      Meta.SelectionType.SELECTION_CLIPBOARD,
+      () =>
+        !this._destroyed &&
+        !PRIVATE_MODE &&
+        !this._quickPasteBusy &&
+        !this._quickPasteRestoring &&
+        this.settings.get_boolean('debug-clipboard'),
+      () =>
+        this._showNotification(
+          _('Clipboard availability problem detected'),
+          _(
+            'The clipboard source returned empty text in every advertised text format. Previously copied text remains in history.',
+          ),
+        ),
+    );
     this._selectionOwnerChangedId = this.selection.connect(
       'owner-changed',
       (_, selectionType) => {
         if (selectionType === Meta.SelectionType.SELECTION_CLIPBOARD) {
+          this._clipboardDebug?.cancel();
           this._clipboardGeneration = (this._clipboardGeneration || 0) + 1;
           if (this._quickPasteRestoring) return;
           if (this._quickPasteState) {
@@ -3604,6 +3631,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
 
     if (PRIVATE_MODE) {
+      this._clipboardDebug?.cancel();
       for (const read of this._clipboardReads || []) read.cancel();
       this._commandPreviews?.clear();
       this._generatedTabs?.clear();
@@ -3696,6 +3724,8 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _onSettingsChange() {
+    if (!this.settings.get_boolean('debug-clipboard'))
+      this._clipboardDebug?.cancel();
     const prevItemLimit = MAX_REGISTRY_LENGTH;
     const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;

@@ -890,3 +890,11 @@ msgstr "表示しない"
 
 #~ msgid "This operation cannot be undone."
 #~ msgstr "削除した履歴は復元できません"
+
+#: extension.js
+msgid "Clipboard availability problem detected"
+msgstr "クリップボードの異常を検出"
+
+#: extension.js
+msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
+msgstr "コピー元が提示するすべてのテキスト形式が空でした。取得済みの内容は履歴に残っています。"
