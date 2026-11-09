@@ -855,11 +855,11 @@ msgid "Neither"
 msgstr ""
 
 #: extension.js
-msgid "Clipboard availability problem detected"
+msgid "Clipboard inspection result"
 msgstr ""
 
 #: extension.js
-msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
+msgid "During inspection, all tested text formats returned empty data. Previously copied text remains in history."
 msgstr ""
 
 #: extension.js

@@ -3530,9 +3530,9 @@ class ClipboardIndicator extends PanelMenu.Button {
           : 'recovery-skipped-unavailable',
       );
       this._showNotification(
-        _('Clipboard availability problem detected'),
+        _('Clipboard inspection result'),
         _(
-          'The clipboard source returned empty text in every advertised text format. Previously copied text remains in history.',
+          'During inspection, all tested text formats returned empty data. Previously copied text remains in history.',
         ),
       );
       return;

@@ -892,12 +892,12 @@ msgstr "表示しない"
 #~ msgstr "削除した履歴は復元できません"
 
 #: extension.js
-msgid "Clipboard availability problem detected"
-msgstr "クリップボードの異常を検出"
+msgid "Clipboard inspection result"
+msgstr "クリップボードの検査結果"
 
 #: extension.js
-msgid "The clipboard source returned empty text in every advertised text format. Previously copied text remains in history."
-msgstr "コピー元が提示するすべてのテキスト形式が空でした。取得済みの内容は履歴に残っています。"
+msgid "During inspection, all tested text formats returned empty data. Previously copied text remains in history."
+msgstr "検査時、対象のテキスト形式はすべて空でした。取得済みの内容は履歴に残っています。"
 
 #: extension.js
 msgid "Clipboard recovery failed"
