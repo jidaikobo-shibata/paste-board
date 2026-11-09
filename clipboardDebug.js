@@ -1,7 +1,8 @@
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
+import { textFitsLimit } from './inputLimits.js';
 
-// Opt-in diagnostics. Never decode or log the clipboard's contents.
+// Opt-in diagnostics. Incident contents go to private files, not the journal.
 export class ClipboardDebug {
   constructor(
     selection,
@@ -13,6 +14,11 @@ export class ClipboardDebug {
       confirmMs = 500,
       timeoutMs = 750,
       log = console.log,
+      incidentDirectory = GLib.build_filenamev([
+        GLib.get_user_state_dir(),
+        'paste-board',
+        'clipboard-debug',
+      ]),
     } = {},
   ) {
     Object.assign(this, {
@@ -24,6 +30,7 @@ export class ClipboardDebug {
       confirmMs,
       timeoutMs,
       log,
+      incidentDirectory,
     });
     this.cancel();
   }
@@ -36,10 +43,13 @@ export class ClipboardDebug {
     this.pending = null;
   }
 
-  observe() {
+  observe(text) {
     this.cancel();
     if (!this.active()) return;
     const generation = this.generation;
+    const snapshot = textFitsLimit(text)
+      ? { text, acquiredAt: new Date().toISOString() }
+      : null;
     let previous = 0;
     let index = 0;
     const next = () => {
@@ -68,6 +78,9 @@ export class ClipboardDebug {
                       if (!this.valid(generation)) return;
                       if (confirmed) {
                         this.record('empty-confirmed');
+                        this.saveIncident(snapshot, generation).catch(() =>
+                          this.record('incident-save-failed'),
+                        );
                         return this.notify(() => this.valid(generation));
                       } else next();
                     })
@@ -93,11 +106,69 @@ export class ClipboardDebug {
     this.record('probe-error');
   }
 
-  record(result) {
+  record(result, details = {}) {
     this.log(
       '[Paste Board clipboard-debug] ' +
-        JSON.stringify({ time: new Date().toISOString(), result }),
+        JSON.stringify({ time: new Date().toISOString(), result, ...details }),
     );
+  }
+
+  async saveIncident(snapshot, generation) {
+    if (!snapshot || !this.valid(generation)) return;
+    const detectedAt = new Date().toISOString();
+    const formats = (this.selection.get_mimetypes(this.type) || [])
+      .slice(0, 64)
+      .map((mime) => mime.slice(0, 256));
+    const directory = Gio.File.new_for_path(this.incidentDirectory);
+    if (GLib.mkdir_with_parents(this.incidentDirectory, 0o700) !== 0)
+      throw new Error('Could not create incident directory');
+    const info = directory.query_info(
+      'standard::type',
+      Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+      null,
+    );
+    if (info.get_file_type() !== Gio.FileType.DIRECTORY)
+      throw new Error('Invalid incident directory');
+    directory.set_attribute_uint32(
+      'unix::mode',
+      0o700,
+      Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
+      null,
+    );
+    const file = directory.get_child(GLib.uuid_string_random() + '.json');
+    const bytes = new GLib.Bytes(
+      new TextEncoder().encode(
+        JSON.stringify(
+          {
+            acquiredAt: snapshot.acquiredAt,
+            detectedAt,
+            generation,
+            formats,
+            text: snapshot.text,
+          },
+          null,
+          2,
+        ) + '\n',
+      ),
+    );
+    await new Promise((resolve, reject) =>
+      file.replace_contents_bytes_async(
+        bytes,
+        null,
+        false,
+        Gio.FileCreateFlags.PRIVATE | Gio.FileCreateFlags.REPLACE_DESTINATION,
+        null,
+        (source, result) => {
+          try {
+            source.replace_contents_finish(result);
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        },
+      ),
+    );
+    this.record('incident-saved', { generation, path: file.get_path() });
   }
 
   async check(generation) {

@@ -64,8 +64,16 @@ export default class extends Extension {
     );
     await delay(30);
     // Model a source that became empty after the original successful read.
-    owner._clipboardDebug.observe();
+    owner._clipboardDebug.observe(expected);
     await wait(() => logs.some((line) => line.includes('recovery-verified')));
+    await wait(() => logs.some((line) => line.includes('incident-saved')));
+    const savedLog = logs.find((line) => line.includes('incident-saved'));
+    const savedPath = JSON.parse(savedLog.slice(savedLog.indexOf('{'))).path;
+    const incident = JSON.parse(
+      new TextDecoder().decode(GLib.file_get_contents(savedPath)[1]),
+    );
+    if (incident.text !== expected)
+      throw Error('Incident text differs from original copy');
     owner._clipboardDebug.cancel();
     const text = await readClipboardText(
       owner.selection,

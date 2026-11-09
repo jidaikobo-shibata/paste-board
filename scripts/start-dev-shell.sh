@@ -22,6 +22,7 @@ if [[ ${1:-} != --session ]]; then
     GSETTINGS_BACKEND=keyfile \
     XDG_CONFIG_HOME="$paste_board_dev_root/config" \
     XDG_CACHE_HOME="$paste_board_dev_root/cache" \
+    XDG_STATE_HOME="$paste_board_dev_root/state" \
     dbus-run-session -- bash "$paste_board_dev_script" --session \
     2>&1 | tee /tmp/paste-board-dev-shell.log
   exit "${PIPESTATUS[0]}"

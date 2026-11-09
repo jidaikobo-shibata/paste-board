@@ -3338,7 +3338,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         !this._quickPasteBusy &&
         !this._quickPasteRestoring
       )
-        this._clipboardDebug?.observe();
+        this._clipboardDebug?.observe(text);
     });
   }
 

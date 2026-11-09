@@ -10,6 +10,7 @@ if [[ ${1:-} != --session ]]; then
   export LC_ALL="${EDITOR_TEST_LOCALE:-C.utf8}"
   export XDG_CONFIG_HOME="$editor_test_root/config"
   export XDG_CACHE_HOME="$editor_test_root/cache"
+  export XDG_STATE_HOME="$editor_test_root/state"
   export XDG_DATA_HOME="$editor_test_root/data"
   export XDG_RUNTIME_DIR="$editor_test_root/runtime"
   unset DISPLAY WAYLAND_DISPLAY XDG_SESSION_ID
