@@ -43,6 +43,7 @@ export class PasteSets {
             }
         }
       PasteSets.validate(this.data);
+      this._rememberValidatedTexts(this.data);
     } else {
       this.data = { version: 1, sets: [] };
       this._save(this.data);
@@ -50,6 +51,10 @@ export class PasteSets {
   }
 
   static validate(data) {
+    PasteSets.#validate(data);
+  }
+
+  static #validate(data, validTexts = null) {
     if (
       data?.version !== 1 ||
       !Array.isArray(data.sets) ||
@@ -111,8 +116,8 @@ export class PasteSets {
           item.name.length > 200 ||
           item.name.includes('\0') ||
           !['text', 'command'].includes(item.kind) ||
-          !isWellFormedString(item.text) ||
-          item.text.includes('\0') ||
+          (!validTexts?.has(item.text) &&
+            (!isWellFormedString(item.text) || item.text.includes('\0'))) ||
           (item.kind === 'text' && !item.text)
         )
           throw new Error(_('Invalid paste item format.'));
@@ -133,8 +138,18 @@ export class PasteSets {
     }
   }
 
+  // Strings are immutable. Cache only previously checked long text values,
+  // never item objects whose fields can change. Keep references only to the
+  // latest accepted snapshot, so deleting content also releases its cache entry.
+  _rememberValidatedTexts(data) {
+    this._validatedTexts = new Set();
+    for (const set of data.sets)
+      for (const item of set.items)
+        if (item.text.length >= 256) this._validatedTexts.add(item.text);
+  }
+
   _encode(data) {
-    PasteSets.validate(data);
+    PasteSets.#validate(data, this._validatedTexts);
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
     if (bytes.length > 16 * 1024 * 1024)
@@ -147,6 +162,7 @@ export class PasteSets {
       throw new Error(_('An import is being saved. Try again shortly.'));
     const bytes = this._encode(data);
     if (this._closed) throw new Error(_('Could not save paste sets.'));
+    this._rememberValidatedTexts(data);
     this._pendingBytes = bytes;
     this._startWrite();
   }
@@ -210,6 +226,7 @@ export class PasteSets {
 
   close() {
     this._closed = true;
+    this._validatedTexts = undefined;
     return this.flush();
   }
 
@@ -274,6 +291,7 @@ export class PasteSets {
     const next = this._changedData(update, options);
     await this._writeBytes(this._encode(next));
     this.data = next;
+    if (!this._closed) this._rememberValidatedTexts(next);
   }
 
   create(name, options = {}) {

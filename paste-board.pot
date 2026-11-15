@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-15 15:37+0900\n"
+"POT-Creation-Date: 2026-11-15 15:50+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -127,7 +127,7 @@ msgstr ""
 msgid "Paste Board is not available."
 msgstr ""
 
-#: backup.js:90 pasteSets.js:75
+#: backup.js:90 pasteSets.js:80
 msgid "Invalid import request."
 msgstr ""
 
@@ -449,7 +449,7 @@ msgstr ""
 msgid "Could not save session metadata"
 msgstr ""
 
-#: extension.js:582 pasteSets.js:149 pasteSets.js:273
+#: extension.js:582 pasteSets.js:164 pasteSets.js:290
 msgid "Could not save paste sets."
 msgstr ""
 
@@ -469,7 +469,7 @@ msgstr ""
 msgid "Could not create the paste set"
 msgstr ""
 
-#: extension.js:1110 extension.js:1345 extension.js:1741 pasteSets.js:349
+#: extension.js:1110 extension.js:1345 extension.js:1741 pasteSets.js:367
 msgid "History"
 msgstr ""
 
@@ -891,61 +891,61 @@ msgstr ""
 msgid "Could not read paste sets."
 msgstr ""
 
-#: pasteSets.js:58 pasteSets.js:88 pasteSets.js:94 pasteSets.js:307
+#: pasteSets.js:63 pasteSets.js:93 pasteSets.js:99 pasteSets.js:325
 msgid "Invalid paste set format."
 msgstr ""
 
-#: pasteSets.js:66
+#: pasteSets.js:71
 msgid "Invalid history tab name."
 msgstr ""
 
-#: pasteSets.js:90 pasteSets.js:92 pasteSets.js:104 pasteSets.js:305
+#: pasteSets.js:95 pasteSets.js:97 pasteSets.js:109 pasteSets.js:323
 msgid "Invalid command tab format."
 msgstr ""
 
-#: pasteSets.js:118
+#: pasteSets.js:123
 msgid "Invalid paste item format."
 msgstr ""
 
-#: pasteSets.js:130
+#: pasteSets.js:135
 msgid "Invalid command item format."
 msgstr ""
 
-#: pasteSets.js:141
+#: pasteSets.js:156
 msgid "Paste sets exceed the storage limit."
 msgstr ""
 
-#: pasteSets.js:147 pasteSets.js:256
+#: pasteSets.js:162 pasteSets.js:273
 msgid "An import is being saved. Try again shortly."
 msgstr ""
 
-#: pasteSets.js:238
+#: pasteSets.js:255
 #, javascript-format
 msgid "This paste set has reached the limit of %d items."
 msgstr ""
 
-#: pasteSets.js:310
+#: pasteSets.js:328
 msgid "Only an empty paste set can be changed to a command tab."
 msgstr ""
 
-#: pasteSets.js:332 pasteSets.js:339 pasteSets.js:394
+#: pasteSets.js:350 pasteSets.js:357 pasteSets.js:412
 msgid "Paste set not found."
 msgstr ""
 
-#: pasteSets.js:341
+#: pasteSets.js:359
 msgid "Generated items cannot be edited."
 msgstr ""
 
-#: pasteSets.js:352 pasteSets.js:354
+#: pasteSets.js:370 pasteSets.js:372
 msgid "untitled"
 msgstr ""
 
-#: pasteSets.js:354
+#: pasteSets.js:372
 #, javascript-format
 msgid "%s %d"
 msgstr ""
 
-#: pasteSets.js:428
+#: pasteSets.js:446
 msgid "The item to move was not found."
 msgstr ""
 
