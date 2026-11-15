@@ -12,13 +12,10 @@ const searchHelpers = vm.runInNewContext(
 );
 
 function method(name) {
-  const start =
-    source.indexOf(`  ${name}(`) >= 0
-      ? source.indexOf(`  ${name}(`)
-      : source.indexOf(`  async ${name}(`);
+  const start = source.indexOf(`  ${name}(`);
   assert.notEqual(start, -1, name);
   const rest = source.slice(start);
-  const end = rest.slice(1).search(/\n  (?:async )?[a-zA-Z_]\w*\(/) + 1;
+  const end = rest.slice(1).search(/\n  [a-zA-Z_]\w*\(/) + 1;
   assert.ok(end > 0, name);
   return rest.slice(0, end);
 }
@@ -2801,84 +2798,4 @@ test('Escape is forwarded only to search during preedit, then closes after compo
   searchFocused = false;
   assert.equal(owner._captureQuickPasteKey(event), true);
   assert.equal(closes, 2);
-});
-
-test('clipboard recovery verifies text and preserves other formats and new copies', async () => {
-  for (const mode of [
-    'success',
-    'mismatch',
-    'error',
-    'write-error',
-    'replaced',
-    'disabled',
-    'stale',
-    'image',
-    'html',
-    'no-history',
-  ]) {
-    const writes = [];
-    const logs = [];
-    const notifications = [];
-    let owner;
-    const [subject] = instance(['_recoverDebugClipboard'], {
-      ...clipboardGlobals(writes),
-      Meta: { SelectionType: { SELECTION_CLIPBOARD: 1 } },
-      Clipboard: {
-        set_text(type, text) {
-          if (mode === 'write-error') throw Error('private content');
-          writes.push([type, text]);
-          owner._clipboardGeneration++;
-        },
-      },
-      readClipboardText() {
-        return {
-          cancel() {},
-          promise: Promise.resolve().then(() => {
-            if (mode === 'error') throw Error('private content');
-            if (mode === 'replaced') owner._clipboardGeneration++;
-            return mode === 'mismatch' ? 'different' : 'saved text';
-          }),
-        };
-      },
-    });
-    owner = subject;
-    owner._clipboardGeneration = 1;
-    owner._clipboardDebug = { record: (result) => logs.push(result) };
-    owner.settings = { get_boolean: () => mode !== 'disabled' };
-    owner.selection = {
-      get_mimetypes: () =>
-        mode === 'image'
-          ? ['text/plain', 'image/png']
-          : mode === 'html'
-            ? ['text/plain', 'text/html']
-            : ['text/plain'],
-    };
-    owner.entries = {
-      last: () => (mode === 'no-history' ? null : { text: 'saved text' }),
-    };
-    owner._showNotification = (...args) => notifications.push(args);
-    await owner._recoverDebugClipboard(() => mode !== 'stale');
-    const result = {
-      success: 'recovery-verified',
-      mismatch: 'recovery-verification-mismatch',
-      error: 'recovery-verification-failed',
-      'write-error': 'recovery-write-failed',
-      replaced: 'recovery-verification-cancelled',
-      disabled: 'recovery-skipped-stale',
-      stale: 'recovery-skipped-stale',
-      image: 'recovery-skipped-other-formats',
-      html: 'recovery-skipped-other-formats',
-      'no-history': 'recovery-skipped-unavailable',
-    }[mode];
-    assert.ok(logs.includes(result), mode);
-    assert.equal(JSON.stringify(logs).includes('saved text'), false);
-    assert.equal(JSON.stringify(logs).includes('private content'), false);
-    assert.equal(
-      writes.length,
-      ['success', 'mismatch', 'error', 'replaced'].includes(mode) ? 1 : 0,
-      mode,
-    );
-    assert.equal(owner._debugRecoveryRead, undefined, mode);
-    if (mode === 'replaced') assert.equal(notifications.length, 0);
-  }
 });

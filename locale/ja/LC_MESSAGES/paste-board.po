@@ -890,23 +890,3 @@ msgstr "表示しない"
 
 #~ msgid "This operation cannot be undone."
 #~ msgstr "削除した履歴は復元できません"
-
-#: extension.js
-msgid "Clipboard inspection result"
-msgstr "クリップボードの検査結果"
-
-#: extension.js
-msgid "During inspection, all tested text formats returned empty data. Previously copied text remains in history."
-msgstr "検査時、対象のテキスト形式はすべて空でした。取得済みの内容は履歴に残っています。"
-
-#: extension.js
-msgid "Clipboard recovery failed"
-msgstr "クリップボードを復旧できませんでした"
-
-#: extension.js
-msgid "Clipboard recovered from history"
-msgstr "履歴からクリップボードを復旧しました"
-
-#: extension.js
-msgid "Plain text is available for pasting. Other applications control whether it is inserted."
-msgstr "プレインテキストを貼り付けられる状態にしました。実際の挿入は貼り付け先のアプリが行います。"

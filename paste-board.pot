@@ -853,23 +853,3 @@ msgstr ""
 #: prefs.js:326
 msgid "Neither"
 msgstr ""
-
-#: extension.js
-msgid "Clipboard inspection result"
-msgstr ""
-
-#: extension.js
-msgid "During inspection, all tested text formats returned empty data. Previously copied text remains in history."
-msgstr ""
-
-#: extension.js
-msgid "Clipboard recovery failed"
-msgstr ""
-
-#: extension.js
-msgid "Clipboard recovered from history"
-msgstr ""
-
-#: extension.js
-msgid "Plain text is available for pasting. Other applications control whether it is inserted."
-msgstr ""
