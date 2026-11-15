@@ -580,7 +580,7 @@ export default class extends Extension {
     await wait(() => record()?.state === 'ready');
     const restored = rows().find((row) => row.entry.sourceSetId === manual);
     assert(
-      restored !== before && global.stage.get_key_focus() === restored,
+      restored === before && global.stage.get_key_focus() === restored,
       'Generated results lost the focused candidate',
     );
     await key(Clutter.KEY_Down);
@@ -609,7 +609,7 @@ export default class extends Extension {
       'Paste completion did not flush generated results',
     );
     assert(
-      owner._quickPasteFocusedCandidate !== pasteCandidate &&
+      owner._quickPasteFocusedCandidate === pasteCandidate &&
         owner._quickPasteFocusedCandidate ===
           rows().find((row) => row.entry.sourceSetId === manual),
       'Deferred update lost the paste return candidate',

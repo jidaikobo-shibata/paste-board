@@ -1001,8 +1001,8 @@ test('row activation retains the panel until asynchronous paste handles closing'
       });
       if (custom) {
         const activate = callback(
-          "        row.connect('activate', () => {",
-          '\n        });',
+          "          row.connect('activate', () => {",
+          '\n          });',
           '',
           vm.createContext({
             row,

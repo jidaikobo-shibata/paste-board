@@ -1074,7 +1074,8 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
     const section = this._searchResultsSection;
-    const oldRows = section._getMenuItems().filter((row) => row.entry);
+    const oldItems = section._getMenuItems();
+    const oldRows = oldItems.filter((row) => row.entry);
     const focus = global.stage.get_key_focus();
     const focused = oldRows.find(
       (row) => focus && (row === focus || row.contains(focus)),
@@ -1082,6 +1083,17 @@ class ClipboardIndicator extends PanelMenu.Button {
     const pasteFocused = oldRows.find(
       (row) => row === this._quickPasteFocusedCandidate,
     );
+    // Snapshot identities before retained rows receive updated entry objects.
+    const identity = (row) =>
+      row && {
+        id: row.entry.id,
+        sourceSetId: row.entry.sourceSetId,
+        generated: row.entry.generated,
+        text: row.entry.text,
+        index: oldRows.indexOf(row),
+      };
+    const focusedIdentity = identity(focused);
+    const pasteIdentity = identity(pasteFocused);
     if (PRIVATE_MODE || !this.entries) {
       section.removeAll();
       this._applyPasteSetVisibility();
@@ -1101,20 +1113,31 @@ class ClipboardIndicator extends PanelMenu.Button {
       getPreview: (item) => this._commandPreviews?.get(item),
       limit: this._searchRenderLimit || HISTORY_BATCH_SIZE,
     });
-    section.removeAll();
+    // Keep unchanged actors (including focused action buttons). Only removed
+    // results are destroyed; new rows and notices are inserted at their positions.
+    const previous = new Map(oldItems.map((row) => [row._searchKey, row]));
+    const desired = [];
+    const retain = (key, create) => {
+      const row = previous.get(key) || create();
+      row._searchKey = key;
+      desired.push(row);
+      return row;
+    };
     this._crossSearchHasMore = results.hasMore;
     for (const group of results.groups) {
-      const heading = new PopupMenu.PopupBaseMenuItem({
-        reactive: false,
-        can_focus: false,
+      const heading = retain(JSON.stringify(['heading', group.id]), () => {
+        const row = new PopupMenu.PopupBaseMenuItem({
+          reactive: false,
+          can_focus: false,
+        });
+        const label = new St.Label({ style_class: 'ci-search-group-label' });
+        label.opacity = 190;
+        row.add_child(label);
+        row._searchHeadingLabel = label;
+        return row;
       });
-      const groupLabel = new St.Label({
-        text: group.name,
-        style_class: 'ci-search-group-label',
-      });
-      groupLabel.opacity = 190;
-      heading.add_child(groupLabel);
-      section.addMenuItem(heading);
+      if (heading._searchHeadingLabel.text !== group.name)
+        heading._searchHeadingLabel.text = group.name;
       for (const item of group.items) {
         const history = group.id === 'history';
         const set = this._pasteSets.data.sets.find(
@@ -1140,83 +1163,107 @@ class ClipboardIndicator extends PanelMenu.Button {
             item.kind === 'command' ? item.command : item.text,
             MAX_VISIBLE_CHARS,
           );
-        const row = new PopupMenu.PopupMenuItem(label, { hover: false });
-        row.add_style_class_name('ci-clipboard-row');
-        row.label.x_expand = true;
-        this._hideCandidateOrnament(row);
+        const key = JSON.stringify(['item', group.id, item.id]);
+        const actionKind = history
+          ? 'history'
+          : entry.generated
+            ? 'generated'
+            : 'manual';
+        const old = previous.get(key);
+        if (old && old._searchActionKind !== actionKind) previous.delete(key);
+        const row = retain(key, () => {
+          const row = new PopupMenu.PopupMenuItem(label, { hover: false });
+          row._searchActionKind = actionKind;
+          row.add_style_class_name('ci-clipboard-row');
+          row.label.x_expand = true;
+          this._hideCandidateOrnament(row);
+
+          row.shortcutLabel = new St.Label({
+            style_class: 'ci-shortcut-number',
+            y_align: Clutter.ActorAlign.CENTER,
+          });
+          row.insert_child_at_index(row.shortcutLabel, 1);
+          row.connect('key-focus-in', () => {
+            if (
+              !this._restoringSearchScroll &&
+              !this._focusingVisibleSearchTail
+            )
+              ensureActorVisibleInScrollView(this._searchResultsScroll, row);
+          });
+          row.connect('activate', () => {
+            GObject.signal_stop_emission_by_name(row, 'activate');
+            if (!this._quickPasteBusy) this._activatePasteEntry(row.entry);
+          });
+          if (history) {
+            for (const [icon, title, action] of [
+              [
+                'list-add-symbolic',
+                _('Add to a paste set'),
+                () => this._addToPasteSet(row.entry.text, row.entry.id),
+              ],
+              [
+                'edit-delete-symbolic',
+                _('Delete from history'),
+                () => this._deleteEntryAndRestoreLatest(row.entry),
+              ],
+            ]) {
+              const button = this._setActionButton(icon, title, action);
+              button.set_style_class_name('ci-action-btn');
+              row.add_child(button);
+            }
+          } else if (!entry.generated) {
+            for (const [icon, title, action] of [
+              [
+                'document-edit-symbolic',
+                _('Edit name and content'),
+                () =>
+                  this._editPasteSetItem(
+                    row.entry.sourceSetId,
+                    row._searchSourceItem,
+                  ),
+              ],
+              [
+                'edit-delete-symbolic',
+                _('Delete item'),
+                () =>
+                  this._confirmPasteSetDelete(
+                    row.entry.sourceSetId,
+                    row._searchSourceItem,
+                  ),
+              ],
+            ]) {
+              const button = this._setActionButton(icon, title, action);
+              button.set_style_class_name('ci-action-btn');
+              row.add_child(button);
+            }
+          }
+          return row;
+        });
         row.entry = entry;
+        row._searchSourceItem = item;
         row.searchGroupName = group.name;
-        row.shortcutLabel = new St.Label({
-          style_class: 'ci-shortcut-number',
-          y_align: Clutter.ActorAlign.CENTER,
-        });
-        row.insert_child_at_index(row.shortcutLabel, 1);
-        row.connect('key-focus-in', () => {
-          if (!this._restoringSearchScroll && !this._focusingVisibleSearchTail)
-            ensureActorVisibleInScrollView(this._searchResultsScroll, row);
-        });
-        row.connect('activate', () => {
-          GObject.signal_stop_emission_by_name(row, 'activate');
-          if (!this._quickPasteBusy) this._activatePasteEntry(row.entry);
-        });
-        if (history) {
-          for (const [icon, title, action] of [
-            [
-              'list-add-symbolic',
-              _('Add to a paste set'),
-              () => this._addToPasteSet(item.text, item.id),
-            ],
-            [
-              'edit-delete-symbolic',
-              _('Delete from history'),
-              () => this._deleteEntryAndRestoreLatest(item),
-            ],
-          ]) {
-            const button = this._setActionButton(icon, title, action);
-            button.set_style_class_name('ci-action-btn');
-            row.add_child(button);
-          }
-        } else if (!entry.generated) {
-          for (const [icon, title, action] of [
-            [
-              'document-edit-symbolic',
-              _('Edit name and content'),
-              () => this._editPasteSetItem(set.id, item),
-            ],
-            [
-              'edit-delete-symbolic',
-              _('Delete item'),
-              () => this._confirmPasteSetDelete(set.id, item),
-            ],
-          ]) {
-            const button = this._setActionButton(icon, title, action);
-            button.set_style_class_name('ci-action-btn');
-            row.add_child(button);
-          }
-        }
-        section.addMenuItem(row);
+        if (row.label.text !== label) row.label.text = label;
       }
     }
     if (!results.count)
-      section.addMenuItem(
-        new PopupMenu.PopupMenuItem(_('No matching items'), {
-          reactive: false,
-          can_focus: false,
-        }),
+      retain(
+        'empty',
+        () =>
+          new PopupMenu.PopupMenuItem(_('No matching items'), {
+            reactive: false,
+            can_focus: false,
+          }),
       );
     for (const missing of results.missing) {
-      const notice = new PopupMenu.PopupMenuItem(
-        format(
-          missing.state === 'pending'
-            ? _('Generating candidates: %s')
-            : missing.state === 'error'
-              ? _('Could not generate candidates: %s')
-              : missing.state === 'stopped'
-                ? _('Generation stopped: %s')
-                : _('Generated candidates not searched: %s'),
-          this._truncated(missing.name, 60),
-        ),
-        { reactive: false, can_focus: false },
+      let text = format(
+        missing.state === 'pending'
+          ? _('Generating candidates: %s')
+          : missing.state === 'error'
+            ? _('Could not generate candidates: %s')
+            : missing.state === 'stopped'
+              ? _('Generation stopped: %s')
+              : _('Generated candidates not searched: %s'),
+        this._truncated(missing.name, 60),
       );
       if (missing.state === 'error') {
         const set = this._pasteSets.data.sets.find(
@@ -1224,34 +1271,61 @@ class ClipboardIndicator extends PanelMenu.Button {
         );
         const error = this._generatedTabs?.get(set)?.error;
         if (error?.message)
-          notice.label.text +=
+          text +=
             ': ' + this._truncated(error.message.replace(/\s+/gu, ' '), 160);
       }
-      notice.label.add_style_class_name('ci-search-group-label');
-      notice.label.opacity = 190;
-      section.addMenuItem(notice);
+      const notice = retain(JSON.stringify(['notice', missing.id]), () => {
+        const row = new PopupMenu.PopupMenuItem('', {
+          reactive: false,
+          can_focus: false,
+        });
+        row.label.add_style_class_name('ci-search-group-label');
+        row.label.opacity = 190;
+        return row;
+      });
+      if (notice.label.text !== text) notice.label.text = text;
     }
+    const kept = new Set(desired);
+    for (const row of oldItems) if (!kept.has(row)) row.destroy();
+    const ordered = section._getMenuItems();
+    desired.forEach((row, index) => {
+      if (ordered[index] === row) return;
+      const oldIndex = ordered.indexOf(row);
+      if (oldIndex < 0) section.addMenuItem(row, index);
+      else {
+        section.moveMenuItem(row, index);
+        ordered.splice(oldIndex, 1);
+      }
+      ordered.splice(index, 0, row);
+    });
     if (this.refreshGeneratedItem) this.refreshGeneratedItem.hide();
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
-    // Results may arrive while the user is navigating or a paste temporarily
-    // releases the grab. Restore identity rather than the destroyed actor.
+    // Preserve an existing child focus; replace it only if its result disappeared.
+    // Paste restoration also keeps the identity from before the update.
     const rows = this._visiblePasteCandidates();
     const restore = (old) =>
       rows.find(
         (row) =>
-          row.entry.id === old.entry.id &&
-          row.entry.sourceSetId === old.entry.sourceSetId &&
-          (!old.entry.generated || row.entry.text === old.entry.text),
-      ) || rows[Math.min(oldRows.indexOf(old), rows.length - 1)];
-    if (pasteFocused) this._quickPasteFocusedCandidate = restore(pasteFocused);
-    if (focused) {
+          row.entry.id === old.id &&
+          row.entry.sourceSetId === old.sourceSetId &&
+          (!old.generated || row.entry.text === old.text),
+      ) || rows[Math.min(old.index, rows.length - 1)];
+    if (pasteIdentity)
+      this._quickPasteFocusedCandidate = restore(pasteIdentity);
+    if (focusedIdentity) {
       // Loading more rows must not scroll back to an offscreen focused row.
       // Keyboard navigation still reveals the row on the next focus change.
       this._restoringSearchScroll = Boolean(this._loadingScrollRows);
       try {
-        (restore(focused) || this.searchEntry).grab_key_focus();
+        const target = restore(focusedIdentity) || this.searchEntry;
+        const currentFocus = global.stage.get_key_focus();
+        if (
+          target !== currentFocus &&
+          !(currentFocus && target.contains(currentFocus))
+        )
+          target.grab_key_focus();
       } finally {
         this._restoringSearchScroll = false;
       }
