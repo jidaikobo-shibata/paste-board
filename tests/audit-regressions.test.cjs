@@ -2064,7 +2064,7 @@ test('delete confirmations preserve the panel and focus the next surviving candi
     { entry: { id: 'c' } },
   ];
   let closed, action, focus;
-  const [owner] = instance(['_confirmPanelAction'], {
+  const [owner] = instance(['_confirmPanelAction', '_openPanelModal'], {
     Shell: { ActionMode: { POPUP: 1 } },
     openConfirmDialog: (title, message, detail, accept, cancel, callback) => {
       action = callback;
@@ -2108,7 +2108,7 @@ test('cancelled confirmations retain the candidate and disabling prevents focus 
   let closed,
     focus,
     opens = 0;
-  const [owner] = instance(['_confirmPanelAction'], {
+  const [owner] = instance(['_confirmPanelAction', '_openPanelModal'], {
     Shell: { ActionMode: { POPUP: 1 } },
     openConfirmDialog: () => {
       opens++;
@@ -2147,7 +2147,7 @@ test('confirmation blocks only its own close handler temporarily and cancels def
   let blocked = false,
     removed = false;
   const layout = {};
-  const [owner] = instance(['_confirmPanelAction'], {
+  const [owner] = instance(['_confirmPanelAction', '_openPanelModal'], {
     Main: { layoutManager: layout },
     GObject: {
       signal_handler_block: (object, id) => {
@@ -2195,7 +2195,7 @@ test('a wide retained panel stays behind the modal and returns to the front afte
     set_child_below_sibling: (a, b) => operations.push(['below', a, b]),
     set_child_above_sibling: (a, b) => operations.push(['above', a, b]),
   };
-  const [owner] = instance(['_confirmPanelAction'], {
+  const [owner] = instance(['_confirmPanelAction', '_openPanelModal'], {
     Main: { layoutManager: { modalDialogGroup: modal } },
     openConfirmDialog: () => ({
       connect: (signal, fn) => {

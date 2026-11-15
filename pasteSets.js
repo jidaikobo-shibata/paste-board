@@ -5,6 +5,10 @@ import { readBoundedFile, MAX_TEXT_BYTES } from './inputLimits.js';
 
 const pendingWrites = new Set();
 
+function isWellFormedString(value) {
+  return typeof value === 'string' && !/[\uD800-\uDFFF]/u.test(value);
+}
+
 export class PasteSets {
   static async waitForWrites() {
     while (pendingWrites.size) await Promise.allSettled([...pendingWrites]);
@@ -38,14 +42,14 @@ export class PasteSets {
               }
             }
         }
-      this._validate(this.data);
+      PasteSets.validate(this.data);
     } else {
       this.data = { version: 1, sets: [] };
       this._save(this.data);
     }
   }
 
-  _validate(data) {
+  static validate(data) {
     if (
       data?.version !== 1 ||
       !Array.isArray(data.sets) ||
@@ -54,30 +58,43 @@ export class PasteSets {
       throw new Error(_('Invalid paste set format.'));
     if (
       data.historyName !== undefined &&
-      (typeof data.historyName !== 'string' ||
+      (!isWellFormedString(data.historyName) ||
         !data.historyName.trim() ||
+        data.historyName.includes('\0') ||
         data.historyName.length > 100)
     )
       throw new Error(_('Invalid history tab name.'));
+    if (
+      data.importReceipts !== undefined &&
+      (!Array.isArray(data.importReceipts) ||
+        data.importReceipts.length > 32 ||
+        data.importReceipts.some(
+          (id) => typeof id !== 'string' || !/^[0-9a-f-]{36}$/i.test(id),
+        ))
+    )
+      throw new Error(_('Invalid import request.'));
     const ids = new Set();
     for (const set of data.sets) {
       if (
-        typeof set.id !== 'string' ||
+        !isWellFormedString(set.id) ||
         ids.has(set.id) ||
-        typeof set.name !== 'string' ||
+        !isWellFormedString(set.name) ||
         !set.name.trim() ||
+        set.name.includes('\0') ||
         set.name.length > 100 ||
         !Array.isArray(set.items) ||
         set.items.length > 100000
       )
         throw new Error(_('Invalid paste set format.'));
+      if (set.runOnOpen !== undefined && typeof set.runOnOpen !== 'boolean')
+        throw new Error(_('Invalid command tab format.'));
       if (set.runOnSearch !== undefined && typeof set.runOnSearch !== 'boolean')
         throw new Error(_('Invalid command tab format.'));
       if (set.kind !== undefined && !['manual', 'generated'].includes(set.kind))
         throw new Error(_('Invalid paste set format.'));
       if (
         set.kind === 'generated' &&
-        (typeof set.command !== 'string' ||
+        (!isWellFormedString(set.command) ||
           !set.command.trim() ||
           set.command.length > 8192 ||
           set.command.includes('\0') ||
@@ -88,19 +105,20 @@ export class PasteSets {
       ids.add(set.id);
       for (const item of set.items) {
         if (
-          typeof item.id !== 'string' ||
+          !isWellFormedString(item.id) ||
           ids.has(item.id) ||
-          typeof item.name !== 'string' ||
+          !isWellFormedString(item.name) ||
           item.name.length > 200 ||
+          item.name.includes('\0') ||
           !['text', 'command'].includes(item.kind) ||
-          typeof item.text !== 'string' ||
+          !isWellFormedString(item.text) ||
           item.text.includes('\0') ||
           (item.kind === 'text' && !item.text)
         )
           throw new Error(_('Invalid paste item format.'));
         if (
           item.kind === 'command' &&
-          (typeof item.command !== 'string' ||
+          (!isWellFormedString(item.command) ||
             !item.command.trim() ||
             item.command.length > 8192 ||
             item.command.includes('\0') ||
@@ -116,7 +134,7 @@ export class PasteSets {
   }
 
   _save(data) {
-    this._validate(data);
+    PasteSets.validate(data);
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
     if (bytes.length > 16 * 1024 * 1024)
@@ -188,7 +206,7 @@ export class PasteSets {
     return this.flush();
   }
 
-  change(update) {
+  change(update, { itemLimit = this._getItemLimit() } = {}) {
     // Persisted fields are scalars, so copying containers isolates edits without
     // repeatedly serializing all text just to make a working copy.
     const next = {
@@ -198,8 +216,8 @@ export class PasteSets {
         items: set.items.map((item) => ({ ...item })),
       })),
     };
-    update(next.sets);
-    const limit = this._getItemLimit();
+    update(next.sets, next);
+    const limit = itemLimit;
     // A lower setting must not delete saved items or prevent editing/removal.
     const lengths = new Map(
       this.data.sets.map((set) => [set.id, set.items.length]),
@@ -239,9 +257,10 @@ export class PasteSets {
       command = '',
       executionMode = 'direct',
       runOnSearch = false,
+      runOnOpen = true,
     } = {},
   ) {
-    if (typeof runOnSearch !== 'boolean')
+    if (typeof runOnSearch !== 'boolean' || typeof runOnOpen !== 'boolean')
       throw new Error(_('Invalid command tab format.'));
     if (!['manual', 'generated'].includes(kind))
       throw new Error(_('Invalid paste set format.'));
@@ -254,12 +273,14 @@ export class PasteSets {
     delete next.command;
     delete next.executionMode;
     delete next.runOnSearch;
+    delete next.runOnOpen;
     if (kind === 'generated')
       Object.assign(next, {
         kind,
         command,
         executionMode,
         ...(runOnSearch ? { runOnSearch: true } : {}),
+        ...(runOnOpen ? {} : { runOnOpen: false }),
       });
     return next;
   }

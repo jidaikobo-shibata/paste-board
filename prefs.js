@@ -10,6 +10,7 @@ import { ExtensionPreferences } from 'resource:///org/gnome/Shell/Extensions/js/
 import Fields from './settingsFields.js';
 import { modifierLabel } from './shortcutModifiers.js';
 import { addApplicationPastePreferences } from './appPastePrefs.js';
+import { addBackupPreferences } from './backupPrefs.js';
 
 export default class ClipboardHistoryPrefs extends ExtensionPreferences {
   // fillPreferencesWindow() is passed a Adw.PreferencesWindow,
@@ -315,6 +316,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     page.add(group);
 
     addApplicationPastePreferences(window, settings, page);
+    addBackupPreferences(window, settings, page);
     window.add(page);
   }
 

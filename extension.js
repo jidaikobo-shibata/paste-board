@@ -24,6 +24,7 @@ import * as Store from './store.js';
 import * as DS from './dataStructures.js';
 import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
 import { PasteSets } from './pasteSets.js';
+import { BackupService } from './backup.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { CommandPreviews, previewSummary } from './commandPreviews.js';
@@ -118,6 +119,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._backupService?.destroy();
+    this._backupService = undefined;
     this._destroyTabContextMenu();
     this._commandPreviews?.destroy();
     this._generatedTabs?.destroy();
@@ -572,6 +575,15 @@ class ClipboardIndicator extends PanelMenu.Button {
           },
         },
       );
+      this._backupService = new BackupService(
+        this._pasteSets,
+        this.settings,
+        () => {
+          if (this._destroyed) return;
+          if (this._quickPasteBusy) this._pendingGeneratedRender = true;
+          else this._renderPasteSets();
+        },
+      );
       this._renderPasteSets();
     } catch (error) {
       this._showNotification(_('Could not load paste sets'), error.message);
@@ -1015,7 +1027,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._generatedTabs.clear();
       return null;
     }
-    return this._generatedTabs.sync(set, { autoRun: !this._previewsPaused });
+    return this._generatedTabs.sync(set, {
+      autoRun: !this._previewsPaused && set.runOnOpen !== false,
+    });
   }
 
   _refreshGeneratedTab() {
@@ -1135,6 +1149,41 @@ class ClipboardIndicator extends PanelMenu.Button {
           GObject.signal_stop_emission_by_name(row, 'activate');
           if (!this._quickPasteBusy) this._activatePasteEntry(row.entry);
         });
+        if (history) {
+          for (const [icon, title, action] of [
+            [
+              'list-add-symbolic',
+              _('Add to a paste set'),
+              () => this._addToPasteSet(item.text),
+            ],
+            [
+              'edit-delete-symbolic',
+              _('Delete from history'),
+              () => this._deleteEntryAndRestoreLatest(item),
+            ],
+          ]) {
+            const button = this._setActionButton(icon, title, action);
+            button.set_style_class_name('ci-action-btn');
+            row.add_child(button);
+          }
+        } else if (!entry.generated) {
+          for (const [icon, title, action] of [
+            [
+              'document-edit-symbolic',
+              _('Edit name and content'),
+              () => this._editPasteSetItem(set.id, item),
+            ],
+            [
+              'edit-delete-symbolic',
+              _('Delete item'),
+              () => this._confirmPasteSetDelete(set.id, item),
+            ],
+          ]) {
+            const button = this._setActionButton(icon, title, action);
+            button.set_style_class_name('ci-action-btn');
+            row.add_child(button);
+          }
+        }
         section.addMenuItem(row);
       }
     }
@@ -1185,7 +1234,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           row.entry.id === old.entry.id &&
           row.entry.sourceSetId === old.entry.sourceSetId &&
           (!old.entry.generated || row.entry.text === old.entry.text),
-      ) || rows[0];
+      ) || rows[Math.min(oldRows.indexOf(old), rows.length - 1)];
     if (pasteFocused) this._quickPasteFocusedCandidate = restore(pasteFocused);
     if (focused) {
       // Loading more rows must not scroll back to an offscreen focused row.
@@ -1533,13 +1582,20 @@ class ClipboardIndicator extends PanelMenu.Button {
       dialog.destroy();
       return;
     }
-    this.menu.close();
+    const preservePanel =
+      this.menu.isOpen && Boolean(this.searchEntry.get_text());
+    if (!preservePanel) this.menu.close();
     this._pasteSetDialog?.destroy();
     this._pasteSetDialog = dialog;
     dialog.connect('closed', () => {
       if (this._pasteSetDialog === dialog) this._pasteSetDialog = undefined;
     });
-    dialog.open();
+    if (preservePanel)
+      this._openPanelModal(() => {
+        dialog.open();
+        return dialog;
+      });
+    else dialog.open();
   }
 
   _destroyTabContextMenu() {
@@ -1611,6 +1667,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               command,
               executionMode: options.executionMode,
               runOnSearch: options.runOnSearch,
+              runOnOpen: options.runOnOpen,
             });
           this._renderPasteSets();
         },
@@ -1620,6 +1677,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           kind: set?.kind === 'generated' ? 'command' : 'text',
           executionMode: set?.executionMode || 'direct',
           runOnSearch: set?.runOnSearch === true,
+          runOnOpen: set?.runOnOpen !== false,
           trimTrailingNewlines: false,
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
@@ -1643,6 +1701,7 @@ class ClipboardIndicator extends PanelMenu.Button {
               command,
               executionMode: options.executionMode,
               runOnSearch: options.runOnSearch,
+              runOnOpen: options.runOnOpen,
             };
             if (id) this._pasteSets.configure(id, name, configuration);
             else
@@ -1678,6 +1737,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           kind: set?.kind === 'generated' ? 'command' : 'text',
           executionMode: set?.executionMode || 'direct',
           runOnSearch: set?.runOnSearch === true,
+          runOnOpen: set?.runOnOpen !== false,
           trimTrailingNewlines: false,
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
@@ -1741,6 +1801,13 @@ class ClipboardIndicator extends PanelMenu.Button {
     action,
     candidateId = null,
   ) {
+    return this._openPanelModal(
+      () => openConfirmDialog(title, message, detail, accept, cancel, action),
+      candidateId,
+    );
+  }
+
+  _openPanelModal(open, candidateId = null) {
     if (this._destroyed || this._quickPasteBusy) return;
     if (this._initialFocusCallbackId) {
       GLib.Source.remove(this._initialFocusCallbackId);
@@ -1758,14 +1825,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (handler) GObject.signal_handler_block(Main.layoutManager, handler);
     let dialog;
     try {
-      dialog = openConfirmDialog(
-        title,
-        message,
-        detail,
-        accept,
-        cancel,
-        action,
-      );
+      dialog = open();
     } finally {
       if (
         handler &&

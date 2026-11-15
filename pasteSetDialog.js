@@ -56,6 +56,7 @@ export const PasteSetDialog = GObject.registerClass(
       let kind = options.kind || 'text';
       let executionMode = options.executionMode || 'direct';
       let runOnSearch = options.runOnSearch === true;
+      let runOnOpen = options.runOnOpen !== false;
       let previewOnOpen = options.previewOnOpen === true;
       let trimTrailingNewlines = options.trimTrailingNewlines !== false;
       if (text !== null) {
@@ -124,6 +125,15 @@ export const PasteSetDialog = GObject.registerClass(
           _('Preview output when opening this tab'),
         );
         this.contentLayout.add_child(preview);
+        const openRun = new CheckBox.CheckBox(
+          _('Run command when opening this tab'),
+        );
+        openRun.accessible_name = _('Run command when opening this tab');
+        openRun.checked = runOnOpen;
+        openRun.connect('clicked', () => {
+          runOnOpen = openRun.checked;
+        });
+        this.contentLayout.add_child(openRun);
         const searchRun = new CheckBox.CheckBox(
           _('Run command during cross-tab search'),
         );
@@ -292,7 +302,7 @@ export const PasteSetDialog = GObject.registerClass(
           this._cancelCommandPreview();
           const command = kind === 'command';
           warning.text = options.tabEditor
-            ? _('Opening this tab runs the command with your permissions.')
+            ? _('This command runs with your user permissions.')
             : _('Runs with your user permissions.');
           bodyLabel.set_text(command ? _('Command') : _('Body'));
           if (options.tabEditor) {
@@ -312,6 +322,7 @@ export const PasteSetDialog = GObject.registerClass(
             this._editorStatus.visible =
             outputScroll.visible =
               command;
+          openRun.visible = Boolean(options.tabEditor && command);
           searchRun.visible = Boolean(options.tabEditor && command);
           searchRun.checked = runOnSearch;
           searchWarning.visible = searchRun.visible;
@@ -320,7 +331,7 @@ export const PasteSetDialog = GObject.registerClass(
             [
               options.tabEditor
                 ? _(
-                    'Opening this tab runs the command and turns each output line into a paste item.',
+                    'Automatic execution runs the command when opening this tab and turns each output line into a paste item.',
                   )
                 : previewOnOpen
                   ? _(
@@ -480,6 +491,7 @@ export const PasteSetDialog = GObject.registerClass(
             executionMode,
             previewOnOpen,
             runOnSearch,
+            runOnOpen,
           });
           this.close();
         } catch (e) {

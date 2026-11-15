@@ -399,10 +399,18 @@ export default class extends Extension {
         .filter((actor) => actor.style_class === 'check-box')
         .filter(
           (actor) =>
-            actor.accessible_name !== _('Run command during cross-tab search'),
+            ![
+              _('Run command during cross-tab search'),
+              _('Run command when opening this tab'),
+            ].includes(actor.accessible_name),
         )
         .every((actor) => !actor.mapped),
       'Item-specific checkboxes leaked into tab editor',
+    );
+    const autoOpen = button(dialog, 'Run command when opening this tab');
+    assert(
+      autoOpen?.mapped && autoOpen.checked,
+      'Tab-opening auto-run default changed',
     );
     const autoSearch = button(dialog, 'Run command during cross-tab search');
     assert(

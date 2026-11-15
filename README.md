@@ -44,7 +44,9 @@ focus search and are passed to the input method. Enabled number shortcuts still 
 
 Search covers **All tabs** by default; uncheck it to search only the current tab.
 Space-separated words use AND matching, in any order. Results are grouped by tab
-and numbered in display order. Clear the query to return to the ordinary list.
+and numbered in display order. Results also offer add, edit, and delete actions
+where supported by their source tab. Generated candidates remain read-only.
+Clear the query to return to the ordinary list.
 
 The first item in unfiltered history is the current text clipboard. Enter or
 clicking an unpinned history item updates the clipboard and moves it to the top.
@@ -71,6 +73,14 @@ toolbar's edit button. Deleting a set requires confirmation; History can only be
 renamed. The trash button empties the active history or manual set after
 confirmation, keeping the clipboard and tab. It is disabled for generated tabs.
 
+## Export and import
+
+Use **Export…** in preferences to save paste sets and settings as a JSON file.
+Clipboard history is excluded. **Import…** previews the tabs and adds them to
+existing sets; preferences and keyboard shortcuts can be applied separately.
+Imported commands have automatic execution turned off. Review them before
+re-enabling previews, tab-opening execution, or search execution.
+
 ## Commands
 
 Use **Bash (one-liner)** for pipes and variable expansion, or **Direct execution**
@@ -93,7 +103,8 @@ Create a set, select **Generate from command**, and enter a command. Each non-em
 output line becomes a read-only paste candidate. The first opening during a panel
 visit runs the command unless results are already available from search. Revisiting
 the tab reuses those results; selecting a candidate pastes without rerunning it.
-Use **Refresh** to regenerate the list, or stop a running generation.
+Use **Refresh** to regenerate the list, or stop a running generation. Turn off
+**Run command when opening this tab** to load it only on demand.
 
 Enable **Run command during cross-tab search** to load the tab when a non-empty
 all-tabs search begins. Further typing only filters the results; clear and
