@@ -188,6 +188,66 @@ async function main() {
   equal(await cancelledSelection, 'cancelled');
   await tick();
   equal(leaving.active.size, 0);
+  // Visible waiting items precede background work without expanding the target
+  // set, interrupting running work, or outranking an explicit paste request.
+  const visible = new CommandPreviews(() => {}, { execute });
+  const visibleStart = calls.length;
+  visible.sync(six, {
+    priorityIds: [six[4].id, six[4].id, 'unknown', six[5].id],
+  });
+  await tick();
+  equal(
+    calls.slice(visibleStart).map((run) => run.command),
+    [six[4].command, six[5].command],
+  );
+  const explicit = visible.request(six[3], { timeoutMs: 1000 });
+  visible.prioritize([six[2].id]);
+  visible.sync(six, { priorityIds: [six[2].id] });
+  equal(calls.length, visibleStart + 2);
+  equal(calls[visibleStart].cancelled, false);
+  equal(calls[visibleStart + 1].cancelled, false);
+  calls[visibleStart].resolve('visible first');
+  await tick();
+  equal(calls[visibleStart + 2].command, six[3].command);
+  calls[visibleStart + 2].resolve('explicit paste');
+  equal(await explicit.promise, 'explicit paste');
+  await tick();
+  equal(calls[visibleStart + 3].command, six[2].command);
+  // Drain the entire original set, including initially offscreen commands.
+  for (let round = 0; round < 10; round++) {
+    calls.slice(visibleStart).forEach((run) => run.resolve('done'));
+    await tick();
+    if (six.every((item) => visible.get(item).state === 'ready')) break;
+  }
+  equal(calls.length, visibleStart + six.length);
+  equal(
+    new Set(calls.slice(visibleStart).map((run) => run.command)).size,
+    six.length,
+  );
+  equal(
+    six.every((item) => visible.get(item).state === 'ready'),
+    true,
+  );
+  equal(
+    calls.slice(visibleStart).some((run) => run.cancelled),
+    false,
+  );
+  visible.prioritize(six.map((item) => item.id));
+  visible.sync(six, { priorityIds: six.map((item) => item.id) });
+  await tick();
+  equal(calls.length, visibleStart + six.length);
+  visible.destroy();
+  const excluded = new CommandPreviews(() => {}, { execute });
+  const excludedStart = calls.length;
+  excluded.sync(
+    six.map((item) => ({ ...item, previewOnOpen: false })),
+    { priorityIds: six.map((item) => item.id) },
+  );
+  excluded.prioritize(six.map((item) => item.id));
+  await tick();
+  equal(calls.length, excludedStart);
+  equal(excluded.records.size, 0);
+  excluded.destroy();
   // Defaults and persistence must not accidentally opt existing commands in.
   const directory = GLib.dir_make_tmp('paste-board-previews.XXXXXX');
   const sets = new PasteSets(directory);

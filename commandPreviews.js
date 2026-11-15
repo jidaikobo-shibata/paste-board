@@ -20,7 +20,7 @@ export class CommandPreviews {
     this.active = new Set();
   }
 
-  sync(items) {
+  sync(items, { priorityIds = [] } = {}) {
     const desired = new Map(
       items
         .filter(
@@ -55,6 +55,17 @@ export class CommandPreviews {
       this.records.set(id, record);
       this.queue.push(record);
     }
+    this.prioritize(priorityIds);
+  }
+
+  // Reorder only waiting work. Running commands keep their slots, and explicit
+  // paste requests stay ahead of visibility changes. Stable sorting preserves
+  // the relative order of background work and never creates new executions.
+  prioritize(ids) {
+    const ranks = new Map([...new Set(ids)].map((id, index) => [id, index]));
+    const rank = (record) =>
+      record.requested ? -1 : (ranks.get(record.id) ?? ranks.size);
+    this.queue.sort((a, b) => rank(a) - rank(b));
     this._pump();
   }
 
@@ -68,6 +79,7 @@ export class CommandPreviews {
     if (!record) return null;
     if (record.state !== 'pending')
       return { promise: record.promise, cancel() {} };
+    record.requested = true;
     const index = this.queue.indexOf(record);
     if (index >= 0) {
       this.queue.splice(index, 1);

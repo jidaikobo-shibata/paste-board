@@ -884,24 +884,27 @@ test('fixed history paste preserves the clipboard and order on paste or close', 
     timers = [],
     moves = [];
   const target = {};
-  const [owner, context] = instance(['_quickPaste'], {
-    DS: { TYPE_TEXT: 1 },
-    global: { display: { focus_window: target } },
-    St: { ClipboardType: { CLIPBOARD: 1 } },
-    Clipboard: {
-      get_text: (_, fn) => fn(null, 'original'),
-      set_text: (_, value) => copied.push(value),
-    },
-    GLib: {
-      PRIORITY_DEFAULT: 0,
-      SOURCE_REMOVE: false,
-      timeout_add: (_, ms, fn) => {
-        timers.push(fn);
-        return timers.length;
+  const [owner, context] = instance(
+    ['_quickPaste', '_cancelPreviewPriorityUpdate'],
+    {
+      DS: { TYPE_TEXT: 1 },
+      global: { display: { focus_window: target } },
+      St: { ClipboardType: { CLIPBOARD: 1 } },
+      Clipboard: {
+        get_text: (_, fn) => fn(null, 'original'),
+        set_text: (_, value) => copied.push(value),
       },
-      Source: { remove: noop },
+      GLib: {
+        PRIORITY_DEFAULT: 0,
+        SOURCE_REMOVE: false,
+        timeout_add: (_, ms, fn) => {
+          timers.push(fn);
+          return timers.length;
+        },
+        Source: { remove: noop },
+      },
     },
-  });
+  );
   Object.assign(owner, {
     menu: { isOpen: true },
     _keepMenuOpen: true,
@@ -2846,4 +2849,101 @@ test('search editing identifies the candidate containing the action button', () 
   owner._openPasteSetDialog(dialog);
   assert.equal(opens, 3);
   assert.equal(closes, 1);
+});
+
+test('preview priority follows viewport intersections and respects inactive modes', () => {
+  const [owner, context] = instance(['_prioritizeVisiblePreviews']);
+  const selected = [];
+  const row = (id, y, height = 10, kind = 'command', mapped = true) => ({
+    entry: { id, kind },
+    mapped,
+    get_transformed_position: () => [0, y],
+    get_transformed_size: () => [100, height],
+  });
+  const rows = [
+    row('above', 50, 50),
+    row('partial-top', 99, 2),
+    row('middle', 150),
+    row('partial-bottom', 199, 2),
+    row('below', 200),
+    row('text', 120, 10, 'text'),
+    row('hidden', 130, 10, 'command', false),
+  ];
+  const scroll = {
+    mapped: true,
+    get_transformed_position: () => [0, 100],
+    get_transformed_size: () => [100, 100],
+  };
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _activePasteTab: 'manual',
+    _isCrossTabSearch: () => false,
+    _commandPreviews: {
+      queue: [{}],
+      prioritize: (ids) => selected.push(Array.from(ids)),
+    },
+    _pasteSetScroll: scroll,
+    _searchResultsScroll: scroll,
+    _pasteSetSection: { _getMenuItems: () => rows },
+    _searchResultsSection: { _getMenuItems: () => rows },
+  });
+  owner._prioritizeVisiblePreviews();
+  assert.deepEqual(selected.pop(), ['partial-top', 'middle', 'partial-bottom']);
+  owner._isCrossTabSearch = () => true;
+  owner._prioritizeVisiblePreviews();
+  assert.deepEqual(selected.pop(), ['partial-top', 'middle', 'partial-bottom']);
+  owner._previewsPaused = true;
+  owner._prioritizeVisiblePreviews();
+  assert.equal(selected.length, 0);
+  owner._previewsPaused = false;
+  context.PRIVATE_MODE = true;
+  owner._prioritizeVisiblePreviews();
+  assert.equal(selected.length, 0);
+  context.PRIVATE_MODE = false;
+  owner.menu.isOpen = false;
+  owner._prioritizeVisiblePreviews();
+  assert.equal(selected.length, 0);
+  owner.menu.isOpen = true;
+  owner._commandPreviews.queue = [];
+  owner._prioritizeVisiblePreviews();
+  assert.equal(selected.length, 0);
+});
+
+test('preview priority updates coalesce and their idle source is cancelled', () => {
+  const pending = [],
+    removed = [];
+  const [owner] = instance(
+    ['_queuePreviewPriorityUpdate', '_cancelPreviewPriorityUpdate'],
+    {
+      GLib: {
+        PRIORITY_DEFAULT_IDLE: 200,
+        SOURCE_REMOVE: false,
+        idle_add: (_priority, fn) => {
+          pending.push(fn);
+          return pending.length;
+        },
+        Source: { remove: (id) => removed.push(id) },
+      },
+    },
+  );
+  let updates = 0;
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _commandPreviews: { queue: [{}] },
+    _prioritizeVisiblePreviews: () => updates++,
+  });
+  owner._queuePreviewPriorityUpdate();
+  owner._queuePreviewPriorityUpdate();
+  assert.equal(pending.length, 1);
+  pending[0]();
+  assert.equal(updates, 1);
+  assert.equal(owner._previewPriorityIdle, undefined);
+  owner._queuePreviewPriorityUpdate();
+  owner._cancelPreviewPriorityUpdate();
+  owner._cancelPreviewPriorityUpdate();
+  assert.deepEqual(removed, [2]);
+  assert.equal(owner._previewPriorityIdle, undefined);
+  owner.menu.isOpen = false;
+  owner._queuePreviewPriorityUpdate();
+  assert.equal(pending.length, 2);
 });

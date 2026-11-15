@@ -120,6 +120,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._cancelPreviewPriorityUpdate();
     this._diagnosticService?.destroy();
     this._diagnosticService = undefined;
     this._backupService?.destroy();
@@ -243,6 +244,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       if (!open && !this.menu.isOpen) {
         this._tabContextMenu?.close();
+        this._cancelPreviewPriorityUpdate();
         this._commandPreviews?.clear();
         this._generatedTabs?.clear();
         this._pendingGeneratedRender = false;
@@ -1302,6 +1304,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
+    this._queuePreviewPriorityUpdate();
     // Preserve an existing child focus; replace it only if its result disappeared.
     // Paste restoration also keeps the identity from before the update.
     const rows = this._visiblePasteCandidates();
@@ -1423,18 +1426,22 @@ class ClipboardIndicator extends PanelMenu.Button {
         .find((row) => row.entry?.id === id);
       if (row) this._updateCommandPreviewRow(row);
     });
-    if (this.menu.isOpen && !PRIVATE_MODE && !this._previewsPaused)
-      this._commandPreviews.sync(sourceItems);
-    else this._commandPreviews.clear();
     const query = this.searchEntry.get_text();
     const terms = searchTerms(query);
+    // Search all data before applying the actor budget. The matching prefix
+    // supplies initial priority until newly created actors have an allocation.
+    const matchingItems = sourceItems.filter((item) =>
+      matchesSearch(terms, item.name, item.text, item.command),
+    );
+    if (this.menu.isOpen && !PRIVATE_MODE && !this._previewsPaused)
+      this._commandPreviews.sync(sourceItems, {
+        priorityIds: matchingItems
+          .slice(0, this._pasteSetRenderLimit || HISTORY_BATCH_SIZE)
+          .map((item) => item.id),
+      });
+    else this._commandPreviews.clear();
     const previous = new Map();
     if (set) {
-      // Filter all source data before applying the rendering budget. Offscreen
-      // items must remain searchable in both local and cross-tab searches.
-      const matchingItems = sourceItems.filter((item) =>
-        matchesSearch(terms, item.name, item.text, item.command),
-      );
       const focus = global.stage.get_key_focus();
       const focusedRow = this._pasteSetSection
         ._getMenuItems()
@@ -1636,6 +1643,65 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._applyPasteSetVisibility();
     this._updateCandidateNumbers();
     this._updatePasteTabScroll();
+    this._queuePreviewPriorityUpdate();
+  }
+
+  _cancelPreviewPriorityUpdate() {
+    if (!this._previewPriorityIdle) return;
+    GLib.Source.remove(this._previewPriorityIdle);
+    this._previewPriorityIdle = undefined;
+  }
+
+  _queuePreviewPriorityUpdate() {
+    if (
+      this._previewPriorityIdle ||
+      this._destroyed ||
+      PRIVATE_MODE ||
+      !this.menu.isOpen ||
+      this._previewsPaused ||
+      !this._commandPreviews?.queue.length
+    )
+      return;
+    this._previewPriorityIdle = GLib.idle_add(
+      GLib.PRIORITY_DEFAULT_IDLE,
+      () => {
+        this._previewPriorityIdle = undefined;
+        this._prioritizeVisiblePreviews();
+        return GLib.SOURCE_REMOVE;
+      },
+    );
+  }
+
+  _prioritizeVisiblePreviews() {
+    if (
+      this._destroyed ||
+      PRIVATE_MODE ||
+      !this.menu.isOpen ||
+      this._previewsPaused ||
+      !this._commandPreviews?.queue.length
+    )
+      return;
+    const crossSearch = this._isCrossTabSearch();
+    const scroll = crossSearch
+      ? this._searchResultsScroll
+      : this._pasteSetScroll;
+    const section = crossSearch
+      ? this._searchResultsSection
+      : this._pasteSetSection;
+    if (!scroll?.mapped || (!crossSearch && this._activePasteTab === 'history'))
+      return;
+    const [, top] = scroll.get_transformed_position();
+    const [, height] = scroll.get_transformed_size();
+    if (height <= 0) return;
+    const ids = [];
+    for (const row of section._getMenuItems()) {
+      if (!row.mapped || row.entry?.kind !== 'command') continue;
+      const [, y] = row.get_transformed_position();
+      const [, rowHeight] = row.get_transformed_size();
+      if (rowHeight > 0 && y < top + height && y + rowHeight > top)
+        ids.push(row.entry.id);
+    }
+    this._commandPreviews.prioritize(ids);
   }
 
   _updateCommandPreviewRow(row) {
@@ -3288,7 +3354,17 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _watchHistoryScroll(scroll, kind) {
+    if (kind !== 'history') {
+      scroll.connect('notify::allocation', () =>
+        this._queuePreviewPriorityUpdate(),
+      );
+      for (const property of ['upper', 'page-size'])
+        scroll.vadjustment.connect(`notify::${property}`, () =>
+          this._queuePreviewPriorityUpdate(),
+        );
+    }
     scroll.vadjustment.connect('notify::value', () => {
+      if (kind !== 'history') this._queuePreviewPriorityUpdate();
       const adjustment = scroll.vadjustment;
       if (
         !this.menu.isOpen ||
