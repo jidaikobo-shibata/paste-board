@@ -12,6 +12,8 @@ function equal(actual, expected) {
   checks++;
 }
 equal(_('History'), japanese ? '履歴' : 'History');
+equal(_('Debug mode'), japanese ? 'デバッグモード' : 'Debug mode');
+equal(_('Diagnose and save'), japanese ? '診断して保存' : 'Diagnose and save');
 equal(_('All tabs'), japanese ? '全タブ' : 'All tabs');
 equal(_('Body'), japanese ? '本文' : 'Body');
 equal(

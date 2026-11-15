@@ -25,6 +25,7 @@ import * as DS from './dataStructures.js';
 import { openConfirmDialog, closeConfirmDialog } from './confirmDialog.js';
 import { PasteSets } from './pasteSets.js';
 import { BackupService } from './backup.js';
+import { DiagnosticService } from './clipboardDiagnostics.js';
 import { PasteSetDialog, PasteSetTargetDialog } from './pasteSetDialog.js';
 import { runCommand } from './commandOutput.js';
 import { CommandPreviews, previewSummary } from './commandPreviews.js';
@@ -119,6 +120,8 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._diagnosticService?.destroy();
+    this._diagnosticService = undefined;
     this._backupService?.destroy();
     this._backupService = undefined;
     this._destroyTabContextMenu();
@@ -462,6 +465,13 @@ class ClipboardIndicator extends PanelMenu.Button {
         clearMenuItem.connect('activate', this._removeAll.bind(this));
 
         this._setupSelectionChangeListener();
+        this._diagnosticService = new DiagnosticService(this.settings, () => ({
+          selection: this.selection,
+          type: Meta.SelectionType.SELECTION_CLIPBOARD,
+          historyText: this.entries?.last()?.text ?? null,
+          application:
+            global.display.get_focus_window()?.get_wm_class() ?? null,
+        }));
         this._queryClipboard(true, true);
       },
     );

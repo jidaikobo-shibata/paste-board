@@ -45,7 +45,9 @@ async function main() {
   original.set_int('history-size', 1234);
   original.set_strv('toggle-menu', ['<Super>F1']);
   original.set_int('quick-paste-modifiers', 8);
+  original.set_boolean('debug-mode', true);
   const json = createBackup(source, original);
+  equal(Object.hasOwn(JSON.parse(json).preferences, 'debug-mode'), false);
   const data = parseBackup(json, original);
   equal(data.historyName, 'My history');
   equal(Object.hasOwn(data, 'history'), false);
@@ -55,11 +57,23 @@ async function main() {
   );
   target.create('Example');
   const destination = settings();
+  destination.set_boolean('debug-mode', false);
   destination.reset('toggle-menu');
   destination.reset('quick-paste-modifiers');
   destination.set_int('history-size', 2);
   const operation = GLib.uuid_string_random();
-  await importBackup(target, destination, json, true, false, operation);
+  await importBackup(
+    target,
+    destination,
+    JSON.stringify({
+      ...data,
+      preferences: { ...data.preferences, 'debug-mode': 'true' },
+    }),
+    true,
+    false,
+    operation,
+  );
+  equal(destination.get_boolean('debug-mode'), false);
   equal(
     target.data.sets.map((set) => set.name),
     ['Example', 'Example (2)', 'Generated'],

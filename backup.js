@@ -57,7 +57,8 @@ export function parseBackup(json, settings) {
 export function createBackup(pasteSets, settings) {
   const preferences = {};
   for (const key of settings.settings_schema.list_keys())
-    preferences[key] = settings.get_value(key).print(true);
+    if (key !== 'debug-mode')
+      preferences[key] = settings.get_value(key).print(true);
   const data = {
     format: 'paste-board',
     version: 1,
@@ -93,7 +94,8 @@ export async function importBackup(
   pending.delay();
   if (applyPreferences)
     for (const [key, value] of Object.entries(data.preferences)) {
-      if (!applyShortcuts && SHORTCUT_KEYS.has(key)) continue;
+      if (key === 'debug-mode' || (!applyShortcuts && SHORTCUT_KEYS.has(key)))
+        continue;
       if (!settings.is_writable(key))
         throw new Error(_('Some preferences cannot be changed.'));
       const variant = GLib.Variant.parse(

@@ -11,6 +11,7 @@ import Fields from './settingsFields.js';
 import { modifierLabel } from './shortcutModifiers.js';
 import { addApplicationPastePreferences } from './appPastePrefs.js';
 import { addBackupPreferences } from './backupPrefs.js';
+import { addDiagnosticPreferences } from './diagnosticPrefs.js';
 
 export default class ClipboardHistoryPrefs extends ExtensionPreferences {
   // fillPreferencesWindow() is passed a Adw.PreferencesWindow,
@@ -317,6 +318,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
 
     addApplicationPastePreferences(window, settings, page);
     addBackupPreferences(window, settings, page);
+    addDiagnosticPreferences(window, settings, page);
     window.add(page);
   }
 
