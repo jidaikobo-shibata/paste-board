@@ -127,11 +127,131 @@ async function main() {
   await rejects(() =>
     importBackup(fail, destination, json, false, false, retryId),
   );
-  equal(fail.data.sets.length, 2);
+  equal(fail.data.sets.length, 0);
+  equal(
+    JSON.parse(new TextDecoder().decode(GLib.file_get_contents(fail.path)[1]))
+      .sets.length,
+    0,
+  );
   fail._writeBytes = write;
   await importBackup(fail, destination, json, false, false, retryId);
   equal(fail.data.sets.length, 2);
   equal(new PasteSets(GLib.path_get_dirname(fail.path)).data.sets.length, 2);
+  const cancelled = new PasteSets(
+    GLib.dir_make_tmp('paste-board-backup-cancelled.XXXXXX'),
+  );
+  cancelled.create('Original');
+  await cancelled.flush();
+  const cancelledWrite = cancelled._writeBytes.bind(cancelled);
+  cancelled._writeBytes = async () => {
+    throw Error('simulated failure');
+  };
+  await rejects(() =>
+    importBackup(
+      cancelled,
+      destination,
+      json,
+      false,
+      false,
+      GLib.uuid_string_random(),
+    ),
+  );
+  equal(
+    cancelled.data.sets.map((set) => set.name),
+    ['Original'],
+  );
+  // Closing the failed dialog makes no request. A subsequent unrelated edit
+  // and a new import must not commit or duplicate that failed operation.
+  cancelled._writeBytes = cancelledWrite;
+  cancelled.create('Later edit');
+  await cancelled.flush();
+  equal(
+    new PasteSets(GLib.path_get_dirname(cancelled.path)).data.sets.length,
+    2,
+  );
+  await importBackup(
+    cancelled,
+    destination,
+    json,
+    false,
+    false,
+    GLib.uuid_string_random(),
+  );
+  equal(
+    cancelled.data.sets.filter((set) => set.name.startsWith('Example')).length,
+    1,
+  );
+  equal(cancelled.data.sets.length, 4);
+  await cancelled.close();
+
+  for (const name of [
+    'a'.repeat(84) + '😀' + 'z'.repeat(14),
+    '😀'.repeat(50),
+  ]) {
+    const emojiSource = new PasteSets(
+      GLib.dir_make_tmp('paste-board-backup-emoji-source.XXXXXX'),
+    );
+    const emojiTarget = new PasteSets(
+      GLib.dir_make_tmp('paste-board-backup-emoji-target.XXXXXX'),
+    );
+    emojiSource.create(name);
+    emojiTarget.create(name);
+    await importBackup(
+      emojiTarget,
+      destination,
+      createBackup(emojiSource, destination),
+      false,
+      false,
+      GLib.uuid_string_random(),
+    );
+    equal(emojiTarget.data.sets.length, 2);
+    const renamed = emojiTarget.data.sets[1].name;
+    equal(renamed.length <= 100, true);
+    equal(/[\uD800-\uDFFF]/u.test(renamed), false);
+    equal(renamed.endsWith(' (2)'), true);
+    await Promise.all([emojiSource.close(), emojiTarget.close()]);
+  }
+
+  const committing = new PasteSets(
+    GLib.dir_make_tmp('paste-board-backup-committing.XXXXXX'),
+  );
+  const originalId = committing.create('Original');
+  await committing.flush();
+  const commitWrite = committing._writeBytes.bind(committing);
+  let release;
+  committing._writeBytes = (bytes) =>
+    new Promise((resolve, reject) => {
+      release = () => commitWrite(bytes).then(resolve, reject);
+    });
+  const importing = importBackup(
+    committing,
+    destination,
+    json,
+    false,
+    false,
+    GLib.uuid_string_random(),
+  );
+  await Promise.resolve();
+  equal(typeof release, 'function');
+  equal(committing.data.sets.length, 1);
+  await rejects(() => committing.rename(originalId, 'Concurrent edit'));
+  equal(committing.data.sets[0].name, 'Original');
+  let drained = false;
+  const draining = PasteSets.waitForWrites().then(() => {
+    drained = true;
+  });
+  const closing = committing.close();
+  await Promise.resolve();
+  equal(drained, false);
+  release();
+  await Promise.all([importing, closing, draining]);
+  equal(committing.data.sets.length, 3);
+  equal(
+    new PasteSets(GLib.path_get_dirname(committing.path)).data.sets.length,
+    3,
+  );
+  equal(drained, true);
+
   const limited = new PasteSets(
     GLib.dir_make_tmp('paste-board-backup-limited.XXXXXX'),
     { getItemLimit: () => 1 },

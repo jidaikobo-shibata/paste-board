@@ -2799,3 +2799,51 @@ test('Escape is forwarded only to search during preedit, then closes after compo
   assert.equal(owner._captureQuickPasteKey(event), true);
   assert.equal(closes, 2);
 });
+
+test('search editing identifies the candidate containing the action button', () => {
+  const button = {};
+  const rows = [
+    { entry: { id: 'first' }, contains: () => false },
+    { entry: { id: 'edited' }, contains: (actor) => actor === button },
+  ];
+  const [owner] = instance(['_openPasteSetDialog'], {
+    global: { stage: { get_key_focus: () => button } },
+  });
+  let opens = 0;
+  let closes = 0;
+  let candidateId;
+  let closed;
+  const dialog = {
+    connect: (_signal, callback) => {
+      closed = callback;
+    },
+    open: () => {
+      opens++;
+    },
+  };
+  owner.menu = {
+    isOpen: true,
+    close: () => {
+      closes++;
+    },
+  };
+  owner.searchEntry = { get_text: () => 'query' };
+  owner._visiblePasteCandidates = () => rows;
+  owner._openPanelModal = (open, id) => {
+    candidateId = id;
+    open();
+  };
+  owner._openPasteSetDialog(dialog);
+  assert.equal(candidateId, 'edited');
+  assert.equal(opens, 1);
+  assert.equal(closes, 0);
+  closed();
+  assert.equal(owner._pasteSetDialog, undefined);
+  owner._openPasteSetDialog(dialog, 'explicit-target');
+  assert.equal(candidateId, 'explicit-target');
+  closed();
+  owner.searchEntry.get_text = () => '';
+  owner._openPasteSetDialog(dialog);
+  assert.equal(opens, 3);
+  assert.equal(closes, 1);
+});

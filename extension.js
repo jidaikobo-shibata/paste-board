@@ -1154,7 +1154,7 @@ class ClipboardIndicator extends PanelMenu.Button {
             [
               'list-add-symbolic',
               _('Add to a paste set'),
-              () => this._addToPasteSet(item.text),
+              () => this._addToPasteSet(item.text, item.id),
             ],
             [
               'edit-delete-symbolic',
@@ -1577,7 +1577,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
-  _openPasteSetDialog(dialog) {
+  _openPasteSetDialog(dialog, candidateId = null) {
     if (this._quickPasteBusy || this._destroyed) {
       dialog.destroy();
       return;
@@ -1590,12 +1590,16 @@ class ClipboardIndicator extends PanelMenu.Button {
     dialog.connect('closed', () => {
       if (this._pasteSetDialog === dialog) this._pasteSetDialog = undefined;
     });
-    if (preservePanel)
+    if (preservePanel) {
+      const focus = global.stage.get_key_focus();
+      const candidate = this._visiblePasteCandidates().find(
+        (row) => row === focus || (focus && row.contains(focus)),
+      );
       this._openPanelModal(() => {
         dialog.open();
         return dialog;
-      });
-    else dialog.open();
+      }, candidateId ?? candidate?.entry.id);
+    } else dialog.open();
   }
 
   _destroyTabContextMenu() {
@@ -1685,7 +1689,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
   }
 
-  _editPasteSetName(id = null, initialText = null) {
+  _editPasteSetName(id = null, initialText = null, candidateId = null) {
     if (!this._pasteSets) return;
     const set = this._pasteSets.data.sets.find((item) => item.id === id);
     this._openPasteSetDialog(
@@ -1742,6 +1746,7 @@ class ClipboardIndicator extends PanelMenu.Button {
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
       ),
+      candidateId,
     );
   }
 
@@ -1771,16 +1776,17 @@ class ClipboardIndicator extends PanelMenu.Button {
           canPreview: () => !PRIVATE_MODE && !this._destroyed,
         },
       ),
+      item?.id,
     );
   }
 
-  _addToPasteSet(text) {
+  _addToPasteSet(text, candidateId = null) {
     if (!this._pasteSets || this._quickPasteBusy) return;
     const sets = this._pasteSets.data.sets.filter(
       (set) => set.kind !== 'generated',
     );
     if (!sets.length) {
-      this._editPasteSetName(null, text);
+      this._editPasteSetName(null, text, candidateId);
       return;
     }
     this._openPasteSetDialog(
@@ -1789,6 +1795,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._pasteSets.put(id, { name: '', text });
         this._renderPasteSets();
       }),
+      candidateId,
     );
   }
 
@@ -2856,7 +2863,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
     menuItem.actor.add_child(icofavBtn);
     icofavBtn.connect('clicked', () => {
-      this._addToPasteSet(menuItem.entry.text);
+      this._addToPasteSet(menuItem.entry.text, menuItem.entry.id);
     });
 
     // Delete button

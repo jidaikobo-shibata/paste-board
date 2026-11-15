@@ -136,7 +136,25 @@ export default class extends Extension {
       'Edited item still matches search',
     );
     const second = rows.find((row) => row.entry.name === 'fixture second');
-    button(second, 'Delete item').emit('clicked', 0);
+    const editFocus = global.stage.get_key_focus();
+    assert(
+      editFocus === second || second.contains(editFocus),
+      'Edit did not restore focus to the nearest surviving candidate',
+    );
+    rows[0].grab_key_focus();
+    button(second, 'Edit name and content').emit('clicked', 0);
+    await wait(() => owner._pasteSetDialog);
+    button(owner._pasteSetDialog, 'Save').emit('clicked', 0);
+    await delay(250);
+    const retained = owner
+      ._visiblePasteCandidates()
+      .find((row) => row.entry.id === second.entry.id);
+    const retainedFocus = global.stage.get_key_focus();
+    assert(
+      retained === retainedFocus || retained.contains(retainedFocus),
+      'Edit restored the previously focused row instead of its explicit target',
+    );
+    button(retained, 'Delete item').emit('clicked', 0);
     await delay(150);
     assert(
       owner.menu.isOpen && owner.searchEntry.get_text() === 'fixture',

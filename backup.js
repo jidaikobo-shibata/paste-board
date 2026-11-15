@@ -110,13 +110,17 @@ export async function importBackup(
       ? pending.get_int('history-size')
       : settings.get_int('history-size');
   if (!(pasteSets.data.importReceipts || []).includes(operationId)) {
-    pasteSets.change(
+    await pasteSets.changeAndSave(
       (sets, next) => {
         const names = new Set(sets.map((set) => set.name));
         for (const source of data.sets) {
           let name = source.name;
           for (let number = 2; names.has(name); number++)
-            name = format(_('%s (%d)'), source.name.slice(0, 85), number);
+            name = format(
+              _('%s (%d)'),
+              source.name.slice(0, 85).replace(/[\uD800-\uDBFF]$/, ''),
+              number,
+            );
           names.add(name);
           const set = { id: GLib.uuid_string_random(), name, items: [] };
           if (source.kind === 'generated')

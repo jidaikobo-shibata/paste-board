@@ -133,12 +133,19 @@ export class PasteSets {
     }
   }
 
-  _save(data) {
+  _encode(data) {
     PasteSets.validate(data);
     const json = JSON.stringify(data);
     const bytes = new TextEncoder().encode(json);
     if (bytes.length > 16 * 1024 * 1024)
       throw new Error(_('Paste sets exceed the storage limit.'));
+    return bytes;
+  }
+
+  _save(data) {
+    if (this._transaction)
+      throw new Error(_('An import is being saved. Try again shortly.'));
+    const bytes = this._encode(data);
     if (this._closed) throw new Error(_('Could not save paste sets.'));
     this._pendingBytes = bytes;
     this._startWrite();
@@ -198,7 +205,7 @@ export class PasteSets {
 
   flush() {
     this._startWrite();
-    return this._writing || Promise.resolve();
+    return this._transaction || this._writing || Promise.resolve();
   }
 
   close() {
@@ -206,7 +213,7 @@ export class PasteSets {
     return this.flush();
   }
 
-  change(update, { itemLimit = this._getItemLimit() } = {}) {
+  _changedData(update, { itemLimit = this._getItemLimit() } = {}) {
     // Persisted fields are scalars, so copying containers isolates edits without
     // repeatedly serializing all text just to make a working copy.
     const next = {
@@ -231,7 +238,41 @@ export class PasteSets {
           format(_('This paste set has reached the limit of %d items.'), limit),
         );
     }
+    return next;
+  }
+
+  change(update, options = {}) {
+    const next = this._changedData(update, options);
     this._save(next);
+    this.data = next;
+  }
+
+  // Flush older edits first, then publish the import only after its atomic
+  // replacement succeeds. Ordinary edits are rejected while this write owns
+  // the store, so failure cannot queue imported data for a later unrelated save.
+  changeAndSave(update, options = {}) {
+    if (this._closed || this._transaction)
+      return Promise.reject(
+        new Error(_('An import is being saved. Try again shortly.')),
+      );
+    const operation = this._commitChange(update, options);
+    this._transaction = operation;
+    pendingWrites.add(operation);
+    const finished = () => {
+      pendingWrites.delete(operation);
+      this._transaction = null;
+    };
+    operation.then(finished, finished);
+    return operation;
+  }
+
+  async _commitChange(update, options) {
+    // flush() also waits for this transaction, so await only ordinary edits here.
+    this._startWrite();
+    await this._writing;
+    if (this._closed) throw new Error(_('Could not save paste sets.'));
+    const next = this._changedData(update, options);
+    await this._writeBytes(this._encode(next));
     this.data = next;
   }
 
