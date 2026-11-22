@@ -2438,9 +2438,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
     if (!this._quickPasteInputReleased) return;
     this._quickPasteInputReleased = false;
+    const previous = this._quickPasteFocusedCandidate;
+    this._quickPasteFocusedCandidate = undefined;
     if (!this._destroyed && this.menu.isOpen) {
       this._emitPasteGrabState(true);
-      const previous = this._quickPasteFocusedCandidate;
       if (previous && this._focusedHistoryCandidate(previous)) {
         if (this._initialFocusCallbackId) {
           GLib.Source.remove(this._initialFocusCallbackId);
@@ -2453,7 +2454,6 @@ class ClipboardIndicator extends PanelMenu.Button {
         );
       }
     }
-    this._quickPasteFocusedCandidate = undefined;
   }
 
   _focusedHistoryCandidate(actor = global.stage.get_key_focus()) {
@@ -2582,10 +2582,12 @@ class ClipboardIndicator extends PanelMenu.Button {
               text: entry.text,
               changed: false,
               keepClipboard: false,
+              clipboardWriteAttempted: false,
             };
-            if (this.menu.isOpen) this._suspendQuickPasteInput();
-            Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
             try {
+              if (this.menu.isOpen) this._suspendQuickPasteInput();
+              this._quickPasteState.clipboardWriteAttempted = true;
+              Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
               this._sendQuickPasteKeys(closeAfterPaste, shortcut);
             } catch (error) {
               this._finishQuickPaste(true);
@@ -2604,8 +2606,9 @@ class ClipboardIndicator extends PanelMenu.Button {
               () => {
                 this._quickPasteTimer = undefined;
                 const changed = this._quickPasteState?.changed;
-                this._finishQuickPaste(true);
+                const cleanedUp = this._finishQuickPaste(true);
                 if (
+                  cleanedUp &&
                   !changed &&
                   !PRIVATE_MODE &&
                   epoch === (this._clipboardQueryEpoch || 0) &&
@@ -2795,24 +2798,46 @@ class ClipboardIndicator extends PanelMenu.Button {
     const state = this._quickPasteState;
     if (!state) return;
     this._quickPasteState = undefined;
-    if (!state.changed && !state.keepClipboard) {
-      this._quickPasteRestoring = true;
-      Clipboard.set_text(St.ClipboardType.CLIPBOARD, state.original);
-      this._quickPasteRestoring = false;
+    try {
+      try {
+        if (
+          state.clipboardWriteAttempted &&
+          !state.changed &&
+          !state.keepClipboard
+        ) {
+          this._quickPasteRestoring = true;
+          Clipboard.set_text(St.ClipboardType.CLIPBOARD, state.original);
+        }
+      } finally {
+        this._quickPasteRestoring = false;
+        try {
+          this._endQuickPasteTracking();
+        } finally {
+          if (resume) this._resumeQuickPasteInput();
+        }
+      }
+    } catch (error) {
+      if (this._destroyed) console.error(error);
+      else this._showNotification(_('Could not paste'), error.message);
+      return false;
     }
-    this._endQuickPasteTracking();
-    if (resume) this._resumeQuickPasteInput();
+    return true;
   }
 
   _endQuickPasteTracking() {
     this._quickPasteBusy = false;
-    if (this._pendingGeneratedRender) {
-      this._pendingGeneratedRender = false;
-      this._onGeneratedTabsChanged();
-    }
-    if (this._pendingClipboardCopy) {
-      this._pendingClipboardCopy = false;
-      if (!this._destroyed) this._queryClipboard(true);
+    try {
+      if (this._pendingGeneratedRender) {
+        this._pendingGeneratedRender = false;
+        this._onGeneratedTabsChanged();
+      }
+    } finally {
+      // Search rendering and an external copy are independent. A failed
+      // redraw must not prevent capturing the user's next clipboard value.
+      if (this._pendingClipboardCopy) {
+        this._pendingClipboardCopy = false;
+        if (!this._destroyed) this._queryClipboard(true);
+      }
     }
   }
 

@@ -1777,50 +1777,91 @@ test('command output uses the application keys captured before execution', async
   assert.equal(paste[0][1].pasteShortcut.keyval, 121);
 });
 
-test('shortcut injection failure restores the clipboard and releases paste state', () => {
-  const writes = [],
-    timers = [],
-    notifications = [],
-    target = {};
-  const [owner] = instance(
-    ['_quickPaste', '_finishQuickPaste', '_endQuickPasteTracking'],
-    {
-      DS: { TYPE_TEXT: 1 },
-      global: { display: { focus_window: target } },
-      St: { ClipboardType: { CLIPBOARD: 1 } },
-      Clipboard: {
-        get_text: (_, cb) => cb(null, 'original'),
-        set_text: (_, text) => writes.push(text),
-      },
-      GLib: {
-        PRIORITY_DEFAULT: 0,
-        SOURCE_REMOVE: false,
-        timeout_add: (_, ms, fn) => {
-          timers.push(fn);
-          return timers.length;
+for (const phase of ['release', 'write', 'inject', 'restore']) {
+  test(`quick paste releases paste state after a ${phase} failure`, () => {
+    const writes = [],
+      timers = [],
+      notifications = [],
+      target = {};
+    let resumed = false;
+    const [owner] = instance(
+      ['_quickPaste', '_finishQuickPaste', '_endQuickPasteTracking'],
+      {
+        DS: { TYPE_TEXT: 1 },
+        global: { display: { focus_window: target } },
+        St: { ClipboardType: { CLIPBOARD: 1 } },
+        Clipboard: {
+          get_text: (_, cb) => cb(null, 'original'),
+          set_text: (_, text) => {
+            writes.push(text);
+            if (
+              (phase === 'write' && text === 'chosen') ||
+              (phase === 'restore' && text === 'original')
+            )
+              throw Error(phase);
+          },
+        },
+        GLib: {
+          PRIORITY_DEFAULT: 0,
+          SOURCE_REMOVE: false,
+          timeout_add: (_, ms, fn) => {
+            timers.push(fn);
+            return timers.length;
+          },
         },
       },
-    },
-  );
-  Object.assign(owner, {
-    menu: { isOpen: true },
-    _quickPasteKeysAreHeld: () => false,
-    _suspendQuickPasteInput: noop,
-    _resumeQuickPasteInput: noop,
-    _sendQuickPasteKeys: () => {
-      throw new Error('injection failed');
-    },
-    _moveEntryFirst: () => assert.fail('Failed paste promoted history'),
-    _setCurrentClipboardEntry: () => assert.fail('Failed paste kept clipboard'),
-    _showNotification: (...args) => notifications.push(args),
+    );
+    Object.assign(owner, {
+      menu: { isOpen: true },
+      _quickPasteKeysAreHeld: () => false,
+      _suspendQuickPasteInput: () => {
+        if (phase === 'release') throw Error(phase);
+      },
+      _resumeQuickPasteInput: () => {
+        resumed = true;
+      },
+      _sendPostPasteAction: () =>
+        assert.fail('Post-paste key sent after restoration failure'),
+      _keepMenuOpen: phase === 'restore',
+      _sendQuickPasteKeys: () => {
+        if (phase === 'inject') throw Error(phase);
+      },
+      _moveEntryFirst: () => assert.fail('Failed paste promoted history'),
+      _setCurrentClipboardEntry: () =>
+        assert.fail('Failed paste kept clipboard'),
+      _showNotification: (...args) => notifications.push(args),
+    });
+    owner._quickPaste({ type: 1, text: 'chosen' }, { commitSelection: true });
+    timers.shift()();
+    if (phase === 'restore') timers.shift()();
+    assert.deepEqual(writes, phase === 'release' ? [] : ['chosen', 'original']);
+    assert.equal(resumed, true);
+    assert.equal(owner._quickPasteRestoring, false);
+    assert.equal(owner._quickPasteBusy, false);
+    assert.equal(owner._quickPasteState, undefined);
+    assert.equal(timers.length, 0);
+    assert.deepEqual(notifications, [['Could not paste', phase]]);
   });
-  owner._quickPaste({ type: 1, text: 'chosen' }, { commitSelection: true });
-  timers.shift()();
-  assert.deepEqual(writes, ['chosen', 'original']);
+}
+
+test('a failed search redraw does not drop a pending clipboard copy', () => {
+  const [owner] = instance(['_endQuickPasteTracking']);
+  let recorded = false;
+  Object.assign(owner, {
+    _quickPasteBusy: true,
+    _pendingGeneratedRender: true,
+    _pendingClipboardCopy: true,
+    _onGeneratedTabsChanged: () => {
+      throw Error('redraw failed');
+    },
+    _queryClipboard: (external) => {
+      recorded = external;
+    },
+  });
+  assert.throws(() => owner._endQuickPasteTracking(), /redraw failed/);
+  assert.equal(recorded, true);
   assert.equal(owner._quickPasteBusy, false);
-  assert.equal(owner._quickPasteState, undefined);
-  assert.equal(timers.length, 0);
-  assert.deepEqual(notifications, [['Could not paste', 'injection failed']]);
+  assert.equal(owner._pendingClipboardCopy, false);
 });
 
 test('automatic key injection releases every attempted key after press or release errors', () => {
