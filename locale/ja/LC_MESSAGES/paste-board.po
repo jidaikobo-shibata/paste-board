@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 19:34+0900\n"
+"POT-Creation-Date: 2026-11-22 19:37+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -23,7 +23,7 @@ msgstr ""
 "X-Poedit-SearchPath-1: extension.js\n"
 
 #: appPastePrefs.js:59 backupPrefs.js:56 backupPrefs.js:105 extension.js:2025
-#: extension.js:3232 extension.js:3249 pasteSetDialog.js:507
+#: extension.js:3246 extension.js:3263 pasteSetDialog.js:507
 #: pasteSetDialog.js:650
 msgid "Cancel"
 msgstr "キャンセル"
@@ -285,11 +285,11 @@ msgstr ""
 "診断にはデバッグモードを有効にしてください。別の診断を実行中の場合は、完了を"
 "待ってください。"
 
-#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2552
+#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2556
 msgid "Could not read clipboard text."
 msgstr "クリップボードのテキストを読み取れませんでした。"
 
-#: clipboardRead.js:62 extension.js:2560 extension.js:3676
+#: clipboardRead.js:62 extension.js:2564 extension.js:3690
 msgid "Copied text exceeds the size limit."
 msgstr "コピーしたテキストがサイズの上限を超えています。"
 
@@ -491,7 +491,7 @@ msgstr "セッション情報を復旧しました"
 msgid "The original session information was preserved at: %s"
 msgstr "元のセッション情報は次の場所に保全しました：%s"
 
-#: extension.js:553 extension.js:4004
+#: extension.js:553 extension.js:4018
 msgid "Could not save session metadata"
 msgstr "セッション情報を保存できません"
 
@@ -515,11 +515,11 @@ msgstr "セットを作成できません"
 msgid "History"
 msgstr "履歴"
 
-#: extension.js:1206 extension.js:3068
+#: extension.js:1206 extension.js:3082
 msgid "Add to a paste set"
 msgstr "ペーストセットへ追加"
 
-#: extension.js:1211 extension.js:3089
+#: extension.js:1211 extension.js:3103
 msgid "Delete from history"
 msgstr "履歴から削除"
 
@@ -596,7 +596,7 @@ msgstr "履歴の項目をこのタブへドラッグして追加できます"
 msgid "Automatic previews paused"
 msgstr "自動プレビュー停止中"
 
-#: extension.js:1718 extension.js:2676 pasteSetDialog.js:244
+#: extension.js:1718 extension.js:2681 pasteSetDialog.js:244
 msgid "Preview unavailable"
 msgstr "プレビューできません"
 
@@ -685,75 +685,75 @@ msgstr "オン"
 msgid "Off"
 msgstr "オフ"
 
-#: extension.js:2588 extension.js:2608 extension.js:2739 extension.js:2822
-#: extension.js:2853
+#: extension.js:2590 extension.js:2610 extension.js:2752 extension.js:2835
+#: extension.js:2866
 msgid "Could not paste"
 msgstr "貼り付けできません"
 
-#: extension.js:2589
+#: extension.js:2591
 msgid "Timed out waiting for the shortcut keys to be released."
 msgstr "ショートカットキーが離されるのを待っている間に、時間切れになりました。"
 
-#: extension.js:2719 pasteSetDialog.js:603
+#: extension.js:2732 pasteSetDialog.js:603
 msgid "Could not execute the command"
 msgstr "コマンドを実行できません"
 
-#: extension.js:3145
+#: extension.js:3159
 #, javascript-format
 msgid "Command: %s"
 msgstr "コマンド：%s"
 
-#: extension.js:3209
+#: extension.js:3223
 msgid "Generated tabs cannot be emptied"
 msgstr "コマンド生成タブは空にできません"
 
-#: extension.js:3211
+#: extension.js:3225
 msgid "Empty history (keep clipboard)"
 msgstr "履歴を空にする（クリップボードは保持）"
 
-#: extension.js:3212
+#: extension.js:3226
 msgid "Empty this paste set"
 msgstr "表示中のペーストセットを空にする"
 
-#: extension.js:3228
+#: extension.js:3242
 msgid "Empty this paste set?"
 msgstr "このペーストセットを空にしますか？"
 
-#: extension.js:3230
+#: extension.js:3244
 msgid "All items will be removed. The tab and clipboard will be kept."
 msgstr "すべての項目を削除します。タブとクリップボードは保持します。"
 
-#: extension.js:3231 extension.js:3248
+#: extension.js:3245 extension.js:3262
 msgid "Clear"
 msgstr "削除"
 
-#: extension.js:3245
+#: extension.js:3259
 msgid "Clear history?"
 msgstr "履歴を空にしますか？"
 
-#: extension.js:3246
+#: extension.js:3260
 msgid "All clipboard history will be removed."
 msgstr "すべてのクリップボード履歴を削除します。"
 
-#: extension.js:3247
+#: extension.js:3261
 msgid "The clipboard and paste sets will be kept."
 msgstr "クリップボードとペーストセットは保持します。"
 
-#: extension.js:4158
+#: extension.js:4172
 msgid "Clipboard history was recovered"
 msgstr "クリップボード履歴を復旧しました"
 
-#: extension.js:4159
+#: extension.js:4173
 msgid "Could not save or load clipboard history"
 msgstr "クリップボード履歴を保存または読み込めません"
 
-#: extension.js:4163
+#: extension.js:4177
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 "読み取り可能な履歴を復元しました。元のファイルは次の場所に保全しました：%s"
 
-#: extension.js:4168
+#: extension.js:4182
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."

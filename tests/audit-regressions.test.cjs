@@ -634,12 +634,31 @@ test('late command results cannot paste after menu close, disable or context cha
 
 test('command errors release busy state without pasting or modifying clipboard', async () => {
   const { owner, reject, paste, errors } = commandFixture();
+  owner._quickPasteKeysHeld = new Set([10]);
   owner._quickPasteCommand({ command: 'false' });
   reject(new Error('failure'));
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(owner._quickPasteBusy, false);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
   assert.deepEqual(paste, []);
   assert.equal(errors[0][1], 'failure');
+});
+
+test('command cancellation releases shortcut state even when cancellation throws', () => {
+  const [owner] = instance(['_cancelPasteCommand', '_endQuickPasteTracking'], {
+    console: { error: noop },
+  });
+  owner._quickPasteKeysHeld = new Set([10]);
+  owner._quickPasteBusy = true;
+  owner._pasteCommandRun = {
+    cancel() {
+      throw Error('cancel failed');
+    },
+  };
+  owner._cancelPasteCommand();
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
+  assert.equal(owner._pasteCommandRun, undefined);
 });
 
 function insertionFixture() {
@@ -2068,6 +2087,7 @@ test('failed original-clipboard read aborts paste and releases busy state', () =
     St: { ClipboardType: { CLIPBOARD: 1 } },
     global: { display: { focus_window: {} } },
   });
+  owner._quickPasteKeysHeld = new Set([10]);
   owner.menu = { isOpen: true };
   owner._readClipboard = (type, callback) =>
     callback(null, null, new Error('limit'));
@@ -2078,6 +2098,7 @@ test('failed original-clipboard read aborts paste and releases busy state', () =
   owner._quickPaste({ type: 1, text: 'candidate' });
   assert.equal(owner._quickPasteBusy, false);
   assert.equal(notified, true);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
 });
 
 test('new clipboard reads cancel superseded requests without losing the current request', async () => {
@@ -2128,9 +2149,13 @@ test('previewed command paste waits for and reuses the displayed result without 
     runCommand: () => assert.fail('preview command ran twice'),
   });
   const pasted = [];
+  owner._quickPasteKeysHeld = new Set([10]);
   owner.menu = { isOpen: true };
   owner._commandPreviews = { request: () => ({ promise, cancel() {} }) };
-  owner._quickPaste = (entry, options) => pasted.push(entry.text);
+  owner._quickPaste = (entry) => {
+    assert.equal(owner._quickPasteKeysHeld.has(10), true);
+    pasted.push(entry.text);
+  };
   const entry = {
     id: 'a',
     previewOnOpen: true,

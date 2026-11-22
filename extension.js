@@ -2513,7 +2513,10 @@ class ClipboardIndicator extends PanelMenu.Button {
       pasteShortcut = null,
     } = {},
   ) {
-    if (PRIVATE_MODE || this._destroyed) return;
+    if (PRIVATE_MODE || this._destroyed) {
+      this._quickPasteKeysHeld?.clear();
+      return;
+    }
     const epoch = this._clipboardQueryEpoch || 0;
     commitSelection =
       commitSelection && !this._keepMenuOpen && !entry.pasteSetItem;
@@ -2522,6 +2525,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
     if (entry.type !== DS.TYPE_TEXT || !global.display.focus_window) {
+      this._quickPasteKeysHeld?.clear();
       console.log(
         this.extension.uuid,
         'Quick paste skipped: no text entry or focused application',
@@ -2575,14 +2579,12 @@ class ClipboardIndicator extends PanelMenu.Button {
               generation !== (this._clipboardGeneration || 0)
             ) {
               this._quickPasteTimer = undefined;
-              this._quickPasteKeysHeld?.clear();
               this._endQuickPasteTracking();
               return GLib.SOURCE_REMOVE;
             }
             if (this._quickPasteKeysAreHeld()) {
               if (++attempts < 80) return GLib.SOURCE_CONTINUE;
               this._quickPasteTimer = undefined;
-              this._quickPasteKeysHeld?.clear();
               this._endQuickPasteTracking();
               this._showNotification(
                 _('Could not paste'),
@@ -2648,21 +2650,24 @@ class ClipboardIndicator extends PanelMenu.Button {
     const running = this._pasteCommandRun;
     if (!running) return;
     this._pasteCommandRun = undefined;
-    running.cancel();
-    this._endQuickPasteTracking();
+    try {
+      running.cancel();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      this._endQuickPasteTracking();
+    }
   }
 
   _quickPasteCommand(
     entry,
     { closeAfterPaste = false, copyOnly = false } = {},
   ) {
-    if (
-      PRIVATE_MODE ||
-      this._quickPasteBusy ||
-      this._destroyed ||
-      !global.display.focus_window
-    )
+    if (this._quickPasteBusy) return;
+    if (PRIVATE_MODE || this._destroyed || !global.display.focus_window) {
+      this._quickPasteKeysHeld?.clear();
       return;
+    }
     const target = global.display.focus_window;
     const pasteShortcut = this._capturePasteShortcut();
     const generation = this._clipboardGeneration || 0;
@@ -2695,20 +2700,28 @@ class ClipboardIndicator extends PanelMenu.Button {
       .then((text) => {
         if (this._pasteCommandRun !== running) return;
         this._pasteCommandRun = undefined;
-        this._endQuickPasteTracking();
-        if (
-          this._destroyed ||
-          PRIVATE_MODE ||
-          !this.menu.isOpen ||
-          global.display.focus_window !== target ||
-          generation !== (this._clipboardGeneration || 0) ||
-          epoch !== (this._clipboardQueryEpoch || 0)
-        )
-          return;
-        // Pasting is temporary; explicit copy-only actions also enter history.
-        const output = { ...entry, kind: 'text', text };
-        if (copyOnly) this._copyPasteEntry(output);
-        else this._quickPaste(output, { closeAfterPaste, pasteShortcut });
+        const canUseOutput = () =>
+          !this._destroyed &&
+          !PRIVATE_MODE &&
+          this.menu.isOpen &&
+          global.display.focus_window === target &&
+          generation === (this._clipboardGeneration || 0) &&
+          epoch === (this._clipboardQueryEpoch || 0);
+        const keepShortcut = !copyOnly && canUseOutput();
+        let handedOff = false;
+        try {
+          this._endQuickPasteTracking({ keepShortcut });
+          if (!canUseOutput()) return;
+          // Pasting is temporary; explicit copy-only actions also enter history.
+          const output = { ...entry, kind: 'text', text };
+          if (copyOnly) this._copyPasteEntry(output);
+          else if (keepShortcut) {
+            this._quickPaste(output, { closeAfterPaste, pasteShortcut });
+            handedOff = true;
+          }
+        } finally {
+          if (keepShortcut && !handedOff) this._quickPasteKeysHeld?.clear();
+        }
       })
       .catch((error) => {
         if (this._pasteCommandRun !== running) return;
@@ -2856,8 +2869,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     return true;
   }
 
-  _endQuickPasteTracking() {
+  _endQuickPasteTracking({ keepShortcut = false } = {}) {
     this._quickPasteBusy = false;
+    if (!keepShortcut) this._quickPasteKeysHeld?.clear();
     try {
       if (this._pendingGeneratedRender) {
         this._pendingGeneratedRender = false;
