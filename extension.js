@@ -2214,7 +2214,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         ? Clutter.EVENT_STOP
         : Clutter.EVENT_PROPAGATE;
     }
-    this._quickPasteKeysHeld.add(code);
+    // Only the initiating number key needs event-based tracking. Modifier
+    // state is checked separately and IME can replay modifier presses.
     // Escape first cancels IME composition; only a later Escape closes.
     if (
       event.get_key_symbol() === Clutter.KEY_Escape &&
@@ -2416,7 +2417,9 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _suspendQuickPasteInput() {
-    this._quickPasteFocusedCandidate = this._focusedHistoryCandidate();
+    const focus = global.stage.get_key_focus();
+    this._quickPasteSearchFocus = this._isSearchActor(focus) ? focus : null;
+    this._quickPasteFocusedCandidate = this._focusedHistoryCandidate(focus);
     this._quickPasteInputReleased = true;
     this._emitPasteGrabState(false);
     global.stage.set_key_focus(null);
@@ -2439,15 +2442,19 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (!this._quickPasteInputReleased) return;
     this._quickPasteInputReleased = false;
     const previous = this._quickPasteFocusedCandidate;
+    const searchFocus = this._quickPasteSearchFocus;
     this._quickPasteFocusedCandidate = undefined;
+    this._quickPasteSearchFocus = null;
     if (!this._destroyed && this.menu.isOpen) {
       this._emitPasteGrabState(true);
-      if (previous && this._focusedHistoryCandidate(previous)) {
+      const target =
+        searchFocus || (previous && this._focusedHistoryCandidate(previous));
+      if (target) {
         if (this._initialFocusCallbackId) {
           GLib.Source.remove(this._initialFocusCallbackId);
           this._initialFocusCallbackId = undefined;
         }
-        global.stage.set_key_focus(previous);
+        global.stage.set_key_focus(target);
       } else {
         global.stage.set_key_focus(
           this._visiblePasteCandidates()[0] || this.searchEntry,
@@ -2605,11 +2612,12 @@ class ClipboardIndicator extends PanelMenu.Button {
               100,
               () => {
                 this._quickPasteTimer = undefined;
-                const changed = this._quickPasteState?.changed;
+                const state = this._quickPasteState;
                 const cleanedUp = this._finishQuickPaste(true);
                 if (
                   cleanedUp &&
-                  !changed &&
+                  !state?.changed &&
+                  !state?.inputRecoveryFailed &&
                   !PRIVATE_MODE &&
                   epoch === (this._clipboardQueryEpoch || 0) &&
                   !this._destroyed &&
@@ -2711,6 +2719,18 @@ class ClipboardIndicator extends PanelMenu.Button {
     if (PRIVATE_MODE || this._destroyed) return;
     const code = action === 'enter' ? 28 : action === 'tab' ? 15 : null;
     if (code === null) return;
+    const finish = (error = null) => {
+      try {
+        try {
+          this._endQuickPasteTracking();
+        } finally {
+          this._resumeQuickPasteInput();
+        }
+      } catch (cleanupError) {
+        error ??= cleanupError;
+      }
+      if (error) this._showNotification(_('Could not paste'), error.message);
+    };
     this._quickPasteBusy = true;
     try {
       this._suspendQuickPasteInput();
@@ -2720,15 +2740,12 @@ class ClipboardIndicator extends PanelMenu.Button {
         40,
         () => {
           this._quickPasteInputTimer = undefined;
-          this._endQuickPasteTracking();
-          this._resumeQuickPasteInput();
+          finish();
           return GLib.SOURCE_REMOVE;
         },
       );
     } catch (error) {
-      this._endQuickPasteTracking();
-      this._resumeQuickPasteInput();
-      this._showNotification(_('Could not paste'), error.message);
+      finish(error);
     }
   }
 
@@ -2778,8 +2795,10 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._sendKeyCodes([29, ...(shortcut.modifiers & 4 ? [42] : []), 47]);
     }
     if (closeAfterPaste) {
-      this._quickPasteInputReleased = false;
       this.menu.close();
+      this._quickPasteInputReleased = false;
+      this._quickPasteFocusedCandidate = undefined;
+      this._quickPasteSearchFocus = null;
       return;
     }
     // Clipboard transfer does not need the keyboard grab to remain released.
@@ -2788,7 +2807,13 @@ class ClipboardIndicator extends PanelMenu.Button {
       40,
       () => {
         this._quickPasteInputTimer = undefined;
-        this._resumeQuickPasteInput();
+        try {
+          this._resumeQuickPasteInput();
+        } catch (error) {
+          if (this._quickPasteState)
+            this._quickPasteState.inputRecoveryFailed = true;
+          this._showNotification(_('Could not paste'), error.message);
+        }
         return GLib.SOURCE_REMOVE;
       },
     );

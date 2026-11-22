@@ -183,6 +183,7 @@ function grabFixture() {
     },
     global: {
       stage: {
+        get_key_focus: () => focus,
         set_key_focus: (actor) => {
           focus = actor;
         },
@@ -194,6 +195,7 @@ function grabFixture() {
   const [owner, context] = instance(
     [
       '_emitPasteGrabState',
+      '_isSearchActor',
       '_suspendQuickPasteInput',
       '_resumeQuickPasteInput',
       '_sendPostPasteAction',
@@ -232,7 +234,14 @@ function grabFixture() {
     _updateCandidateNumbers: noop,
     _setMenuWidth: noop,
   });
-  return { owner, timers, focus: () => focus };
+  return {
+    owner,
+    timers,
+    focus: () => focus,
+    setFocus: (actor) => {
+      focus = actor;
+    },
+  };
 }
 
 test('temporary release and regrab preserve active tab, filter and focused row', () => {
@@ -244,6 +253,16 @@ test('temporary release and regrab preserve active tab, filter and focused row',
   assert.equal(focus(), owner._visiblePasteCandidates()[0]);
 });
 
+test('temporary release and regrab restore the search input', () => {
+  const { owner, focus, setFocus } = grabFixture();
+  const searchText = { get_parent: () => owner.searchEntry };
+  setFocus(searchText);
+  owner._suspendQuickPasteInput();
+  owner._resumeQuickPasteInput();
+  assert.equal(focus(), searchText);
+  assert.equal(owner.searchEntry.text, 'needle');
+});
+
 test('post-paste Tab and Enter retain custom tab after busy becomes false', () => {
   for (const action of ['tab', 'enter']) {
     const { owner, timers } = grabFixture();
@@ -253,6 +272,21 @@ test('post-paste Tab and Enter retain custom tab after busy becomes false', () =
     assert.equal(owner._activePasteTab, 'set');
     assert.equal(owner.searchEntry.text, 'needle');
   }
+});
+
+test('post-paste cleanup restores focus when deferred rendering throws', () => {
+  const { owner, timers, focus } = grabFixture();
+  owner._pendingGeneratedRender = true;
+  owner._onGeneratedTabsChanged = () => {
+    throw Error('redraw failed');
+  };
+  const notices = [];
+  owner._showNotification = (...args) => notices.push(args);
+  owner._sendPostPasteAction('tab');
+  timers.shift()();
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(focus(), owner._visiblePasteCandidates()[0]);
+  assert.deepEqual(notices, [['Could not paste', 'redraw failed']]);
 });
 
 test('a real reopen selects history and clears search', () => {
@@ -1777,7 +1811,7 @@ test('command output uses the application keys captured before execution', async
   assert.equal(paste[0][1].pasteShortcut.keyval, 121);
 });
 
-for (const phase of ['release', 'write', 'inject', 'restore']) {
+for (const phase of ['release', 'write', 'inject', 'restore', 'resume']) {
   test(`quick paste releases paste state after a ${phase} failure`, () => {
     const writes = [],
       timers = [],
@@ -1785,7 +1819,12 @@ for (const phase of ['release', 'write', 'inject', 'restore']) {
       target = {};
     let resumed = false;
     const [owner] = instance(
-      ['_quickPaste', '_finishQuickPaste', '_endQuickPasteTracking'],
+      [
+        '_quickPaste',
+        '_finishQuickPaste',
+        '_endQuickPasteTracking',
+        '_sendQuickPasteKeys',
+      ],
       {
         DS: { TYPE_TEXT: 1 },
         global: { display: { focus_window: target } },
@@ -1818,12 +1857,16 @@ for (const phase of ['release', 'write', 'inject', 'restore']) {
         if (phase === 'release') throw Error(phase);
       },
       _resumeQuickPasteInput: () => {
+        if (phase === 'resume' && !resumed) {
+          resumed = true;
+          throw Error(phase);
+        }
         resumed = true;
       },
       _sendPostPasteAction: () =>
         assert.fail('Post-paste key sent after restoration failure'),
-      _keepMenuOpen: phase === 'restore',
-      _sendQuickPasteKeys: () => {
+      _keepMenuOpen: phase === 'restore' || phase === 'resume',
+      _sendKeyCodes: () => {
         if (phase === 'inject') throw Error(phase);
       },
       _moveEntryFirst: () => assert.fail('Failed paste promoted history'),
@@ -1833,7 +1876,10 @@ for (const phase of ['release', 'write', 'inject', 'restore']) {
     });
     owner._quickPaste({ type: 1, text: 'chosen' }, { commitSelection: true });
     timers.shift()();
-    if (phase === 'restore') timers.shift()();
+    if (phase === 'restore' || phase === 'resume') {
+      timers.shift()();
+      timers.shift()();
+    }
     assert.deepEqual(writes, phase === 'release' ? [] : ['chosen', 'original']);
     assert.equal(resumed, true);
     assert.equal(owner._quickPasteRestoring, false);

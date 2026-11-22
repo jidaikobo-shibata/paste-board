@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 19:25+0900\n"
+"POT-Creation-Date: 2026-11-22 19:31+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -18,7 +18,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: appPastePrefs.js:59 backupPrefs.js:56 backupPrefs.js:105 extension.js:2025
-#: extension.js:3200 extension.js:3217 pasteSetDialog.js:507
+#: extension.js:3225 extension.js:3242 pasteSetDialog.js:507
 #: pasteSetDialog.js:650
 msgid "Cancel"
 msgstr ""
@@ -272,11 +272,11 @@ msgid ""
 "progress."
 msgstr ""
 
-#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2545
+#: clipboardRead.js:27 clipboardRead.js:75 extension.js:2552
 msgid "Could not read clipboard text."
 msgstr ""
 
-#: clipboardRead.js:62 extension.js:2553 extension.js:3644
+#: clipboardRead.js:62 extension.js:2560 extension.js:3669
 msgid "Copied text exceeds the size limit."
 msgstr ""
 
@@ -468,7 +468,7 @@ msgstr ""
 msgid "The original session information was preserved at: %s"
 msgstr ""
 
-#: extension.js:553 extension.js:3972
+#: extension.js:553 extension.js:3997
 msgid "Could not save session metadata"
 msgstr ""
 
@@ -492,11 +492,11 @@ msgstr ""
 msgid "History"
 msgstr ""
 
-#: extension.js:1206 extension.js:3036
+#: extension.js:1206 extension.js:3061
 msgid "Add to a paste set"
 msgstr ""
 
-#: extension.js:1211 extension.js:3057
+#: extension.js:1211 extension.js:3082
 msgid "Delete from history"
 msgstr ""
 
@@ -573,7 +573,7 @@ msgstr ""
 msgid "Automatic previews paused"
 msgstr ""
 
-#: extension.js:1718 extension.js:2661 pasteSetDialog.js:244
+#: extension.js:1718 extension.js:2669 pasteSetDialog.js:244
 msgid "Preview unavailable"
 msgstr ""
 
@@ -662,69 +662,69 @@ msgstr ""
 msgid "Off"
 msgstr ""
 
-#: extension.js:2594 extension.js:2731 extension.js:2821
+#: extension.js:2601 extension.js:2732 extension.js:2815 extension.js:2846
 msgid "Could not paste"
 msgstr ""
 
-#: extension.js:2704 pasteSetDialog.js:603
+#: extension.js:2712 pasteSetDialog.js:603
 msgid "Could not execute the command"
 msgstr ""
 
-#: extension.js:3113
+#: extension.js:3138
 #, javascript-format
 msgid "Command: %s"
 msgstr ""
 
-#: extension.js:3177
+#: extension.js:3202
 msgid "Generated tabs cannot be emptied"
 msgstr ""
 
-#: extension.js:3179
+#: extension.js:3204
 msgid "Empty history (keep clipboard)"
 msgstr ""
 
-#: extension.js:3180
+#: extension.js:3205
 msgid "Empty this paste set"
 msgstr ""
 
-#: extension.js:3196
+#: extension.js:3221
 msgid "Empty this paste set?"
 msgstr ""
 
-#: extension.js:3198
+#: extension.js:3223
 msgid "All items will be removed. The tab and clipboard will be kept."
 msgstr ""
 
-#: extension.js:3199 extension.js:3216
+#: extension.js:3224 extension.js:3241
 msgid "Clear"
 msgstr ""
 
-#: extension.js:3213
+#: extension.js:3238
 msgid "Clear history?"
 msgstr ""
 
-#: extension.js:3214
+#: extension.js:3239
 msgid "All clipboard history will be removed."
 msgstr ""
 
-#: extension.js:3215
+#: extension.js:3240
 msgid "The clipboard and paste sets will be kept."
 msgstr ""
 
-#: extension.js:4126
+#: extension.js:4151
 msgid "Clipboard history was recovered"
 msgstr ""
 
-#: extension.js:4127
+#: extension.js:4152
 msgid "Could not save or load clipboard history"
 msgstr ""
 
-#: extension.js:4131
+#: extension.js:4156
 #, javascript-format
 msgid "The readable history was kept. The original file was preserved at: %s"
 msgstr ""
 
-#: extension.js:4136
+#: extension.js:4161
 msgid ""
 "Check the storage location and available disk space. Some clipboard history "
 "may not have been saved or loaded."

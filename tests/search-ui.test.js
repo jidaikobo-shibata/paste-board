@@ -338,6 +338,7 @@ export default class extends Extension {
       'Enter did not paste manual search result',
     );
     owner.settings.set_int('quick-paste-modifiers', 8);
+    owner.searchEntry.clutter_text.grab_key_focus();
     keyboard.notify_keyval(
       GLib.get_monotonic_time(),
       Clutter.KEY_Super_L,
@@ -363,6 +364,10 @@ export default class extends Extension {
     assert(
       read(root + '/generated-pasted') === 'server manualprod server generated',
       'Numeric shortcut did not paste global generated result',
+    );
+    assert(
+      global.stage.get_key_focus() === owner.searchEntry.clutter_text,
+      'Pinned numeric paste did not return to the search input',
     );
     const commandRow = rows().find((row) => row.entry.sourceSetId === commands);
     commandRow.emit('activate', null);
