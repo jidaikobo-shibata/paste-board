@@ -118,6 +118,39 @@ async function main() {
   await tick();
   equal(searchCalls[4].cancelled, true);
   searchTabs.destroy();
+  const changedTabs = new GeneratedTabs(null, { execute });
+  calls.length = 0;
+  const disabled = { ...opted, id: 'disabled', command: 'disabled' };
+  const edited = { ...opted, id: 'edited', command: 'old' };
+  const added = { ...opted, id: 'added', command: 'added' };
+  changedTabs.search([opted, second, disabled, edited], true);
+  await tick();
+  equal(calls.length, 1);
+  changedTabs.search(
+    [
+      opted,
+      { ...disabled, runOnSearch: false },
+      { ...edited, command: 'new' },
+      added,
+    ],
+    true,
+  );
+  calls[0].resolve('first output');
+  await tick();
+  equal(
+    calls.map((run) => run.command),
+    ['first', 'new'],
+  );
+  // Disable an already-running tab and verify that its result is discarded.
+  changedTabs.search(
+    [opted, { ...edited, command: 'new', runOnSearch: false }],
+    true,
+  );
+  await tick();
+  equal(calls[1].cancelled, true);
+  equal(changedTabs.get({ ...edited, command: 'new' }), null);
+  equal(calls.length, 2);
+  changedTabs.destroy();
   calls.length = 0;
   let record = tabs.sync(tab, { autoRun: false });
   equal(record.state, 'idle');

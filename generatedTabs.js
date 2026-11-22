@@ -145,13 +145,34 @@ export class GeneratedTabs {
       this.endSearch();
       return;
     }
-    if (this.searchSession) return;
-    const session = { cancelled: false, pending: null };
+    const eligible = new Map(
+      tabs
+        .filter((tab) => tab.kind === 'generated' && tab.runOnSearch === true)
+        .map((tab) => [tab.id, tab]),
+    );
+    if (this.searchSession) {
+      const session = this.searchSession;
+      session.eligible = eligible;
+      const pending = session.pending;
+      if (
+        pending?.state === 'pending' &&
+        this.records.get(pending.tab.id) === pending
+      ) {
+        const current = eligible.get(pending.tab.id);
+        if (!current || this.get(current) !== pending)
+          this._discard(pending.tab.id);
+      }
+      return;
+    }
+    const session = { cancelled: false, pending: null, eligible };
     this.searchSession = session;
     const run = async () => {
-      for (const tab of tabs) {
+      // Only tabs opted in at the start join this batch. Each queued ID uses
+      // its current configuration when the preceding command finishes.
+      for (const id of eligible.keys()) {
         if (session.cancelled) return;
-        if (tab.kind !== 'generated' || tab.runOnSearch !== true) continue;
+        const tab = session.eligible.get(id);
+        if (!tab) continue;
         // Reuse an already-running visit rather than execute it twice.
         let record = this.get(tab);
         if (record?.state !== 'pending') {
@@ -182,7 +203,10 @@ export class GeneratedTabs {
     this.searchSession = null;
     if (!session) return;
     session.cancelled = true;
-    if (session.pending?.state === 'pending')
+    if (
+      session.pending?.state === 'pending' &&
+      this.records.get(session.pending.tab.id) === session.pending
+    )
       this._discard(session.pending.tab.id);
   }
 
