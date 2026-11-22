@@ -31,9 +31,17 @@ export function runCommand(
       timer = undefined;
       if (error) {
         // Signal the live session owner, not a recycled numeric process-group ID.
-        process?.send_signal(15);
-        cancellable.cancel();
-        reject(error);
+        try {
+          process?.send_signal(15);
+        } catch (signalError) {
+          console.error(signalError);
+        } finally {
+          try {
+            cancellable.cancel();
+          } finally {
+            reject(error);
+          }
+        }
       } else {
         resolve(text);
       }

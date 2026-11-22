@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 19:43+0900\n"
+"POT-Creation-Date: 2026-11-22 19:46+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -280,49 +280,49 @@ msgstr ""
 msgid "Copied text exceeds the size limit."
 msgstr ""
 
-#: commandOutput.js:41 commandPreviews.js:101 commandPreviews.js:124
+#: commandOutput.js:49 commandPreviews.js:101 commandPreviews.js:124
 #: commandPreviews.js:138
 msgid "Command execution was cancelled."
 msgstr ""
 
-#: commandOutput.js:49
+#: commandOutput.js:57
 msgid "Enter a command (up to 8192 characters)."
 msgstr ""
 
-#: commandOutput.js:51
+#: commandOutput.js:59
 msgid "Invalid command execution mode."
 msgstr ""
 
-#: commandOutput.js:74 commandOutput.js:107
+#: commandOutput.js:82 commandOutput.js:115
 msgid "Could not start the command."
 msgstr ""
 
-#: commandOutput.js:87
+#: commandOutput.js:95
 msgid "Command execution timed out."
 msgstr ""
 
-#: commandOutput.js:99 commandOutput.js:108 commandOutput.js:111
-#: commandOutput.js:115
+#: commandOutput.js:107 commandOutput.js:116 commandOutput.js:119
+#: commandOutput.js:123
 msgid "Command supervision failed."
 msgstr ""
 
-#: commandOutput.js:103
+#: commandOutput.js:111
 msgid "Command output exceeded the size limit."
 msgstr ""
 
-#: commandOutput.js:104
+#: commandOutput.js:112
 msgid "The command did not exit successfully."
 msgstr ""
 
-#: commandOutput.js:105
+#: commandOutput.js:113
 msgid "The output contains a NUL character."
 msgstr ""
 
-#: commandOutput.js:106
+#: commandOutput.js:114
 msgid "The output is not valid UTF-8 text."
 msgstr ""
 
-#: commandOutput.js:120
+#: commandOutput.js:128
 msgid "The command produced no output; nothing was pasted."
 msgstr ""
 

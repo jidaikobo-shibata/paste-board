@@ -1,4 +1,5 @@
 import GLib from 'gi://GLib';
+import Gio from 'gi://Gio';
 import { runCommand as executeCommand } from '../commandOutput.js';
 import { PasteSets } from '../pasteSets.js';
 
@@ -103,6 +104,28 @@ async function main() {
     throw new Error('Cancellation did not reject');
   } catch (error) {
     equal(error.message.includes('cancelled'), true);
+  }
+
+  const sendSignal = Gio.Subprocess.prototype.send_signal;
+  let signalErrors = 0;
+  Gio.Subprocess.prototype.send_signal = function (signal) {
+    // Clean up the fixture process, then simulate an exception at the call site.
+    sendSignal.call(this, signal);
+    signalErrors++;
+    throw Error('Synthetic signal failure');
+  };
+  try {
+    const task = runCommand('sleep 2');
+    const cancelled = task.promise.then(
+      () => '',
+      (error) => error.message,
+    );
+    task.cancel();
+    equal((await cancelled).includes('cancelled'), true);
+    await rejects('sleep 2', { timeoutMs: 40 }, 'timed out');
+    equal(signalErrors, 2);
+  } finally {
+    Gio.Subprocess.prototype.send_signal = sendSignal;
   }
 
   const directory = GLib.dir_make_tmp('clipboard-command-store-XXXXXX');

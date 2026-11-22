@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 19:43+0900\n"
+"POT-Creation-Date: 2026-11-22 19:46+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -293,49 +293,49 @@ msgstr "クリップボードのテキストを読み取れませんでした。
 msgid "Copied text exceeds the size limit."
 msgstr "コピーしたテキストがサイズの上限を超えています。"
 
-#: commandOutput.js:41 commandPreviews.js:101 commandPreviews.js:124
+#: commandOutput.js:49 commandPreviews.js:101 commandPreviews.js:124
 #: commandPreviews.js:138
 msgid "Command execution was cancelled."
 msgstr "コマンドの実行を中止しました。"
 
-#: commandOutput.js:49
+#: commandOutput.js:57
 msgid "Enter a command (up to 8192 characters)."
 msgstr "コマンドを入力してください（8192文字以内）。"
 
-#: commandOutput.js:51
+#: commandOutput.js:59
 msgid "Invalid command execution mode."
 msgstr "コマンドの実行方式が不正です。"
 
-#: commandOutput.js:74 commandOutput.js:107
+#: commandOutput.js:82 commandOutput.js:115
 msgid "Could not start the command."
 msgstr "コマンドを起動できません。"
 
-#: commandOutput.js:87
+#: commandOutput.js:95
 msgid "Command execution timed out."
 msgstr "コマンドの実行が時間制限を超えました。"
 
-#: commandOutput.js:99 commandOutput.js:108 commandOutput.js:111
-#: commandOutput.js:115
+#: commandOutput.js:107 commandOutput.js:116 commandOutput.js:119
+#: commandOutput.js:123
 msgid "Command supervision failed."
 msgstr "コマンド監視処理に失敗しました。"
 
-#: commandOutput.js:103
+#: commandOutput.js:111
 msgid "Command output exceeded the size limit."
 msgstr "コマンドの出力量が上限を超えました。"
 
-#: commandOutput.js:104
+#: commandOutput.js:112
 msgid "The command did not exit successfully."
 msgstr "コマンドが正常に終了しませんでした。"
 
-#: commandOutput.js:105
+#: commandOutput.js:113
 msgid "The output contains a NUL character."
 msgstr "出力にNUL文字が含まれています。"
 
-#: commandOutput.js:106
+#: commandOutput.js:114
 msgid "The output is not valid UTF-8 text."
 msgstr "出力が正しいUTF-8テキストではありません。"
 
-#: commandOutput.js:120
+#: commandOutput.js:128
 msgid "The command produced no output; nothing was pasted."
 msgstr "コマンドの出力が空のため、貼り付けませんでした。"
 
