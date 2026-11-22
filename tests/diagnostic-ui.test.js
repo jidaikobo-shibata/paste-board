@@ -45,14 +45,14 @@ export default class extends Extension {
     );
     const { DIAGNOSTIC_PATH, DIAGNOSTIC_INTERFACE, diagnosticDirectory } =
       await import(`file://${extension.path}/clipboardDiagnostics.js`);
-    const call = () =>
+    const call = (method = 'Capture', id = GLib.uuid_string_random()) =>
       new Promise((resolve, reject) =>
         Gio.DBus.session.call(
           'org.gnome.Shell',
           DIAGNOSTIC_PATH,
           DIAGNOSTIC_INTERFACE,
-          'Capture',
-          null,
+          method,
+          new GLib.Variant('(s)', [id]),
           null,
           Gio.DBusCallFlags.NONE,
           15000,
@@ -123,6 +123,29 @@ export default class extends Extension {
         'Switching to private mode did not cancel capture',
       );
       assert(!folder.query_exists(null), 'Cancelled capture wrote data');
+      owner.settings.set_boolean('private-mode', false);
+      readStarted = false;
+      const id = GLib.uuid_string_random();
+      const outcome = call('Capture', id).then(
+        () => null,
+        Gio.DBusError.get_remote_error,
+      );
+      for (let i = 0; i < 100 && !readStarted; i++) await delay(10);
+      assert(readStarted, 'Explicit cancellation fixture did not start');
+      await call('Cancel', 'different-request');
+      assert(
+        !service.cancellable.is_cancelled(),
+        'Mismatched request cancelled capture',
+      );
+      await call('Cancel', id);
+      assert(
+        (await outcome) === DIAGNOSTIC_INTERFACE + '.Cancelled',
+        'Unexpected cancellation reply',
+      );
+      assert(
+        !folder.query_exists(null),
+        'Explicitly cancelled capture wrote data',
+      );
     } finally {
       owner.settings.set_boolean('debug-mode', false);
       owner.settings.set_boolean('private-mode', false);

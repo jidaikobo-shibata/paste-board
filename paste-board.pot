@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 16:32+0900\n"
+"POT-Creation-Date: 2026-11-22 16:35+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -248,24 +248,25 @@ msgstr ""
 msgid "Choose a local backup file."
 msgstr ""
 
-#: clipboardDiagnostics.js:115 clipboardDiagnostics.js:127
-#: clipboardDiagnostics.js:215
+#: clipboardDiagnostics.js:116 clipboardDiagnostics.js:128
+#: clipboardDiagnostics.js:216 clipboardDiagnostics.js:303
+#: diagnosticPrefs.js:142
 msgid "Diagnostic cancelled."
 msgstr ""
 
-#: clipboardDiagnostics.js:155
+#: clipboardDiagnostics.js:156
 msgid "The diagnostic folder is not safe to use."
 msgstr ""
 
-#: clipboardDiagnostics.js:198
+#: clipboardDiagnostics.js:199 diagnosticPrefs.js:163
 msgid "Could not save the diagnostic record."
 msgstr ""
 
-#: clipboardDiagnostics.js:254 diagnosticPrefs.js:63
+#: clipboardDiagnostics.js:261 diagnosticPrefs.js:72
 msgid "Clipboard diagnostics are unavailable in private mode."
 msgstr ""
 
-#: clipboardDiagnostics.js:266
+#: clipboardDiagnostics.js:273
 msgid ""
 "Enable debug mode before running a diagnostic. Another diagnostic may be in "
 "progress."
@@ -341,26 +342,26 @@ msgstr ""
 msgid "Copied!"
 msgstr ""
 
-#: diagnosticPrefs.js:13
+#: diagnosticPrefs.js:14
 msgid "Debug mode"
 msgstr ""
 
-#: diagnosticPrefs.js:15
+#: diagnosticPrefs.js:16
 msgid "Show tools for investigating problems. Not needed for normal use."
 msgstr ""
 
-#: diagnosticPrefs.js:18
+#: diagnosticPrefs.js:19
 msgid "Enable debug mode"
 msgstr ""
 
-#: diagnosticPrefs.js:27
+#: diagnosticPrefs.js:28
 msgid ""
 "Clipboard diagnostic: when pasting fails, run this before copying again. "
 "Records the available formats, retrieval results and text, and the text at "
 "the top of history. Does not change the clipboard."
 msgstr ""
 
-#: diagnosticPrefs.js:36
+#: diagnosticPrefs.js:37
 msgid ""
 "Records may contain passwords or personal information. They are saved "
 "locally and are not sent automatically. Review their contents before "
@@ -368,27 +369,35 @@ msgid ""
 "successfully."
 msgstr ""
 
-#: diagnosticPrefs.js:43
+#: diagnosticPrefs.js:44
 msgid "Diagnose and save"
 msgstr ""
 
-#: diagnosticPrefs.js:44
+#: diagnosticPrefs.js:45
 msgid "Open diagnostic folder"
 msgstr ""
 
-#: diagnosticPrefs.js:81
-msgid "Diagnosing…"
-msgstr ""
-
-#: diagnosticPrefs.js:96
-msgid "Diagnostic record saved."
+#: diagnosticPrefs.js:47
+msgid "Cancel diagnostic"
 msgstr ""
 
 #: diagnosticPrefs.js:101
-msgid "Could not save a diagnostic. Enable Paste Board and try again."
+msgid "Could not cancel the diagnostic."
 msgstr ""
 
-#: diagnosticPrefs.js:115
+#: diagnosticPrefs.js:122
+msgid "Diagnosing…"
+msgstr ""
+
+#: diagnosticPrefs.js:137
+msgid "Diagnostic record saved."
+msgstr ""
+
+#: diagnosticPrefs.js:155
+msgid "Clipboard diagnostics are unavailable. Enable or reload Paste Board."
+msgstr ""
+
+#: diagnosticPrefs.js:179
 msgid "No diagnostic records yet."
 msgstr ""
 

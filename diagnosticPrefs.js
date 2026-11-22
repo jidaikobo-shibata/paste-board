@@ -1,4 +1,5 @@
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Gtk from 'gi://Gtk';
 import Adw from 'gi://Adw';
 import { _ } from './i18n.js';
@@ -42,7 +43,12 @@ export function addDiagnosticPreferences(window, settings, page) {
   const buttons = new Gtk.Box({ spacing: 12 });
   const capture = new Gtk.Button({ label: _('Diagnose and save') });
   const open = new Gtk.Button({ label: _('Open diagnostic folder') });
+  const cancel = new Gtk.Button({
+    label: _('Cancel diagnostic'),
+    visible: false,
+  });
   buttons.append(capture);
+  buttons.append(cancel);
   buttons.append(open);
   content.append(buttons);
   const status = new Gtk.Label({
@@ -55,10 +61,13 @@ export function addDiagnosticPreferences(window, settings, page) {
   group.add(content);
   settings.bind('debug-mode', content, 'visible', Gio.SettingsBindFlags.GET);
   let closed = false;
-  let busy = false;
+  let captureId = null;
+  let cancelling = false;
   const updateAvailability = () => {
     const privateMode = settings.get_boolean('private-mode');
-    capture.sensitive = !busy && !privateMode;
+    capture.sensitive = !captureId && !privateMode;
+    cancel.visible = Boolean(captureId);
+    cancel.sensitive = !cancelling;
     capture.tooltip_text = privateMode
       ? _('Clipboard diagnostics are unavailable in private mode.')
       : null;
@@ -69,14 +78,46 @@ export function addDiagnosticPreferences(window, settings, page) {
   );
   updateAvailability();
   const request = new Gio.Cancellable();
+  const cancelCapture = () => {
+    if (!captureId || cancelling) return;
+    cancelling = true;
+    updateAvailability();
+    Gio.DBus.session.call(
+      'org.gnome.Shell',
+      DIAGNOSTIC_PATH,
+      DIAGNOSTIC_INTERFACE,
+      'Cancel',
+      new GLib.Variant('(s)', [captureId]),
+      null,
+      Gio.DBusCallFlags.NO_AUTO_START,
+      5000,
+      null,
+      (connection, result) => {
+        try {
+          connection.call_finish(result);
+        } catch (error) {
+          if (!closed && captureId) {
+            status.label =
+              _('Could not cancel the diagnostic.') + '\n' + error.message;
+            cancelling = false;
+            updateAvailability();
+          }
+        }
+      },
+    );
+  };
+  cancel.connect('clicked', cancelCapture);
   window.connect('close-request', () => {
+    if (closed) return false;
+    cancelCapture();
     closed = true;
     settings.disconnect(privateChanged);
     request.cancel();
     return false;
   });
   capture.connect('clicked', () => {
-    busy = true;
+    if (closed || captureId || !capture.sensitive) return;
+    captureId = GLib.uuid_string_random();
     updateAvailability();
     status.label = _('Diagnosing…');
     Gio.DBus.session.call(
@@ -84,26 +125,49 @@ export function addDiagnosticPreferences(window, settings, page) {
       DIAGNOSTIC_PATH,
       DIAGNOSTIC_INTERFACE,
       'Capture',
-      null,
+      new GLib.Variant('(s)', [captureId]),
       null,
       Gio.DBusCallFlags.NONE,
       30000,
-      request,
+      null,
       (connection, result) => {
         try {
           const [path] = connection.call_finish(result).deep_unpack();
           if (!closed)
             status.label = _('Diagnostic record saved.') + '\n' + path;
         } catch (error) {
-          if (!closed)
-            status.label =
-              _(
-                'Could not save a diagnostic. Enable Paste Board and try again.',
-              ) +
-              '\n' +
-              error.message;
+          if (!closed) {
+            const name = Gio.DBusError.get_remote_error(error);
+            if (name === DIAGNOSTIC_INTERFACE + '.Cancelled')
+              status.label = _('Diagnostic cancelled.');
+            else if (
+              [
+                'UNKNOWN_METHOD',
+                'UNKNOWN_OBJECT',
+                'UNKNOWN_INTERFACE',
+                'SERVICE_UNKNOWN',
+                'NAME_HAS_NO_OWNER',
+              ].some((code) =>
+                error.matches(Gio.DBusError, Gio.DBusError[code]),
+              )
+            )
+              status.label = _(
+                'Clipboard diagnostics are unavailable. Enable or reload Paste Board.',
+              );
+            else {
+              const unavailable =
+                name === DIAGNOSTIC_INTERFACE + '.Unavailable';
+              if (name) Gio.DBusError.strip_remote_error(error);
+              status.label = unavailable
+                ? error.message
+                : _('Could not save the diagnostic record.') +
+                  '\n' +
+                  error.message;
+            }
+          }
         } finally {
-          busy = false;
+          captureId = null;
+          cancelling = false;
           if (!closed) updateAvailability();
         }
       },

@@ -8,7 +8,8 @@ export const DIAGNOSTIC_PATH =
 export const DIAGNOSTIC_INTERFACE =
   'org.gnome.Shell.Extensions.PasteBoard.Diagnostics';
 const XML = `<node><interface name="${DIAGNOSTIC_INTERFACE}">
-<method name="Capture"><arg type="s" direction="out"/></method>
+<method name="Capture"><arg type="s" direction="in"/><arg type="s" direction="out"/></method>
+<method name="Cancel"><arg type="s" direction="in"/></method>
 </interface></node>`;
 export const diagnosticDirectory = () =>
   GLib.build_filenamev([
@@ -247,7 +248,13 @@ export class DiagnosticService {
     this.object = Gio.DBusExportedObject.wrapJSObject(XML, this);
     this.object.export(Gio.DBus.session, DIAGNOSTIC_PATH);
   }
-  async CaptureAsync(_args, invocation) {
+  CancelAsync([id], invocation) {
+    if (this.captureId === id && this.sender === invocation.get_sender())
+      this.cancellable?.cancel();
+    invocation.return_value(null);
+  }
+
+  async CaptureAsync([id], invocation) {
     if (this.settings.get_boolean('private-mode')) {
       invocation.return_dbus_error(
         DIAGNOSTIC_INTERFACE + '.Unavailable',
@@ -269,6 +276,15 @@ export class DiagnosticService {
       return;
     }
     const cancellable = (this.cancellable = new Gio.Cancellable());
+    this.captureId = id;
+    this.sender = invocation.get_sender();
+    const watch = Gio.bus_watch_name_on_connection(
+      invocation.get_connection(),
+      this.sender,
+      Gio.BusNameWatcherFlags.NONE,
+      null,
+      () => cancellable.cancel(),
+    );
     try {
       const { selection, type, historyText, application } = this.snapshot();
       const report = await collectDiagnostic(
@@ -282,11 +298,14 @@ export class DiagnosticService {
       invocation.return_value(new GLib.Variant('(s)', [path]));
     } catch (error) {
       invocation.return_dbus_error(
-        DIAGNOSTIC_INTERFACE + '.Error',
-        error.message,
+        DIAGNOSTIC_INTERFACE +
+          (cancellable.is_cancelled() ? '.Cancelled' : '.Error'),
+        cancellable.is_cancelled() ? _('Diagnostic cancelled.') : error.message,
       );
     } finally {
+      Gio.bus_unwatch_name(watch);
       this.cancellable = null;
+      this.captureId = this.sender = null;
     }
   }
   destroy() {
