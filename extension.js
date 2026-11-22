@@ -2533,7 +2533,14 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
     const target = global.display.focus_window;
-    const shortcut = pasteShortcut || this._capturePasteShortcut();
+    let shortcut;
+    try {
+      shortcut = pasteShortcut || this._capturePasteShortcut();
+    } catch (error) {
+      this._quickPasteKeysHeld?.clear();
+      this._showNotification(_('Could not paste'), error.message);
+      return;
+    }
     const afterAction =
       !closeAfterPaste && this._keepMenuOpen ? this._pasteAfterAction : 'none';
     const generation = this._clipboardGeneration || 0;
@@ -2675,31 +2682,38 @@ class ClipboardIndicator extends PanelMenu.Button {
       return;
     }
     const target = global.display.focus_window;
-    const pasteShortcut = this._capturePasteShortcut();
+    let pasteShortcut;
     const generation = this._clipboardGeneration || 0;
     const epoch = this._clipboardQueryEpoch || 0;
     this._quickPasteBusy = true;
     let running;
-    if (entry.previewOnOpen && !this._previewsPaused) {
-      const request = this._commandPreviews?.request(entry);
-      if (!request) {
-        this._endQuickPasteTracking();
-        this._showNotification(_('Preview unavailable'), '');
-        return;
+    try {
+      pasteShortcut = this._capturePasteShortcut();
+      if (entry.previewOnOpen && !this._previewsPaused) {
+        const request = this._commandPreviews?.request(entry);
+        if (!request) {
+          this._endQuickPasteTracking();
+          this._showNotification(_('Preview unavailable'), '');
+          return;
+        }
+        running = {
+          promise: request.promise,
+          preview: true,
+          cancel: () => {
+            request.cancel();
+            this._commandPreviews?.clear();
+          },
+        };
+      } else {
+        running = runCommand(entry.command, {
+          trimTrailingNewlines: entry.trimTrailingNewlines,
+          executionMode: entry.executionMode,
+        });
       }
-      running = {
-        promise: request.promise,
-        preview: true,
-        cancel: () => {
-          request.cancel();
-          this._commandPreviews?.clear();
-        },
-      };
-    } else {
-      running = runCommand(entry.command, {
-        trimTrailingNewlines: entry.trimTrailingNewlines,
-        executionMode: entry.executionMode,
-      });
+    } catch (error) {
+      this._endQuickPasteTracking();
+      this._showNotification(_('Could not execute the command'), error.message);
+      return;
     }
     this._pasteCommandRun = running;
     running.promise

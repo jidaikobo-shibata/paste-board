@@ -632,6 +632,41 @@ test('late command results cannot paste after menu close, disable or context cha
   }
 });
 
+test('synchronous preview setup errors release command and shortcut state', () => {
+  const { owner, errors } = commandFixture();
+  owner._quickPasteKeysHeld = new Set([10]);
+  owner._commandPreviews = {
+    request() {
+      throw Error('preview setup failed');
+    },
+  };
+  owner._quickPasteCommand({ command: 'date', previewOnOpen: true });
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
+  assert.equal(owner._pasteCommandRun, undefined);
+  assert.deepEqual(errors, [
+    ['Could not execute the command', 'preview setup failed'],
+  ]);
+});
+
+test('a shortcut lookup failure clears tracking before reading the clipboard', () => {
+  const [owner] = instance(['_quickPaste'], {
+    DS: { TYPE_TEXT: 1 },
+    global: { display: { focus_window: {} } },
+  });
+  owner._quickPasteKeysHeld = new Set([10]);
+  owner._capturePasteShortcut = () => {
+    throw Error('shortcut lookup failed');
+  };
+  owner._readClipboard = () => assert.fail('Clipboard read started');
+  const errors = [];
+  owner._showNotification = (...args) => errors.push(args);
+  owner._quickPaste({ type: 1, text: 'candidate' });
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
+  assert.ok(!owner._quickPasteBusy);
+  assert.deepEqual(errors, [['Could not paste', 'shortcut lookup failed']]);
+});
+
 test('command errors release busy state without pasting or modifying clipboard', async () => {
   const { owner, reject, paste, errors } = commandFixture();
   owner._quickPasteKeysHeld = new Set([10]);
