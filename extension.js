@@ -2538,112 +2538,118 @@ class ClipboardIndicator extends PanelMenu.Button {
       !closeAfterPaste && this._keepMenuOpen ? this._pasteAfterAction : 'none';
     const generation = this._clipboardGeneration || 0;
     this._quickPasteBusy = true;
-    this._readClipboard(
-      St.ClipboardType.CLIPBOARD,
-      (_clipboard, original, readError) => {
-        if (
-          this._destroyed ||
-          PRIVATE_MODE ||
-          epoch !== (this._clipboardQueryEpoch || 0) ||
-          !this.menu.isOpen ||
-          generation !== (this._clipboardGeneration || 0)
-        ) {
-          this._endQuickPasteTracking();
-          return;
-        }
-        if (readError) {
-          this._endQuickPasteTracking();
-          this._showNotification(_('Could not read clipboard text.'), '');
-          return;
-        }
-        // A new login can have saved history but no current text selection.
-        // Treat an absent text clipboard as empty instead of rejecting every paste.
-        original ??= '';
-        if (!textFitsLimit(original) || !textFitsLimit(entry.text)) {
-          this._endQuickPasteTracking();
-          this._showNotification(_('Copied text exceeds the size limit.'), '');
-          return;
-        }
-        let attempts = 0;
-        // Wait for the physical shortcut keys to be released before injecting paste.
-        this._quickPasteTimer = GLib.timeout_add(
-          GLib.PRIORITY_DEFAULT,
-          25,
-          () => {
-            if (
-              this._destroyed ||
-              PRIVATE_MODE ||
-              epoch !== (this._clipboardQueryEpoch || 0) ||
-              !this.menu.isOpen ||
-              global.display.focus_window !== target ||
-              generation !== (this._clipboardGeneration || 0)
-            ) {
-              this._quickPasteTimer = undefined;
-              this._endQuickPasteTracking();
-              return GLib.SOURCE_REMOVE;
-            }
-            if (this._quickPasteKeysAreHeld()) {
-              if (++attempts < 80) return GLib.SOURCE_CONTINUE;
-              this._quickPasteTimer = undefined;
-              this._endQuickPasteTracking();
-              this._showNotification(
-                _('Could not paste'),
-                _('Timed out waiting for the shortcut keys to be released.'),
-              );
-              return GLib.SOURCE_REMOVE;
-            }
+    const onRead = (_clipboard, original, readError) => {
+      if (
+        this._destroyed ||
+        PRIVATE_MODE ||
+        epoch !== (this._clipboardQueryEpoch || 0) ||
+        !this.menu.isOpen ||
+        generation !== (this._clipboardGeneration || 0)
+      ) {
+        this._endQuickPasteTracking();
+        return;
+      }
+      if (readError) {
+        this._endQuickPasteTracking();
+        this._showNotification(_('Could not read clipboard text.'), '');
+        return;
+      }
+      // A new login can have saved history but no current text selection.
+      // Treat an absent text clipboard as empty instead of rejecting every paste.
+      original ??= '';
+      if (!textFitsLimit(original) || !textFitsLimit(entry.text)) {
+        this._endQuickPasteTracking();
+        this._showNotification(_('Copied text exceeds the size limit.'), '');
+        return;
+      }
+      let attempts = 0;
+      // Wait for the physical shortcut keys to be released before injecting paste.
+      this._quickPasteTimer = GLib.timeout_add(
+        GLib.PRIORITY_DEFAULT,
+        25,
+        () => {
+          if (
+            this._destroyed ||
+            PRIVATE_MODE ||
+            epoch !== (this._clipboardQueryEpoch || 0) ||
+            !this.menu.isOpen ||
+            global.display.focus_window !== target ||
+            generation !== (this._clipboardGeneration || 0)
+          ) {
             this._quickPasteTimer = undefined;
-            this._quickPasteState = {
-              original,
-              text: entry.text,
-              changed: false,
-              keepClipboard: false,
-              clipboardWriteAttempted: false,
-            };
-            try {
-              if (this.menu.isOpen) this._suspendQuickPasteInput();
-              this._quickPasteState.clipboardWriteAttempted = true;
-              Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
-              this._sendQuickPasteKeys(closeAfterPaste, shortcut);
-            } catch (error) {
-              this._finishQuickPaste(true);
-              this._showNotification(_('Could not paste'), error.message);
-              return GLib.SOURCE_REMOVE;
-            }
-            if (commitSelection && !entry.pasteSetItem) {
-              this._quickPasteState.keepClipboard = true;
-              this._moveEntryFirst(entry);
-              this._setCurrentClipboardEntry(entry, false);
-            }
-            // Experimental delay: application clipboard reads are asynchronous.
-            this._quickPasteTimer = GLib.timeout_add(
-              GLib.PRIORITY_DEFAULT,
-              100,
-              () => {
-                this._quickPasteTimer = undefined;
-                const state = this._quickPasteState;
-                const cleanedUp = this._finishQuickPaste(true);
-                if (
-                  cleanedUp &&
-                  !state?.changed &&
-                  !state?.inputRecoveryFailed &&
-                  !PRIVATE_MODE &&
-                  epoch === (this._clipboardQueryEpoch || 0) &&
-                  !this._destroyed &&
-                  this.menu.isOpen &&
-                  global.display.focus_window === target &&
-                  this._keepMenuOpen &&
-                  !this._quickPasteKeysAreHeld()
-                )
-                  this._sendPostPasteAction(afterAction);
-                return GLib.SOURCE_REMOVE;
-              },
+            this._endQuickPasteTracking();
+            return GLib.SOURCE_REMOVE;
+          }
+          if (this._quickPasteKeysAreHeld()) {
+            if (++attempts < 80) return GLib.SOURCE_CONTINUE;
+            this._quickPasteTimer = undefined;
+            this._endQuickPasteTracking();
+            this._showNotification(
+              _('Could not paste'),
+              _('Timed out waiting for the shortcut keys to be released.'),
             );
             return GLib.SOURCE_REMOVE;
-          },
-        );
-      },
-    );
+          }
+          this._quickPasteTimer = undefined;
+          this._quickPasteState = {
+            original,
+            text: entry.text,
+            changed: false,
+            keepClipboard: false,
+            clipboardWriteAttempted: false,
+          };
+          try {
+            if (this.menu.isOpen) this._suspendQuickPasteInput();
+            this._quickPasteState.clipboardWriteAttempted = true;
+            Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
+            this._sendQuickPasteKeys(closeAfterPaste, shortcut);
+          } catch (error) {
+            this._finishQuickPaste(true);
+            this._showNotification(_('Could not paste'), error.message);
+            return GLib.SOURCE_REMOVE;
+          }
+          if (commitSelection && !entry.pasteSetItem) {
+            this._quickPasteState.keepClipboard = true;
+            this._moveEntryFirst(entry);
+            this._setCurrentClipboardEntry(entry, false);
+          }
+          // Experimental delay: application clipboard reads are asynchronous.
+          this._quickPasteTimer = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT,
+            100,
+            () => {
+              this._quickPasteTimer = undefined;
+              const state = this._quickPasteState;
+              const cleanedUp = this._finishQuickPaste(true);
+              if (
+                cleanedUp &&
+                !state?.changed &&
+                !state?.inputRecoveryFailed &&
+                !PRIVATE_MODE &&
+                epoch === (this._clipboardQueryEpoch || 0) &&
+                !this._destroyed &&
+                this.menu.isOpen &&
+                global.display.focus_window === target &&
+                this._keepMenuOpen &&
+                !this._quickPasteKeysAreHeld()
+              )
+                this._sendPostPasteAction(afterAction);
+              return GLib.SOURCE_REMOVE;
+            },
+          );
+          return GLib.SOURCE_REMOVE;
+        },
+      );
+    };
+    try {
+      this._readClipboard(St.ClipboardType.CLIPBOARD, onRead);
+    } catch (error) {
+      this._endQuickPasteTracking();
+      this._showNotification(
+        _('Could not read clipboard text.'),
+        error.message,
+      );
+    }
   }
 
   _cancelPasteCommand() {
@@ -2719,6 +2725,14 @@ class ClipboardIndicator extends PanelMenu.Button {
             this._quickPaste(output, { closeAfterPaste, pasteShortcut });
             handedOff = true;
           }
+        } catch (error) {
+          if (!this._destroyed)
+            this._showNotification(
+              copyOnly
+                ? _('Could not copy command output')
+                : _('Could not paste'),
+              error.message,
+            );
         } finally {
           if (keepShortcut && !handedOff) this._quickPasteKeysHeld?.clear();
         }

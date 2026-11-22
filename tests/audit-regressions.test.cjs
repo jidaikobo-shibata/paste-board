@@ -644,6 +644,27 @@ test('command errors release busy state without pasting or modifying clipboard',
   assert.equal(errors[0][1], 'failure');
 });
 
+for (const copyOnly of [false, true]) {
+  test(`command output ${copyOnly ? 'copy' : 'paste'} errors are reported separately`, async () => {
+    const { owner, resolve, errors } = commandFixture();
+    owner._quickPasteKeysHeld = new Set([10]);
+    owner[copyOnly ? '_copyPasteEntry' : '_quickPaste'] = () => {
+      throw Error('output operation failed');
+    };
+    owner._quickPasteCommand({ command: 'date' }, { copyOnly });
+    resolve('command output');
+    await new Promise((done) => setImmediate(done));
+    assert.deepEqual(errors, [
+      [
+        copyOnly ? 'Could not copy command output' : 'Could not paste',
+        'output operation failed',
+      ],
+    ]);
+    assert.equal(owner._quickPasteBusy, false);
+    assert.equal(owner._quickPasteKeysHeld.size, 0);
+  });
+}
+
 test('command cancellation releases shortcut state even when cancellation throws', () => {
   const [owner] = instance(['_cancelPasteCommand', '_endQuickPasteTracking'], {
     console: { error: noop },
@@ -2081,25 +2102,30 @@ test('failed bounded clipboard reads never restore saved history over the clipbo
   owner._queryClipboard(true, true);
 });
 
-test('failed original-clipboard read aborts paste and releases busy state', () => {
-  const [owner] = instance(['_quickPaste', '_endQuickPasteTracking'], {
-    DS: { TYPE_TEXT: 1 },
-    St: { ClipboardType: { CLIPBOARD: 1 } },
-    global: { display: { focus_window: {} } },
+for (const failsDuringSetup of [false, true]) {
+  test(`clipboard read failure ${failsDuringSetup ? 'during setup' : 'after setup'} releases paste state`, () => {
+    const [owner] = instance(['_quickPaste', '_endQuickPasteTracking'], {
+      DS: { TYPE_TEXT: 1 },
+      St: { ClipboardType: { CLIPBOARD: 1 } },
+      global: { display: { focus_window: {} } },
+    });
+    owner._quickPasteKeysHeld = new Set([10]);
+    owner.menu = { isOpen: true };
+    owner._readClipboard = (_type, callback) => {
+      const error = new Error('read failed');
+      if (failsDuringSetup) throw error;
+      callback(null, null, error);
+    };
+    let notified = false;
+    owner._showNotification = () => {
+      notified = true;
+    };
+    owner._quickPaste({ type: 1, text: 'candidate' });
+    assert.equal(owner._quickPasteBusy, false);
+    assert.equal(notified, true);
+    assert.equal(owner._quickPasteKeysHeld.size, 0);
   });
-  owner._quickPasteKeysHeld = new Set([10]);
-  owner.menu = { isOpen: true };
-  owner._readClipboard = (type, callback) =>
-    callback(null, null, new Error('limit'));
-  let notified = false;
-  owner._showNotification = () => {
-    notified = true;
-  };
-  owner._quickPaste({ type: 1, text: 'candidate' });
-  assert.equal(owner._quickPasteBusy, false);
-  assert.equal(notified, true);
-  assert.equal(owner._quickPasteKeysHeld.size, 0);
-});
+}
 
 test('new clipboard reads cancel superseded requests without losing the current request', async () => {
   const reads = [];
