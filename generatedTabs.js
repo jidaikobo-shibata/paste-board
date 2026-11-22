@@ -65,6 +65,11 @@ export class GeneratedTabs {
   _start(record = this.record) {
     record.state = 'pending';
     record.items = [];
+    const session = this.searchSession;
+    const id = record.tab.id;
+    const queued = session?.eligible.get(id);
+    if (session?.remaining.has(id) && queued && this.get(queued) === record)
+      session.reused.add(record);
     // Catch launch failures as well as asynchronous failures; never publish a
     // partial result or let a superseded command replace a newer snapshot.
     return (record.completion = Promise.resolve()
@@ -153,11 +158,12 @@ export class GeneratedTabs {
     if (this.searchSession) {
       const session = this.searchSession;
       session.eligible = eligible;
-      const pending = session.pending;
-      if (
-        pending?.state === 'pending' &&
-        this.records.get(pending.tab.id) === pending
-      ) {
+      for (const pending of new Set([...session.reused, session.pending])) {
+        if (
+          pending?.state !== 'pending' ||
+          this.records.get(pending.tab.id) !== pending
+        )
+          continue;
         const current = tabs.find((tab) => tab.id === pending.tab.id);
         if (
           current?.kind !== 'generated' ||
@@ -173,19 +179,26 @@ export class GeneratedTabs {
       const record = this.get(tab);
       if (record?.state === 'pending') alreadyRunning.add(record);
     }
-    const session = { cancelled: false, pending: null, eligible };
+    const session = {
+      cancelled: false,
+      pending: null,
+      eligible,
+      remaining: new Set(eligible.keys()),
+      reused: alreadyRunning,
+    };
     this.searchSession = session;
     const run = async () => {
       // Only tabs opted in at the start join this batch. Each queued ID uses
       // its current configuration when the preceding command finishes.
-      for (const id of eligible.keys()) {
+      for (const id of session.remaining) {
         if (session.cancelled) return;
+        session.remaining.delete(id);
         const tab = session.eligible.get(id);
         if (!tab) continue;
         // Reuse an already-running visit rather than execute it twice.
         let record = this.get(tab);
         if (
-          alreadyRunning.has(record) &&
+          session.reused.delete(record) &&
           (record.state === 'ready' || record.state === 'error')
         )
           continue;
@@ -207,6 +220,7 @@ export class GeneratedTabs {
           await completion;
         }
         session.pending = null;
+        session.reused.delete(record);
       }
     };
     run().catch((error) => console.error(error));
@@ -217,12 +231,14 @@ export class GeneratedTabs {
     this.searchSession = null;
     if (!session) return;
     session.cancelled = true;
-    if (
-      session.pending?.state === 'pending' &&
-      this.record !== session.pending &&
-      this.records.get(session.pending.tab.id) === session.pending
-    )
-      this._discard(session.pending.tab.id);
+    for (const record of new Set([...session.reused, session.pending])) {
+      if (
+        record?.state === 'pending' &&
+        this.record !== record &&
+        this.records.get(record.tab.id) === record
+      )
+        this._discard(record.tab.id);
+    }
   }
 
   _notify() {
@@ -257,12 +273,21 @@ export class GeneratedTabs {
   }
 
   suspend() {
-    if (
-      this.record?.state === 'pending' &&
-      this.searchSession?.pending !== this.record
-    )
-      this._discard(this.record.tab.id);
+    const record = this.record;
     this.record = null;
+    if (record?.state !== 'pending') return;
+    const session = this.searchSession;
+    const id = record.tab.id;
+    const tab = session?.eligible.get(id);
+    if (
+      tab &&
+      this.get(tab) === record &&
+      (session.pending === record || session.remaining.has(id))
+    ) {
+      session.reused.add(record);
+      return;
+    }
+    this._discard(id);
   }
 
   clear() {

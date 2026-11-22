@@ -175,6 +175,38 @@ async function main() {
   equal(calls[2].command, 'second');
   reusedTabs.destroy();
   await tick();
+  for (const action of ['finish', 'end', 'remove', 'open-during-search']) {
+    const queuedTabs = new GeneratedTabs(null, { execute });
+    calls.length = 0;
+    const openedLater = action === 'open-during-search';
+    if (openedLater) queuedTabs.search([opted, second], true);
+    const queued = queuedTabs.sync(second);
+    if (!openedLater) queuedTabs.search([opted, second], true);
+    await tick();
+    if (!openedLater) queuedTabs.suspend();
+    const visibleRun = calls.find((run) => run.command === 'second');
+    const firstRun = calls.find((run) => run.command === 'first');
+    equal(visibleRun.cancelled, false);
+    if (action === 'end') {
+      queuedTabs.endSearch();
+      equal(visibleRun.cancelled, true);
+      equal(firstRun.cancelled, true);
+    } else if (action === 'remove') {
+      queuedTabs.search([opted], true);
+      equal(visibleRun.cancelled, true);
+      equal(firstRun.cancelled, false);
+    } else {
+      visibleRun.resolve('retained output');
+      await tick();
+      firstRun.resolve('first output');
+      await tick();
+      equal(calls.length, 2);
+      equal(queuedTabs.get(second) === queued, true);
+      equal(queuedTabs.get(second).items[0].text, 'retained output');
+    }
+    queuedTabs.destroy();
+    await tick();
+  }
   const sharedTabs = new GeneratedTabs(null, { execute });
   calls.length = 0;
   const shared = sharedTabs.sync(opted);
