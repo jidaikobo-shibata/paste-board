@@ -78,8 +78,9 @@ export function addDiagnosticPreferences(window, settings, page) {
   );
   updateAvailability();
   const request = new Gio.Cancellable();
-  const cancelCapture = () => {
-    if (!captureId || cancelling) return;
+  const cancelCapture = (retry = false) => {
+    const id = captureId;
+    if (!id || (cancelling && !retry)) return;
     cancelling = true;
     updateAvailability();
     Gio.DBus.session.call(
@@ -87,7 +88,7 @@ export function addDiagnosticPreferences(window, settings, page) {
       DIAGNOSTIC_PATH,
       DIAGNOSTIC_INTERFACE,
       'Cancel',
-      new GLib.Variant('(s)', [captureId]),
+      new GLib.Variant('(s)', [id]),
       null,
       Gio.DBusCallFlags.NO_AUTO_START,
       5000,
@@ -96,7 +97,7 @@ export function addDiagnosticPreferences(window, settings, page) {
         try {
           connection.call_finish(result);
         } catch (error) {
-          if (!closed && captureId) {
+          if (!closed && captureId === id) {
             status.label =
               _('Could not cancel the diagnostic.') + '\n' + error.message;
             cancelling = false;
@@ -106,7 +107,7 @@ export function addDiagnosticPreferences(window, settings, page) {
       },
     );
   };
-  cancel.connect('clicked', cancelCapture);
+  cancel.connect('clicked', () => cancelCapture());
   window.connect('close-request', () => {
     if (closed) return false;
     cancelCapture();
@@ -136,9 +137,19 @@ export function addDiagnosticPreferences(window, settings, page) {
           if (!closed)
             status.label = _('Diagnostic record saved.') + '\n' + path;
         } catch (error) {
+          const timedOut =
+            error.matches(Gio.IOErrorEnum, Gio.IOErrorEnum.TIMED_OUT) ||
+            error.matches(Gio.DBusError, Gio.DBusError.NO_REPLY) ||
+            error.matches(Gio.DBusError, Gio.DBusError.TIMEOUT) ||
+            error.matches(Gio.DBusError, Gio.DBusError.TIMED_OUT);
+          if (timedOut) cancelCapture(true);
           if (!closed) {
             const name = Gio.DBusError.get_remote_error(error);
-            if (name === DIAGNOSTIC_INTERFACE + '.Cancelled')
+            if (timedOut)
+              status.label = _(
+                'The diagnostic did not respond in time. Check the diagnostic folder to see whether a record was saved.',
+              );
+            else if (name === DIAGNOSTIC_INTERFACE + '.Cancelled')
               status.label = _('Diagnostic cancelled.');
             else if (
               [
