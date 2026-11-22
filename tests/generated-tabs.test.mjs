@@ -151,6 +151,30 @@ async function main() {
   equal(changedTabs.get({ ...edited, command: 'new' }), null);
   equal(calls.length, 2);
   changedTabs.destroy();
+  const reusedTabs = new GeneratedTabs(null, { execute });
+  calls.length = 0;
+  const visible = reusedTabs.sync(second);
+  reusedTabs.search([opted, second], true);
+  await tick();
+  equal(
+    calls.map((run) => run.command),
+    ['second', 'first'],
+  );
+  calls[0].resolve('visible output');
+  await tick();
+  calls[1].resolve('first output');
+  await tick();
+  equal(calls.length, 2);
+  equal(reusedTabs.get(second) === visible, true);
+  equal(reusedTabs.get(second).items[0].text, 'visible output');
+  // A fresh search may refresh a result that predates that search.
+  reusedTabs.endSearch();
+  reusedTabs.search([second], true);
+  await tick();
+  equal(calls.length, 3);
+  equal(calls[2].command, 'second');
+  reusedTabs.destroy();
+  await tick();
   const sharedTabs = new GeneratedTabs(null, { execute });
   calls.length = 0;
   const shared = sharedTabs.sync(opted);

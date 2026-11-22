@@ -168,6 +168,11 @@ export class GeneratedTabs {
       }
       return;
     }
+    const alreadyRunning = new Set();
+    for (const tab of eligible.values()) {
+      const record = this.get(tab);
+      if (record?.state === 'pending') alreadyRunning.add(record);
+    }
     const session = { cancelled: false, pending: null, eligible };
     this.searchSession = session;
     const run = async () => {
@@ -179,6 +184,11 @@ export class GeneratedTabs {
         if (!tab) continue;
         // Reuse an already-running visit rather than execute it twice.
         let record = this.get(tab);
+        if (
+          alreadyRunning.has(record) &&
+          (record.state === 'ready' || record.state === 'error')
+        )
+          continue;
         if (record?.state !== 'pending') {
           this._discard(tab.id);
           record = {
