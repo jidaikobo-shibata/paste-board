@@ -78,6 +78,8 @@ confirmation, keeping the clipboard and tab. It is disabled for generated tabs.
 Use **Export…** in preferences to save paste sets and settings as a JSON file.
 Clipboard history is excluded. **Import…** previews the tabs and adds them to
 existing sets; preferences and keyboard shortcuts can be applied separately.
+Restoring the saved item limit preserves existing items in the backup, even in
+sets that already exceed that limit. The restored limit applies to new items.
 Imported commands have automatic execution turned off. Review them before
 re-enabling previews, tab-opening execution, or search execution.
 

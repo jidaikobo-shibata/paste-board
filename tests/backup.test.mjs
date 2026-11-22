@@ -294,6 +294,31 @@ async function main() {
     ),
   );
   equal(limited.data.sets.length, 0);
+  const loweredLimitBackup = JSON.stringify({
+    ...data,
+    preferences: { 'history-size': '1' },
+  });
+  await importBackup(
+    limited,
+    destination,
+    loweredLimitBackup,
+    true,
+    false,
+    GLib.uuid_string_random(),
+  );
+  const restored = limited.data.sets[0];
+  equal(
+    restored.items.map((item) => item.name),
+    ['text', 'Date'],
+  );
+  equal(destination.get_int('history-size'), 1);
+  equal(
+    new PasteSets(GLib.path_get_dirname(limited.path)).data.sets[0].items
+      .length,
+    2,
+  );
+  await rejects(() => limited.put(restored.id, { text: 'above limit' }));
+  equal(limited.data.sets[0].items.length, 2);
   const interrupted = new PasteSets(
     GLib.dir_make_tmp('paste-board-backup-interrupted.XXXXXX'),
   );

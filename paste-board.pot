@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 20:00+0900\n"
+"POT-Creation-Date: 2026-11-22 20:05+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -123,7 +123,7 @@ msgstr ""
 msgid "Invalid backup preferences."
 msgstr ""
 
-#: backup.js:88 backup.js:155
+#: backup.js:88 backup.js:158
 msgid "Paste Board is not available."
 msgstr ""
 
@@ -139,12 +139,12 @@ msgstr ""
 msgid "Could not apply backup preferences."
 msgstr ""
 
-#: backup.js:122
+#: backup.js:125
 #, javascript-format
 msgid "%s (%d)"
 msgstr ""
 
-#: backup.js:180
+#: backup.js:183
 msgid "Another import is in progress."
 msgstr ""
 

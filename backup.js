@@ -107,9 +107,12 @@ export async function importBackup(
       if (!pending.set_value(key, variant))
         throw new Error(_('Could not apply backup preferences.'));
     }
+  // A backup can contain sets created before its saved item limit was lowered.
+  // When restoring that limit, preserve those items just as a local edit would.
+  // The persisted format and storage size limits still apply.
   const itemLimit =
-    applyPreferences && data.preferences['history-size']
-      ? pending.get_int('history-size')
+    applyPreferences && Object.hasOwn(data.preferences, 'history-size')
+      ? Infinity
       : settings.get_int('history-size');
   if (!(pasteSets.data.importReceipts || []).includes(operationId)) {
     await pasteSets.changeAndSave(
