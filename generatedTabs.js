@@ -158,8 +158,12 @@ export class GeneratedTabs {
         pending?.state === 'pending' &&
         this.records.get(pending.tab.id) === pending
       ) {
-        const current = eligible.get(pending.tab.id);
-        if (!current || this.get(current) !== pending)
+        const current = tabs.find((tab) => tab.id === pending.tab.id);
+        if (
+          current?.kind !== 'generated' ||
+          this.get(current) !== pending ||
+          (!eligible.has(pending.tab.id) && this.record !== pending)
+        )
           this._discard(pending.tab.id);
       }
       return;
@@ -205,6 +209,7 @@ export class GeneratedTabs {
     session.cancelled = true;
     if (
       session.pending?.state === 'pending' &&
+      this.record !== session.pending &&
       this.records.get(session.pending.tab.id) === session.pending
     )
       this._discard(session.pending.tab.id);
@@ -242,7 +247,11 @@ export class GeneratedTabs {
   }
 
   suspend() {
-    if (this.record?.state === 'pending') this._discard(this.record.tab.id);
+    if (
+      this.record?.state === 'pending' &&
+      this.searchSession?.pending !== this.record
+    )
+      this._discard(this.record.tab.id);
     this.record = null;
   }
 
