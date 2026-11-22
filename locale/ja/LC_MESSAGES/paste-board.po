@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-22 16:36+0900\n"
+"POT-Creation-Date: 2026-11-22 16:38+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -260,7 +260,7 @@ msgid "Choose a local backup file."
 msgstr "ローカルのバックアップファイルを選択してください。"
 
 #: clipboardDiagnostics.js:116 clipboardDiagnostics.js:128
-#: clipboardDiagnostics.js:216 clipboardDiagnostics.js:303
+#: clipboardDiagnostics.js:221 clipboardDiagnostics.js:311
 #: diagnosticPrefs.js:153
 msgid "Diagnostic cancelled."
 msgstr "診断を中止しました。"
@@ -269,15 +269,15 @@ msgstr "診断を中止しました。"
 msgid "The diagnostic folder is not safe to use."
 msgstr "診断記録の保存先の安全性を確認できませんでした。"
 
-#: clipboardDiagnostics.js:199 diagnosticPrefs.js:174
+#: clipboardDiagnostics.js:204 diagnosticPrefs.js:174
 msgid "Could not save the diagnostic record."
 msgstr "診断記録を保存できませんでした。"
 
-#: clipboardDiagnostics.js:261 diagnosticPrefs.js:72
+#: clipboardDiagnostics.js:269 diagnosticPrefs.js:72
 msgid "Clipboard diagnostics are unavailable in private mode."
 msgstr "プライベートモード中はクリップボード診断を利用できません。"
 
-#: clipboardDiagnostics.js:273
+#: clipboardDiagnostics.js:281
 msgid ""
 "Enable debug mode before running a diagnostic. Another diagnostic may be in "
 "progress."
@@ -416,7 +416,9 @@ msgstr "診断記録を保存しました。"
 msgid ""
 "The diagnostic did not respond in time. Check the diagnostic folder to see "
 "whether a record was saved."
-msgstr "診断から時間内に応答がありませんでした。記録が保存されたかどうかは、保存先フォルダーで確認してください。"
+msgstr ""
+"診断から時間内に応答がありませんでした。記録が保存されたかどうかは、保存先"
+"フォルダーで確認してください。"
 
 #: diagnosticPrefs.js:166
 msgid "Clipboard diagnostics are unavailable. Enable or reload Paste Board."

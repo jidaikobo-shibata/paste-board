@@ -160,14 +160,18 @@ export async function saveDiagnostic(
     Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS,
     cancellable,
   );
-  const file = folder.get_child(GLib.uuid_string_random() + '.json');
+  const id = GLib.uuid_string_random();
+  const file = folder.get_child('.' + id + '.tmp');
+  const destination = folder.get_child(id + '.json');
+  cancellable.set_error_if_cancelled();
   let stream;
   try {
     stream = await new Promise((resolve, reject) =>
       file.create_async(
         Gio.FileCreateFlags.PRIVATE,
         GLib.PRIORITY_DEFAULT,
-        cancellable,
+        // Always receive the stream if creation succeeds so we can clean up.
+        null,
         (source, result) => {
           try {
             resolve(source.create_finish(result));
@@ -177,6 +181,7 @@ export async function saveDiagnostic(
         },
       ),
     );
+    cancellable.set_error_if_cancelled();
     const bytes = new TextEncoder().encode(JSON.stringify(report, null, 2));
     // GLib.Bytes owns its buffer throughout asynchronous I/O.
     let offset = 0;
@@ -214,7 +219,10 @@ export async function saveDiagnostic(
       ),
     );
     if (cancellable.is_cancelled()) throw new Error(_('Diagnostic cancelled.'));
-    return file.get_path();
+    // Commit in one rename without yielding between the cancellation check and
+    // the final name becoming visible. Never fall back to copying.
+    file.move(destination, Gio.FileCopyFlags.NO_FALLBACK_FOR_MOVE, null, null);
+    return destination.get_path();
   } catch (error) {
     if (stream) {
       try {

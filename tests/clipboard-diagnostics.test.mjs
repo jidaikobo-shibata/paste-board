@@ -140,7 +140,48 @@ async function main() {
   equal(stalled.connected, false);
   const root = GLib.dir_make_tmp('paste-board-diagnostics-XXXXXX');
   const dir = root + '/diagnostics';
-  const path = await saveDiagnostic(report, new Gio.Cancellable(), dir);
+  const names = () => {
+    const entries = Gio.File.new_for_path(dir).enumerate_children(
+      'standard::name',
+      0,
+      null,
+    );
+    const result = [];
+    try {
+      for (let item; (item = entries.next_file(null));)
+        result.push(item.get_name());
+    } finally {
+      entries.close(null);
+    }
+    return result.sort();
+  };
+  const path = await saveDiagnostic(
+    {
+      toJSON() {
+        equal(names().length, 1);
+        equal(/^\..+\.tmp$/.test(names()[0]), true);
+        return report;
+      },
+    },
+    new Gio.Cancellable(),
+    dir,
+  );
+  const finalNames = [GLib.path_get_basename(path)];
+  equal(names(), finalNames);
+  const duringSave = new Gio.Cancellable();
+  await rejects(() =>
+    saveDiagnostic(
+      {
+        toJSON() {
+          duringSave.cancel();
+          return report;
+        },
+      },
+      duringSave,
+      dir,
+    ),
+  );
+  equal(names(), finalNames);
   const file = Gio.File.new_for_path(path);
   const read = JSON.parse(
     new TextDecoder().decode(file.load_contents(null)[1]),
