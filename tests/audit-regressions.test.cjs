@@ -1890,6 +1890,61 @@ for (const phase of ['release', 'write', 'inject', 'restore', 'resume']) {
   });
 }
 
+test('key release timeout clears stale keys and allows the next paste', () => {
+  const timers = [],
+    notices = [],
+    writes = [];
+  const display = { focus_window: {} };
+  const [owner] = instance(
+    ['_quickPaste', '_finishQuickPaste', '_endQuickPasteTracking'],
+    {
+      DS: { TYPE_TEXT: 1 },
+      global: { display },
+      St: { ClipboardType: { CLIPBOARD: 1 } },
+      Clipboard: {
+        get_text: (_, cb) => cb(null, 'original'),
+        set_text: (_, text) => writes.push(text),
+      },
+      GLib: {
+        PRIORITY_DEFAULT: 0,
+        SOURCE_CONTINUE: true,
+        SOURCE_REMOVE: false,
+        timeout_add: (_, ms, fn) => timers.push(fn),
+      },
+    },
+  );
+  Object.assign(owner, {
+    menu: { isOpen: true },
+    _quickPasteKeysHeld: new Set([10]),
+    _quickPasteKeysAreHeld: () => owner._quickPasteKeysHeld.size > 0,
+    _sendQuickPasteKeys: noop,
+    _suspendQuickPasteInput: noop,
+    _resumeQuickPasteInput: noop,
+    _showNotification: (...args) => notices.push(args),
+  });
+  const item = { type: 1, text: 'chosen' };
+  owner._quickPaste(item);
+  const tick = timers.shift();
+  for (let i = 0; i < 79; i++) assert.equal(tick(), true);
+  assert.equal(tick(), false);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
+  assert.equal(owner._quickPasteBusy, false);
+  assert.equal(owner._quickPasteTimer, undefined);
+  assert.deepEqual(writes, []);
+  assert.match(notices[0][1], /Timed out/);
+
+  owner._quickPasteKeysHeld.add(11);
+  owner._quickPaste(item);
+  display.focus_window = {};
+  assert.equal(timers.shift()(), false);
+  assert.equal(owner._quickPasteKeysHeld.size, 0);
+  assert.equal(notices.length, 1);
+  owner._quickPaste(item);
+  timers.shift()();
+  timers.shift()();
+  assert.deepEqual(writes, ['chosen', 'original']);
+});
+
 test('a failed search redraw does not drop a pending clipboard copy', () => {
   const [owner] = instance(['_endQuickPasteTracking']);
   let recorded = false;

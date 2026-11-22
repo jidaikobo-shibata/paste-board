@@ -2566,13 +2566,6 @@ class ClipboardIndicator extends PanelMenu.Button {
           GLib.PRIORITY_DEFAULT,
           25,
           () => {
-            if (this._quickPasteKeysAreHeld()) {
-              if (++attempts < 80) return GLib.SOURCE_CONTINUE;
-              this._endQuickPasteTracking();
-              this._quickPasteTimer = undefined;
-              return GLib.SOURCE_REMOVE;
-            }
-            this._quickPasteTimer = undefined;
             if (
               this._destroyed ||
               PRIVATE_MODE ||
@@ -2581,9 +2574,23 @@ class ClipboardIndicator extends PanelMenu.Button {
               global.display.focus_window !== target ||
               generation !== (this._clipboardGeneration || 0)
             ) {
+              this._quickPasteTimer = undefined;
+              this._quickPasteKeysHeld?.clear();
               this._endQuickPasteTracking();
               return GLib.SOURCE_REMOVE;
             }
+            if (this._quickPasteKeysAreHeld()) {
+              if (++attempts < 80) return GLib.SOURCE_CONTINUE;
+              this._quickPasteTimer = undefined;
+              this._quickPasteKeysHeld?.clear();
+              this._endQuickPasteTracking();
+              this._showNotification(
+                _('Could not paste'),
+                _('Timed out waiting for the shortcut keys to be released.'),
+              );
+              return GLib.SOURCE_REMOVE;
+            }
+            this._quickPasteTimer = undefined;
             this._quickPasteState = {
               original,
               text: entry.text,
