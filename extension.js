@@ -129,7 +129,10 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._commandPreviews?.destroy();
     this._generatedTabs?.destroy();
     for (const read of this._clipboardReads || []) read.cancel();
-    this._pasteSets?.close().catch((error) => console.error(error));
+    this._pasteSets?.close().catch((error) => {
+      console.error(error);
+      Main.notifyError(_('Could not save paste sets.'), error.message);
+    });
     if (this._sessionOverSignal) {
       Gio.DBus.session.signal_unsubscribe(this._sessionOverSignal);
       this._sessionOverSignal = undefined;
@@ -2578,20 +2581,21 @@ class ClipboardIndicator extends PanelMenu.Button {
               original,
               text: entry.text,
               changed: false,
-              keepClipboard: commitSelection && !entry.pasteSetItem,
+              keepClipboard: false,
             };
             if (this.menu.isOpen) this._suspendQuickPasteInput();
             Clipboard.set_text(St.ClipboardType.CLIPBOARD, entry.text);
-            if (commitSelection && !entry.pasteSetItem) {
-              this._moveEntryFirst(entry);
-              this._setCurrentClipboardEntry(entry, false);
-            }
             try {
               this._sendQuickPasteKeys(closeAfterPaste, shortcut);
             } catch (error) {
               this._finishQuickPaste(true);
               this._showNotification(_('Could not paste'), error.message);
               return GLib.SOURCE_REMOVE;
+            }
+            if (commitSelection && !entry.pasteSetItem) {
+              this._quickPasteState.keepClipboard = true;
+              this._moveEntryFirst(entry);
+              this._setCurrentClipboardEntry(entry, false);
             }
             // Experimental delay: application clipboard reads are asynchronous.
             this._quickPasteTimer = GLib.timeout_add(

@@ -82,7 +82,7 @@ async function main() {
     equal(read(store.path).sets[0].name, 'After I/O failure');
     // Close and re-enable must wait for all writes without accepting new edits.
     store._writeBytes = (bytes) =>
-      new Promise((resolve) => writes.push({ bytes, resolve }));
+      new Promise((resolve, reject) => writes.push({ bytes, resolve, reject }));
     store.rename(id, 'Before close');
     const closing = store.close();
     let ready = false;
@@ -99,13 +99,45 @@ async function main() {
     }
     equal(refused, true);
     equal(store.data.sets[0].name, 'Before close');
+    const failedWrite = writes.at(-1);
+    failedWrite.reject(new Error('Temporary I/O failure during close'));
+    await new Promise((resolve) =>
+      GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        resolve();
+        return GLib.SOURCE_REMOVE;
+      }),
+    );
     const last = writes.at(-1);
+    equal(last === failedWrite, false);
+    equal(ready, false);
     await originalWrite(last.bytes);
     last.resolve();
     await closing;
     await waiting;
     equal(ready, true);
     equal(new PasteSets(directory).data.sets[0].name, 'Before close');
+    // A persistent failure gets one retry and leaves the last good file intact.
+    const failingStore = new PasteSets(directory);
+    let attempts = 0;
+    failingStore._writeBytes = async () => {
+      attempts++;
+      throw Error('Persistent I/O failure');
+    };
+    failingStore.rename(id, 'Unsaved');
+    await rejected(failingStore.close());
+    await PasteSets.waitForWrites();
+    equal(attempts, 2);
+    equal(read(store.path).sets[0].name, 'Before close');
+
+    // Closing before an import starts writing rejects the import, not close.
+    const importingStore = new PasteSets(directory);
+    const importing = rejected(
+      importingStore.changeAndSave((sets) => {
+        sets[0].name = 'Uncommitted import';
+      }),
+    );
+    await Promise.all([importingStore.close(), importing]);
+    equal(read(store.path).sets[0].name, 'Before close');
     GLib.unlink(backup);
     print(`Asynchronous paste-set writes: ${checks} checks passed`);
   } finally {

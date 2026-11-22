@@ -227,7 +227,24 @@ export class PasteSets {
   close() {
     this._closed = true;
     this._validatedTexts = undefined;
-    return this.flush();
+    if (this._closing) return this._closing;
+    // Keep the whole close operation registered so a new instance cannot read
+    // the old file between the original failure and its retry.
+    const transaction = this._transaction;
+    // Import errors belong to the import caller. Closing still waits for the
+    // transaction before flushing any ordinary edits left in the queue.
+    const flushing = transaction
+      ? transaction.catch(() => {}).then(() => this.flush())
+      : this.flush();
+    const closing = flushing.catch((error) => {
+      if (!this._pendingBytes) throw error;
+      return this.flush();
+    });
+    this._closing = closing;
+    pendingWrites.add(closing);
+    const finished = () => pendingWrites.delete(closing);
+    closing.then(finished, finished);
+    return closing;
   }
 
   _changedData(update, { itemLimit = this._getItemLimit() } = {}) {

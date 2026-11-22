@@ -1810,9 +1810,11 @@ test('shortcut injection failure restores the clipboard and releases paste state
     _sendQuickPasteKeys: () => {
       throw new Error('injection failed');
     },
+    _moveEntryFirst: () => assert.fail('Failed paste promoted history'),
+    _setCurrentClipboardEntry: () => assert.fail('Failed paste kept clipboard'),
     _showNotification: (...args) => notifications.push(args),
   });
-  owner._quickPaste({ type: 1, text: 'chosen' });
+  owner._quickPaste({ type: 1, text: 'chosen' }, { commitSelection: true });
   timers.shift()();
   assert.deepEqual(writes, ['chosen', 'original']);
   assert.equal(owner._quickPasteBusy, false);
