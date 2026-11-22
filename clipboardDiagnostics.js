@@ -235,13 +235,26 @@ export class DiagnosticService {
   constructor(settings, snapshot) {
     this.settings = settings;
     this.snapshot = snapshot;
-    this.changed = settings.connect('changed::debug-mode', () => {
-      if (!settings.get_boolean('debug-mode')) this.cancellable?.cancel();
-    });
+    this.changed = ['debug-mode', 'private-mode'].map((key) =>
+      settings.connect('changed::' + key, () => {
+        if (
+          !settings.get_boolean('debug-mode') ||
+          settings.get_boolean('private-mode')
+        )
+          this.cancellable?.cancel();
+      }),
+    );
     this.object = Gio.DBusExportedObject.wrapJSObject(XML, this);
     this.object.export(Gio.DBus.session, DIAGNOSTIC_PATH);
   }
   async CaptureAsync(_args, invocation) {
+    if (this.settings.get_boolean('private-mode')) {
+      invocation.return_dbus_error(
+        DIAGNOSTIC_INTERFACE + '.Unavailable',
+        _('Clipboard diagnostics are unavailable in private mode.'),
+      );
+      return;
+    }
     if (
       this.closed ||
       this.cancellable ||
@@ -279,7 +292,7 @@ export class DiagnosticService {
   destroy() {
     this.closed = true;
     this.cancellable?.cancel();
-    this.settings.disconnect(this.changed);
+    for (const id of this.changed) this.settings.disconnect(id);
     this.object.unexport();
   }
 }

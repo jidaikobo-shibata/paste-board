@@ -75,6 +75,59 @@ export default class extends Extension {
     assert(rejected, 'Capture allowed while disabled');
     const folder = Gio.File.new_for_path(diagnosticDirectory());
     assert(!folder.query_exists(null), 'Disabled diagnostic wrote data');
+    const service = owner._diagnosticService;
+    const snapshot = service.snapshot;
+    let readStarted = false;
+    service.snapshot = () => ({
+      selection: {
+        connect: () => 1,
+        disconnect() {},
+        get_mimetypes: () => ['text/plain'],
+        transfer_finish() {
+          throw Error('Cancelled fixture transfer');
+        },
+        transfer_async(_type, _mime, _limit, _output, cancellable, callback) {
+          readStarted = true;
+          cancellable.connect(() =>
+            GLib.idle_add(0, () => {
+              callback(this, {});
+              return GLib.SOURCE_REMOVE;
+            }),
+          );
+        },
+      },
+      type: Meta.SelectionType.SELECTION_CLIPBOARD,
+      historyText: 'Synthetic history',
+    });
+    try {
+      owner.settings.set_boolean('debug-mode', true);
+      owner.settings.set_boolean('private-mode', true);
+      assert(
+        await call().then(
+          () => false,
+          () => true,
+        ),
+        'Private capture accepted',
+      );
+      assert(!readStarted, 'Private capture started reading');
+      owner.settings.set_boolean('private-mode', false);
+      const cancelled = call().then(
+        () => false,
+        () => true,
+      );
+      for (let i = 0; i < 100 && !readStarted; i++) await delay(10);
+      assert(readStarted, 'Fixture capture did not start');
+      owner.settings.set_boolean('private-mode', true);
+      assert(
+        await cancelled,
+        'Switching to private mode did not cancel capture',
+      );
+      assert(!folder.query_exists(null), 'Cancelled capture wrote data');
+    } finally {
+      owner.settings.set_boolean('debug-mode', false);
+      owner.settings.set_boolean('private-mode', false);
+      service.snapshot = snapshot;
+    }
     const selection = owner.selection;
     const source = Meta.SelectionSourceMemory.new(
       'text/plain;charset=utf-8',

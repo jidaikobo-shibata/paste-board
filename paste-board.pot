@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-15 16:02+0900\n"
+"POT-Creation-Date: 2026-11-22 16:32+0900\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -261,7 +261,11 @@ msgstr ""
 msgid "Could not save the diagnostic record."
 msgstr ""
 
-#: clipboardDiagnostics.js:253
+#: clipboardDiagnostics.js:254 diagnosticPrefs.js:63
+msgid "Clipboard diagnostics are unavailable in private mode."
+msgstr ""
+
+#: clipboardDiagnostics.js:266
 msgid ""
 "Enable debug mode before running a diagnostic. Another diagnostic may be in "
 "progress."
@@ -372,19 +376,19 @@ msgstr ""
 msgid "Open diagnostic folder"
 msgstr ""
 
-#: diagnosticPrefs.js:66
+#: diagnosticPrefs.js:81
 msgid "Diagnosing…"
 msgstr ""
 
-#: diagnosticPrefs.js:81
+#: diagnosticPrefs.js:96
 msgid "Diagnostic record saved."
 msgstr ""
 
-#: diagnosticPrefs.js:86
+#: diagnosticPrefs.js:101
 msgid "Could not save a diagnostic. Enable Paste Board and try again."
 msgstr ""
 
-#: diagnosticPrefs.js:99
+#: diagnosticPrefs.js:115
 msgid "No diagnostic records yet."
 msgstr ""
 

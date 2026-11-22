@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Paste Board for GNOME 44\n"
 "Report-Msgid-Bugs-To: Report issues to the project maintainer\n"
-"POT-Creation-Date: 2026-11-15 16:02+0900\n"
+"POT-Creation-Date: 2026-11-22 16:32+0900\n"
 "PO-Revision-Date: 2026-10-26 00:00+0900\n"
 "Last-Translator: 小山田 純 <oyamadajun@outlook.jp>\n"
 "Language-Team: \n"
@@ -272,7 +272,11 @@ msgstr "診断記録の保存先の安全性を確認できませんでした。
 msgid "Could not save the diagnostic record."
 msgstr "診断記録を保存できませんでした。"
 
-#: clipboardDiagnostics.js:253
+#: clipboardDiagnostics.js:254 diagnosticPrefs.js:63
+msgid "Clipboard diagnostics are unavailable in private mode."
+msgstr "プライベートモード中はクリップボード診断を利用できません。"
+
+#: clipboardDiagnostics.js:266
 msgid ""
 "Enable debug mode before running a diagnostic. Another diagnostic may be in "
 "progress."
@@ -391,20 +395,20 @@ msgstr "診断して保存"
 msgid "Open diagnostic folder"
 msgstr "保存先を開く"
 
-#: diagnosticPrefs.js:66
+#: diagnosticPrefs.js:81
 msgid "Diagnosing…"
 msgstr "診断しています…"
 
-#: diagnosticPrefs.js:81
+#: diagnosticPrefs.js:96
 msgid "Diagnostic record saved."
 msgstr "診断記録を保存しました。"
 
-#: diagnosticPrefs.js:86
+#: diagnosticPrefs.js:101
 msgid "Could not save a diagnostic. Enable Paste Board and try again."
 msgstr ""
 "診断記録を保存できませんでした。Paste Boardを有効にして再試行してください。"
 
-#: diagnosticPrefs.js:99
+#: diagnosticPrefs.js:115
 msgid "No diagnostic records yet."
 msgstr "診断記録はまだありません。"
 

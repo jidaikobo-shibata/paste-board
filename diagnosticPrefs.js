@@ -55,14 +55,29 @@ export function addDiagnosticPreferences(window, settings, page) {
   group.add(content);
   settings.bind('debug-mode', content, 'visible', Gio.SettingsBindFlags.GET);
   let closed = false;
+  let busy = false;
+  const updateAvailability = () => {
+    const privateMode = settings.get_boolean('private-mode');
+    capture.sensitive = !busy && !privateMode;
+    capture.tooltip_text = privateMode
+      ? _('Clipboard diagnostics are unavailable in private mode.')
+      : null;
+  };
+  const privateChanged = settings.connect(
+    'changed::private-mode',
+    updateAvailability,
+  );
+  updateAvailability();
   const request = new Gio.Cancellable();
   window.connect('close-request', () => {
     closed = true;
+    settings.disconnect(privateChanged);
     request.cancel();
     return false;
   });
   capture.connect('clicked', () => {
-    capture.sensitive = false;
+    busy = true;
+    updateAvailability();
     status.label = _('Diagnosing…');
     Gio.DBus.session.call(
       'org.gnome.Shell',
@@ -88,7 +103,8 @@ export function addDiagnosticPreferences(window, settings, page) {
               '\n' +
               error.message;
         } finally {
-          if (!closed) capture.sensitive = true;
+          busy = false;
+          if (!closed) updateAvailability();
         }
       },
     );
