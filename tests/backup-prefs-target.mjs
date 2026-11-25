@@ -136,6 +136,22 @@ app.connect('activate', async () => {
     });
     await delay(100);
     dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT).emit('clicked');
+    const [preferences, shortcuts] = descendants(dialog).filter(
+      (w) => w instanceof Gtk.CheckButton,
+    );
+    await wait(
+      () =>
+        preferences.sensitive &&
+        dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT).sensitive,
+    );
+    if (shortcuts.sensitive || JSON.parse(await call()).sets.length !== 2)
+      throw Error(
+        'Rejected import affected preferences controls or saved sets',
+      );
+    preferences.active = true;
+    if (!shortcuts.sensitive)
+      throw Error('Shortcut option did not follow preferences');
+    dialog.get_widget_for_response(Gtk.ResponseType.ACCEPT).emit('clicked');
     let imported;
     for (let i = 0; i < 100; i++) {
       await delay(50);

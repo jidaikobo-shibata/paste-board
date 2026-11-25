@@ -88,7 +88,7 @@ test('initial display and private-mode transitions preserve the clipboard', () =
     icon: { remove_style_class_name: noop, add_style_class_name: noop },
     _applyPasteSetVisibility: noop,
     _updateButtonText: noop,
-    _queryClipboard: noop,
+    _queryClipboard: () => assert.fail('Privacy transition read the clipboard'),
     _cancelPasteCommand: noop,
   });
   owner._updatePrivateModeState();
@@ -100,6 +100,26 @@ test('initial display and private-mode transitions preserve the clipboard', () =
   assert.deepEqual(writes, []);
   assert.equal(owner._currentClipboardEntry, undefined);
   assert.equal(owner._clipboardQueryEpoch, 3);
+});
+
+test('hiding the top bar suppresses the arrow and restores the button style on exit', () => {
+  const [owner, context] = instance(['_updateTopbarLayout'], {
+    TOPBAR_DISPLAY_MODE: 3,
+    DISABLE_DOWN_ARROW: false,
+  });
+  Object.assign(owner, {
+    icon: {},
+    _buttonText: {},
+    _downArrow: {},
+    style_class: 'panel-button',
+  });
+  owner._updateTopbarLayout();
+  owner._updateTopbarLayout();
+  assert.equal(owner._downArrow.visible, false);
+  context.TOPBAR_DISPLAY_MODE = 0;
+  owner._updateTopbarLayout();
+  assert.equal(owner._downArrow.visible, true);
+  assert.equal(owner.style_class, 'panel-button');
 });
 
 test('rebuilding visible history does not write the selected item to clipboard', () => {
@@ -1191,6 +1211,8 @@ function historyFixture(options = {}) {
     rows = [];
   const [owner, context] = instance(
     [
+      '_updatePrivateModeState',
+      '_queryClipboard',
       '_processClipboardContent',
       '_moveEntryFirst',
       '_setCurrentClipboardEntry',
@@ -1294,6 +1316,32 @@ function historyFixture(options = {}) {
     },
   };
 }
+
+test('resuming recording only persists the next public copy', () => {
+  const { owner, context, order, disk } = historyFixture();
+  let text = 'private';
+  Object.assign(owner, {
+    scrollViewMenuSection: { actor: {} },
+    icon: { remove_style_class_name: noop, add_style_class_name: noop },
+    _applyPasteSetVisibility: noop,
+    _cancelPasteCommand: noop,
+    _readClipboard: (_, cb) => cb(null, text),
+  });
+  context.PRIVATE_MODE = true;
+  owner._updatePrivateModeState();
+  owner._queryClipboard();
+  context.PRIVATE_MODE = false;
+  owner._updatePrivateModeState();
+  assert.deepEqual(order(), []);
+  assert.deepEqual(disk, []);
+  text = 'public';
+  owner._queryClipboard();
+  assert.deepEqual(order(), ['public']);
+  assert.deepEqual(
+    disk.map((item) => item.text),
+    ['public'],
+  );
+});
 
 test('ordinary copies and copy-only actions always make history first equal clipboard', () => {
   const fixture = historyFixture();

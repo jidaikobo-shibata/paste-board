@@ -194,6 +194,7 @@ export default class extends Extension {
     );
     owner.menu.close();
     await owner._pasteSets.flush();
+    owner.settings.set_int('history-size', 1);
     const launcher = new Gio.SubprocessLauncher({
       flags: Gio.SubprocessFlags.NONE,
     });

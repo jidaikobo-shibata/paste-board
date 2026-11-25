@@ -424,6 +424,17 @@ class ClipboardIndicator extends PanelMenu.Button {
       this,
     );
 
+    const startupEpoch = this._clipboardQueryEpoch;
+    this.settings.connectObject(
+      'changed::private-mode',
+      () => {
+        PRIVATE_MODE = this.settings.get_boolean(SettingsFields.PRIVATE_MODE);
+        this._updatePrivateModeState();
+        this._syncModeButtons();
+      },
+      this,
+    );
+
     Store.buildClipboardStateFromLog(
       async (entries, archivedEntries, nextId, nextDiskId) => {
         if (this._destroyed) return;
@@ -477,7 +488,8 @@ class ClipboardIndicator extends PanelMenu.Button {
           application:
             global.display.get_focus_window()?.get_wm_class() ?? null,
         }));
-        this._queryClipboard(true, true);
+        if (this._clipboardQueryEpoch === startupEpoch)
+          this._queryClipboard(true, true);
       },
     );
   }
@@ -3931,6 +3943,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   _updatePrivateModeState() {
     // Invalidate reads started before a privacy transition.
     this._clipboardQueryEpoch = (this._clipboardQueryEpoch || 0) + 1;
+    this._pendingClipboardCopy = false;
     // We hide the history in private mode because it will be out of sync
     // (selected item will not reflect clipboard)
     this.scrollViewMenuSection.actor.visible = !PRIVATE_MODE;
@@ -3955,7 +3968,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       } else {
         this._clearCurrentClipboardEntry(false);
       }
-      this._queryClipboard(true);
+      // Resume recording on the next copy, leaving private content unread.
       if (this._isCrossTabSearch?.()) this._renderAllTabSearch();
     }
   }
@@ -4030,7 +4043,6 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _onSettingsChange() {
     const prevItemLimit = MAX_REGISTRY_LENGTH;
-    const prevPrivateMode = PRIVATE_MODE;
     const prevClearOnLogout = CLEAR_ON_LOGOUT;
     const prevPreviewsPaused = this._previewsPaused;
     const prevSearchAllTabs = this._searchAllTabs;
@@ -4054,10 +4066,6 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._updateCandidateNumbers();
     this._syncModeButtons();
     if (COPY_FEEDBACK === 0 || PRIVATE_MODE) this._copyFeedback.clear();
-
-    if (prevPrivateMode !== undefined && PRIVATE_MODE !== prevPrivateMode) {
-      this._updatePrivateModeState();
-    }
 
     // Remove old entries in case the registry size changed
     this._pruneOldestEntries();
@@ -4111,10 +4119,11 @@ class ClipboardIndicator extends PanelMenu.Button {
       this.icon.visible = false;
       this._buttonText.visible = false;
 
-      this._style_class = this.style_class;
+      this._style_class ??= this.style_class;
       this.style_class = '';
-    } else if (this._style_class) {
+    } else if (this._style_class != null) {
       this.style_class = this._style_class;
+      this._style_class = undefined;
     }
 
     if (TOPBAR_DISPLAY_MODE === 0) {
@@ -4129,7 +4138,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this.icon.visible = true;
       this._buttonText.visible = true;
     }
-    this._downArrow.visible = !DISABLE_DOWN_ARROW;
+    this._downArrow.visible = TOPBAR_DISPLAY_MODE !== 3 && !DISABLE_DOWN_ARROW;
   }
 
   _disconnectSettings() {

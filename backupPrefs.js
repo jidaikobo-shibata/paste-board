@@ -166,6 +166,7 @@ export function confirmImport(parent, settings, json) {
   content.append(errorLabel);
   const operationId = GLib.uuid_string_random();
   let busy = false;
+  let outcomeUncertain = false;
   let closed = false;
   const close = () => {
     if (closed) return;
@@ -212,7 +213,22 @@ export function confirmImport(parent, settings, json) {
         );
       }
     } catch (error) {
-      if (!closed) errorLabel.label = error.message;
+      if (!closed) {
+        const name =
+          error instanceof GLib.Error
+            ? Gio.DBusError.get_remote_error(error)
+            : null;
+        if (
+          name !== BACKUP_INTERFACE + '.NotApplied' &&
+          name !== BACKUP_INTERFACE + '.Busy'
+        )
+          outcomeUncertain = true;
+        if (!outcomeUncertain) {
+          preferences.sensitive = true;
+          shortcuts.sensitive = preferences.active;
+        }
+        errorLabel.label = error.message;
+      }
     } finally {
       busy = false;
       if (!closed) {

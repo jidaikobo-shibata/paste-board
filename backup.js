@@ -194,7 +194,10 @@ export class BackupService {
       );
       invocation.return_value(null);
     } catch (error) {
-      invocation.return_dbus_error(BACKUP_INTERFACE + '.Error', error.message);
+      // The receipt and imported sets are committed in the same file write.
+      const committed = this.pasteSets.data.importReceipts?.includes(args[3]);
+      const suffix = committed || this.closed ? '.Error' : '.NotApplied';
+      invocation.return_dbus_error(BACKUP_INTERFACE + suffix, error.message);
     } finally {
       this.busy = false;
       if (!this.closed) this.changed();
