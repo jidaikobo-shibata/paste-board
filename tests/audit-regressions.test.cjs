@@ -1407,6 +1407,62 @@ test('deleting current history selects the next first item; clearing preserves c
   assert.equal(fixture.clipboard(), 'older');
 });
 
+test('deleting an unrelated history row preserves the non-text clipboard', () => {
+  const fixture = historyFixture();
+  fixture.copy('older');
+  fixture.copy('latest');
+  // A non-text clipboard owner supplies no text to the history reader.
+  fixture.owner._processClipboardContent(null, true, true);
+  const writes = [];
+  fixture.context.Clipboard.set_text = (...args) => writes.push(args);
+  fixture.owner._deleteEntryAndRestoreLatest(fixture.owner.entries.head);
+  assert.deepEqual(writes, []);
+  assert.deepEqual(fixture.order(), ['latest']);
+  fixture.checkOrder();
+});
+
+test('settings refresh updates the top-bar text without replacing a search excerpt', () => {
+  const [owner, context] = instance(
+    ['_onSettingsChange', '_updateButtonText', '_setEntryLabel'],
+    {
+      MAX_REGISTRY_LENGTH: 1000,
+      CLEAR_ON_LOGOUT: false,
+      COPY_FEEDBACK: 1,
+      ENABLE_KEYBINDING: false,
+      TOPBAR_DISPLAY_MODE: 1,
+      MAX_TOPBAR_LENGTH: 20,
+      MAX_VISIBLE_CHARS: 200,
+      DS: { TYPE_TEXT: 1 },
+    },
+  );
+  let topbar = 'previous text';
+  let excerpt = '…matching term…';
+  const row = {
+    entry: { type: 1, text: 'x'.repeat(300) + 'matching term' },
+    label: { set_text: (text) => (excerpt = text) },
+  };
+  Object.assign(owner, {
+    _fetchSettings: noop,
+    _updateCandidateNumbers: noop,
+    _syncModeButtons: noop,
+    _pruneOldestEntries: noop,
+    _updateTopbarLayout: noop,
+    _setMenuWidth: noop,
+    _unbindShortcuts: noop,
+    _copyFeedback: { clear: noop },
+    _buttonText: { set_text: (text) => (topbar = text) },
+    _truncated: (text, limit) => text.slice(0, limit),
+    historySection: { _getMenuItems: () => [row] },
+  });
+  context.PRIVATE_MODE = true;
+  owner._onSettingsChange();
+  assert.equal(topbar, '…');
+  context.PRIVATE_MODE = false;
+  owner._onSettingsChange();
+  assert.equal(topbar, '');
+  assert.equal(excerpt, '…matching term…');
+});
+
 test('trimmed history and clipboard remain identical while PRIMARY never changes clipboard', () => {
   const fixture = historyFixture({ primary: () => ' selected \n' });
   fixture.context.STRIP_TEXT = true;

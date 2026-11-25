@@ -3880,9 +3880,10 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _deleteEntryAndRestoreLatest(entry) {
+    const wasCurrent = this._currentClipboardEntry === entry;
     this._removeEntry(entry, true, true);
 
-    if (!this._currentClipboardEntry) {
+    if (wasCurrent) {
       const nextEntry = this.entries.last();
       if (nextEntry) {
         this._setCurrentClipboardEntry(nextEntry, true);
@@ -4070,14 +4071,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     // Remove old entries in case the registry size changed
     this._pruneOldestEntries();
 
-    // Re-set menu-items labels in case preview size changed
-    const resetLabel = (item) => this._setEntryLabel(item);
-    this.historySection._getMenuItems().forEach(resetLabel);
-
+    this._updateButtonText(this._currentClipboardEntry);
     this._updateTopbarLayout();
-    if (this._currentClipboardEntry) {
-      this._updateButtonText(this._currentClipboardEntry);
-    }
     this._setMenuWidth();
 
     if (ENABLE_KEYBINDING) {
