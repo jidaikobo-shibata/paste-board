@@ -44,7 +44,7 @@ import {
 } from './pasteShortcuts.js';
 import { HistorySession } from './historySession.js';
 import { MAX_TEXT_BYTES, MAX_LOG_BYTES, textFitsLimit } from './inputLimits.js';
-import { readClipboardText } from './clipboardRead.js';
+import { isPlainTextTarget, readClipboardText } from './clipboardRead.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
@@ -2663,6 +2663,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     try {
       this._readClipboard(St.ClipboardType.CLIPBOARD, onRead, {
         requireRestorableText: !commitSelection,
+        allowTextOnlyFallback: this._allowTextOnlyFallback,
       });
     } catch (error) {
       this._endQuickPasteTracking();
@@ -3653,6 +3654,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       )
         return;
       if (readError) {
+        this._clearCurrentClipboardEntry(false);
         if (readError.code === 'size-limit')
           this._showNotification(readError.message, '');
         return;
@@ -3663,12 +3665,10 @@ class ClipboardIndicator extends PanelMenu.Button {
             Meta.SelectionType.SELECTION_CLIPBOARD,
           ) || [];
         // Restore only an empty/text-only clipboard, never images or other data.
-        const textOnly = mimetypes.every((type) =>
-          /^(text\/plain(?:;.*)?|UTF8_STRING|STRING|TEXT|COMPOUND_TEXT)$/i.test(
-            type,
-          ),
-        );
-        if (textOnly) {
+        if (
+          !mimetypes.length ||
+          (text === '' && mimetypes.every(isPlainTextTarget))
+        ) {
           this._setCurrentClipboardEntry(this.entries.last(), true);
           return;
         }
@@ -3733,18 +3733,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._showNotification(_('Copied text exceeds the size limit.'), '');
       return;
     }
-    if (STRIP_TEXT && text) {
-      const trimmed = text.trim();
-      if (selectEntry && trimmed !== text) {
-        this._quickPasteRestoring = true;
-        try {
-          Clipboard.set_text(St.ClipboardType.CLIPBOARD, trimmed);
-        } finally {
-          this._quickPasteRestoring = false;
-        }
-      }
-      text = trimmed;
-    }
+    if (STRIP_TEXT && text) text = text.trim();
     if (!text) {
       if (selectEntry) this._clearCurrentClipboardEntry(false);
       return;
@@ -3848,11 +3837,14 @@ class ClipboardIndicator extends PanelMenu.Button {
           if (this._quickPasteState) {
             if (this._quickPasteState.owned) {
               this._quickPasteState.changed = true;
+              this._clearCurrentClipboardEntry(false);
               this._pendingClipboardCopy = true;
             }
             this._quickPasteState.owned = true;
             return;
           }
+          // A deletion during the pending read must not replace the new owner.
+          this._clearCurrentClipboardEntry(false);
           if (this._quickPasteBusy) {
             this._pendingClipboardCopy = true;
             return;
@@ -4031,6 +4023,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     );
     DISABLE_DOWN_ARROW = this.settings.get_boolean(
       SettingsFields.DISABLE_DOWN_ARROW,
+    );
+    this._allowTextOnlyFallback = this.settings.get_boolean(
+      SettingsFields.ALLOW_TEXT_ONLY_FALLBACK,
     );
     STRIP_TEXT = this.settings.get_boolean(SettingsFields.STRIP_TEXT);
     PRIVATE_MODE = this.settings.get_boolean(SettingsFields.PRIVATE_MODE);

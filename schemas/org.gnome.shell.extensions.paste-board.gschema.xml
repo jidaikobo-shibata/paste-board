@@ -90,6 +90,11 @@
       <range min="1" max="1024" />
     </key>
 
+    <key name="allow-text-only-fallback" type="b">
+      <default>false</default>
+      <summary>Allow temporary pastes to restore only the original plain text</summary>
+    </key>
+
     <key name="strip-text" type="b">
       <default>false</default>
       <summary>Remove whitespace around copied plaintext items</summary>

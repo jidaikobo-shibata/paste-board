@@ -3,6 +3,13 @@ import GLib from 'gi://GLib';
 import { _ } from './i18n.js';
 import { MAX_TEXT_BYTES } from './inputLimits.js';
 
+// These targets represent the same plain text in a supported encoding.
+const utf8Plain = (type) =>
+  /^text\/plain\s*;\s*charset\s*=\s*(?:utf-8|"utf-8")\s*$/i.test(type);
+export const isPlainTextTarget = (type) =>
+  utf8Plain(type) ||
+  ['text/plain', 'UTF8_STRING', 'TEXT', 'STRING'].includes(type);
+
 // Mutter enforces the transfer bound before a clipboard owner can fill memory.
 export function readClipboardText(
   selection,
@@ -11,6 +18,7 @@ export function readClipboardText(
     limit = MAX_TEXT_BYTES,
     timeoutMs = 3000,
     requireRestorableText = false,
+    allowTextOnlyFallback = false,
   } = {},
 ) {
   const cancellable = new Gio.Cancellable();
@@ -31,11 +39,13 @@ export function readClipboardText(
     cancel = () => finish(new Error(_('Could not read clipboard text.')));
     try {
       const types = selection.get_mimetypes(type) || [];
+      const mixed =
+        requireRestorableText && types.some((type) => !isPlainTextTarget(type));
       const mime =
         types.find(
-          (candidate) =>
-            /^text\/plain\s*;/i.test(candidate) &&
-            /;\s*charset\s*=\s*(?:utf-8|"utf-8")\s*(?:;|$)/i.test(candidate),
+          (type) =>
+            /^text\/plain\s*;/i.test(type) &&
+            /;\s*charset\s*=\s*(?:utf-8|"utf-8")\s*(?:;|$)/i.test(type),
         ) ||
         ['UTF8_STRING', 'text/plain', 'STRING', 'TEXT'].find((candidate) =>
           types.includes(candidate),
@@ -48,6 +58,14 @@ export function readClipboardText(
             ),
           );
         else finish(null);
+        return;
+      }
+      if (mixed && !allowTextOnlyFallback) {
+        finish(
+          new Error(
+            _('Paste skipped to preserve the original clipboard formats.'),
+          ),
+        );
         return;
       }
       timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
@@ -78,7 +96,15 @@ export function readClipboardText(
                 ? GLib.convert(bytes, 'UTF-8', 'ISO-8859-1')[0]
                 : bytes;
             const text = new TextDecoder('utf-8', { fatal: true }).decode(utf8);
-            finish(null, text);
+            if (mixed && !text.length)
+              finish(
+                new Error(
+                  _(
+                    'Paste skipped to preserve the original clipboard formats.',
+                  ),
+                ),
+              );
+            else finish(null, text);
           } catch {
             finish(new Error(_('Could not read clipboard text.')));
           }

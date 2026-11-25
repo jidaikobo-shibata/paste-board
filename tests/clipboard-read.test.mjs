@@ -77,6 +77,34 @@ async function main() {
     source.get_mimetypes = () => ['STRING', 'text/plain', mime];
     equal(await readClipboardText(source, 1, protectedRead).promise, '日本');
   }
+  for (const extra of ['text/html', 'image/png', 'application/x-writer']) {
+    const source = selection(new TextEncoder().encode('body'));
+    const plain = source.get_mimetypes()[0];
+    source.get_mimetypes = () => [plain, extra];
+    equal(await readClipboardText(source, 1, options).promise, 'body');
+    await reject(readClipboardText(source, 1, protectedRead));
+    equal(
+      await readClipboardText(source, 1, {
+        ...protectedRead,
+        allowTextOnlyFallback: true,
+      }).promise,
+      'body',
+    );
+  }
+  await reject(
+    readClipboardText({ get_mimetypes: () => ['image/png'] }, 1, {
+      ...protectedRead,
+      allowTextOnlyFallback: true,
+    }),
+  );
+  const empty = selection(new Uint8Array());
+  empty.get_mimetypes = () => ['text/plain;charset=utf-8', 'text/html'];
+  await reject(
+    readClipboardText(empty, 1, {
+      ...protectedRead,
+      allowTextOnlyFallback: true,
+    }),
+  );
   const stalled = { get_mimetypes: () => ['text/plain'], transfer_async() {} };
   await reject(readClipboardText(stalled, 1, { limit: 8, timeoutMs: 10 }));
   const cancelled = readClipboardText(stalled, 1, options);

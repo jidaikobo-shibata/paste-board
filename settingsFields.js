@@ -12,6 +12,7 @@ const SettingsFields = {
   TOPBAR_PREVIEW_SIZE: 'topbar-preview-size',
   TOPBAR_DISPLAY_MODE_ID: 'display-mode',
   DISABLE_DOWN_ARROW: 'disable-down-arrow',
+  ALLOW_TEXT_ONLY_FALLBACK: 'allow-text-only-fallback',
   STRIP_TEXT: 'strip-text',
   PRIVATE_MODE: 'private-mode',
   PASTE_ON_SELECTION: 'paste-on-selection',

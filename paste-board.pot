@@ -1101,3 +1101,18 @@ msgstr ""
 #: clipboardRead.js
 msgid "Paste skipped to preserve non-text clipboard content."
 msgstr ""
+
+msgid "Keep only text if clipboard formats cannot be preserved"
+msgstr ""
+
+msgid "Off: skip the paste and keep the original formats."
+msgstr ""
+
+msgid "About clipboard formats"
+msgstr ""
+
+msgid "Pinned, number-key, and paste-set pastes temporarily use the clipboard. A Writer heading can include text and formatting. Enabling this option lets the paste proceed, but only the original text will be available for your next paste. Image-only copies are always protected."
+msgstr ""
+
+msgid "Paste skipped to preserve the original clipboard formats."
+msgstr ""

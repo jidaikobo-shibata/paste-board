@@ -23,6 +23,8 @@ function instance(names, globals = {}) {
   const context = vm.createContext({
     _: (value) => value,
     PRIVATE_MODE: false,
+    isPlainTextTarget: (type) =>
+      ['text/plain', 'text/plain;charset=utf-8'].includes(type),
     ...searchHelpers,
     MAX_TEXT_BYTES: 16 * 1024 * 1024,
     MAX_LOG_BYTES: 256 * 1024 * 1024,
@@ -1463,14 +1465,14 @@ test('settings refresh updates the top-bar text without replacing a search excer
   assert.equal(excerpt, '…matching term…');
 });
 
-test('trimmed history and clipboard remain identical while PRIMARY never changes clipboard', () => {
+test('trimming history and PRIMARY selections never rewrites the original clipboard', () => {
   const fixture = historyFixture({ primary: () => ' selected \n' });
   fixture.context.STRIP_TEXT = true;
   fixture.copy('\n current \n');
-  assert.equal(fixture.clipboard(), 'current');
+  assert.equal(fixture.clipboard(), '\n current \n');
   assert.equal(fixture.order()[0], 'current');
   fixture.owner._queryPrimaryClipboard();
-  assert.equal(fixture.clipboard(), 'current');
+  assert.equal(fixture.clipboard(), '\n current \n');
   fixture.checkOrder();
 });
 
@@ -1480,6 +1482,8 @@ test('startup restores saved first text only into an empty text-only clipboard',
       [],
       ['text/plain;charset=utf-8'],
       ['image/png'],
+      ['COMPOUND_TEXT'],
+      ['text/plain;charset=iso-8859-1'],
       ['text/plain', 'image/png'],
     ]) {
       for (const restoreEmpty of [true, false]) {
@@ -1504,7 +1508,12 @@ test('startup restores saved first text only into an empty text-only clipboard',
         });
         owner._queryClipboard(true, restoreEmpty);
         const shouldRestore =
-          !text && restoreEmpty && !mimetypes.includes('image/png');
+          !text &&
+          restoreEmpty &&
+          (!mimetypes.length ||
+            (text === '' &&
+              mimetypes.length === 1 &&
+              mimetypes[0] === 'text/plain;charset=utf-8'));
         assert.equal(restored.length, shouldRestore ? 1 : 0);
         assert.equal(processed.length, shouldRestore ? 0 : 1);
       }
@@ -2228,6 +2237,42 @@ test('oversized copied text is rejected before history or storage mutation', () 
   assert.equal(notified, true);
 });
 
+test('deleting a row while a new clipboard owner is being read leaves the clipboard alone', () => {
+  let changed;
+  const selection = {
+    connect(_signal, callback) {
+      changed = callback;
+      return 1;
+    },
+  };
+  const [owner] = instance(
+    [
+      '_setupSelectionChangeListener',
+      '_deleteEntryAndRestoreLatest',
+      '_clearCurrentClipboardEntry',
+    ],
+    {
+      Shell: {
+        Global: {
+          get: () => ({
+            get_display: () => ({ get_selection: () => selection }),
+          }),
+        },
+      },
+      Meta: { SelectionType: { SELECTION_CLIPBOARD: 1 } },
+    },
+  );
+  const old = { text: 'old' };
+  owner._currentClipboardEntry = old;
+  owner._updateButtonText = noop;
+  owner._removeEntry = noop;
+  owner._queryClipboard = noop;
+  owner._setupSelectionChangeListener();
+  changed(selection, 1);
+  owner._deleteEntryAndRestoreLatest(old);
+  assert.equal(owner._currentClipboardEntry, undefined);
+});
+
 test('failed bounded clipboard reads never restore saved history over the clipboard', () => {
   const [owner] = instance(['_queryClipboard'], {
     St: { ClipboardType: { CLIPBOARD: 1 } },
@@ -2235,10 +2280,16 @@ test('failed bounded clipboard reads never restore saved history over the clipbo
   owner.entries = { last: () => ({ text: 'saved' }) };
   owner._readClipboard = (type, callback) =>
     callback(null, null, new Error('limit'));
+  owner._currentClipboardEntry = owner.entries.last();
+  owner._clearCurrentClipboardEntry = (reset) => {
+    assert.equal(reset, false);
+    owner._currentClipboardEntry = undefined;
+  };
   owner._setCurrentClipboardEntry = () => assert.fail('clipboard replaced');
   owner._processClipboardContent = () =>
     assert.fail('failed read became history');
   owner._queryClipboard(true, true);
+  assert.equal(owner._currentClipboardEntry, undefined);
 });
 
 for (const failsDuringSetup of [false, true]) {

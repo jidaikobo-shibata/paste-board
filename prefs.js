@@ -317,6 +317,42 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     page.add(group);
 
     addApplicationPastePreferences(window, settings, page);
+    const fallback = new Adw.SwitchRow({
+      title: _('Keep only text if clipboard formats cannot be preserved'),
+      subtitle: _('Off: skip the paste and keep the original formats.'),
+    });
+    settings.bind(
+      Fields.ALLOW_TEXT_ONLY_FALLBACK,
+      fallback,
+      'active',
+      Gio.SettingsBindFlags.DEFAULT,
+    );
+    const popover = new Gtk.Popover();
+    popover.set_child(
+      new Gtk.Label({
+        label: _(
+          'Pinned, number-key, and paste-set pastes temporarily use the clipboard. A Writer heading can include text and formatting. Enabling this option lets the paste proceed, but only the original text will be available for your next paste. Image-only copies are always protected.',
+        ),
+        wrap: true,
+        max_width_chars: 38,
+        margin_top: 8,
+        margin_bottom: 8,
+        margin_start: 8,
+        margin_end: 8,
+      }),
+    );
+    const help = new Gtk.MenuButton({
+      label: '?',
+      valign: Gtk.Align.CENTER,
+      popover,
+      tooltip_text: _('About clipboard formats'),
+    });
+    help.update_property(
+      [Gtk.AccessibleProperty.LABEL],
+      [_('About clipboard formats')],
+    );
+    fallback.add_suffix(help);
+    group.add(fallback);
     addBackupPreferences(window, settings, page);
     addDiagnosticPreferences(window, settings, page);
     window.add(page);
