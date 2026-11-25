@@ -144,14 +144,15 @@ async function main() {
       'output-limit',
     ]) {
       const marker = GLib.build_filenamev([directory, 'late-' + scenario]);
+      const started = GLib.build_filenamev([directory, 'started']);
       const command =
         scenario === 'leader-exit'
           ? `(sleep 0.3; printf late > '${marker}') & exit 0`
           : scenario === 'output-limit'
             ? `(sleep 0.3; printf late > '${marker}') & yes`
-            : `printf harmless | (sleep 0.3; cat > '${marker}')`;
+            : `printf harmless | (touch '${started}'; sleep 0.3; cat > '${marker}')`;
       const task = runCommand(command, {
-        timeoutMs: 100,
+        timeoutMs: scenario === 'cancel' ? 3000 : 100,
         maxOutputBytes: 8192,
       });
       // Attach the rejection handler before waiting to cancel.
@@ -160,13 +161,20 @@ async function main() {
         () => true,
       );
       if (scenario === 'cancel') {
-        await delay(60);
+        for (
+          let i = 0;
+          i < 100 && !GLib.file_test(started, GLib.FileTest.EXISTS);
+          i++
+        )
+          await delay(10);
+        equal(GLib.file_test(started, GLib.FileTest.EXISTS), true);
         task.cancel();
       }
       equal(await result, true);
       await delay(400);
       equal(GLib.file_test(marker, GLib.FileTest.EXISTS), false);
       if (GLib.file_test(marker, GLib.FileTest.EXISTS)) GLib.unlink(marker);
+      if (GLib.file_test(started, GLib.FileTest.EXISTS)) GLib.unlink(started);
     }
     const startupFile = GLib.build_filenamev([directory, 'startup.sh']);
     GLib.file_set_contents(startupFile, "printf 'UNEXPECTED_STARTUP'");

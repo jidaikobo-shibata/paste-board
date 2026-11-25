@@ -14,7 +14,7 @@ Supports GNOME Shell 50 on Wayland.
 
 Download or clone this repository and run `make install` from its directory.
 Building from source requires GNU Make, gettext, and GLib's
-`glib-compile-schemas`. Command features require Python 3 at `/usr/bin/python3`.
+`glib-compile-schemas`. Command features use GJS and the system utilities `setsid` and `kill`.
 
 Keep the downloaded directory in place. Log out and back in, then enable
 **Paste Board for GNOME** in the Extensions app.

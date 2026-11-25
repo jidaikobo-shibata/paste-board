@@ -4,7 +4,7 @@ import GLib from 'gi://GLib';
 
 const SUPERVISOR = GLib.build_filenamev([
   GLib.path_get_dirname(GLib.filename_from_uri(import.meta.url)[0]),
-  'commandSupervisor.py',
+  'commandSupervisor.js',
 ]);
 
 // Direct argument passing is the default; shell interpretation requires explicit Bash mode.
@@ -82,10 +82,11 @@ export function runCommand(
           throw new Error(_('Could not start the command.'));
         }
       }
-      // Python isolated mode ignores Python startup/import environment hooks.
+      // setsid execs the supervisor in a fresh session before any command runs.
       process = launcher.spawnv([
-        '/usr/bin/python3',
-        '-I',
+        '/usr/bin/setsid',
+        '/usr/bin/gjs',
+        '-m',
         SUPERVISOR,
         String(maxOutputBytes),
         ...argv,
