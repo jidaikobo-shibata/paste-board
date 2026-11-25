@@ -1,155 +1,101 @@
 # Paste Board for GNOME
 
 A plain-text clipboard and paste-set manager for GNOME Shell on Wayland.
-Organize reusable text in tabs, search across them, and fill forms with repeated
-pastes followed by Tab or Enter. Commands can supply text or entire tabs of
-paste candidates.
+Organize reusable text in tabs, search across them, and fill forms with
+repeated pastes. Commands can supply individual items or entire tabs.
 
-![Paste Board with its clipboard icon, paste-set tabs, reusable form fields, and a command output preview.](screenshot.png)
+![Paste Board with its top-bar icon, search field, and reusable form fields.](screenshot.png)
 
-## Install
+## Installation
 
-From the project directory, run:
+Supports GNOME Shell 50 on Wayland.
 
-```bash
-make install
-```
+Download or clone this repository and run `make install` from its directory.
+Requires GNU Make, gettext, GLib's `glib-compile-schemas`, and Python 3 for commands.
 
-Requires GNU Make, gettext (`msgfmt`), and GLib's `glib-compile-schemas`.
-Commands also require Python 3 at `/usr/bin/python3`.
+Keep the downloaded directory in place. Log out and back in, then enable
+**Paste Board for GNOME** in the Extensions app.
 
-Log out and back in, then enable **Paste Board for GNOME** in the Extensions app.
-Installation links this directory into your extensions folder, so keep it in
-place. After updating the source, run `make` and log out and back in.
+## Using Paste Board
 
-## Open, search, and paste
+Copy text as usual and open the panel from the top-bar icon.
 
-Copy text as usual, then open the panel from the top-bar icon. Panel-opening
-and number-paste shortcuts are off by default to avoid desktop shortcut conflicts.
-Enable them and choose your keys in preferences if desired.
+- **Up/Down**, then **Enter**, or click an item to paste.
+- **Left/Right** to switch tabs when outside the search field.
+- Type to search, or use **Ctrl+F** to toggle search focus.
+- **Esc** to close the panel.
 
-- **Up/Down**, then **Enter**, or a click: paste an item.
-- **Your chosen modifiers + 1–9**: paste a numbered candidate, when enabled.
-- **Left/Right** outside search: switch tabs.
-- Scroll to browse items; more rows load as you approach the bottom. Number shortcuts stay assigned to the first nine items in the list.
-- **Ctrl+F**: switch between search and the last selected candidate.
-  **/** outside search also focuses it.
-- **Esc** or **your chosen modifiers + 0**: close the panel. Unassigned keys
-  do not close it; they are left to the focused control or input method.
-  During IME composition, Esc is left to the input method.
+Search covers all tabs by default. Space-separated words must all match,
+in any order. Search results also support editing and deletion where applicable.
 
-Type letters or digits anywhere in the panel to start searching, including the
-first character. Dedicated input-mode keys (such as Henkan and Muhenkan) also
-focus search and are passed to the input method. Enabled number shortcuts still paste.
+Panel-opening and number-paste shortcuts are off by default. Enable and customize
+them in preferences.
+With number shortcuts enabled, your chosen modifiers + **1–9** paste the
+corresponding numbered items.
 
-Search covers **All tabs** by default; uncheck it to search only the current tab.
-Space-separated words use AND matching, in any order. Results are grouped by tab
-and numbered in display order. Results also offer add, edit, and delete actions
-where supported by their source tab. Generated candidates remain read-only.
-Clear the query to return to the ordinary list.
-
-The first item in unfiltered history is the current text clipboard. Enter or
-clicking an unpinned history item updates the clipboard and moves it to the top.
-Number shortcuts, pinned pastes, and pastes from sets preserve both.
-
-Click the **pin** button to keep the panel open for repeated pastes. Choose
-**nothing**, **Enter**, or **Tab** after each paste—for example, Tab to fill
+Click the **pin** icon to keep the panel open for repeated pastes. Choose
+whether to send **Enter** or **Tab** after each paste, for example to fill
 successive form fields.
 
-Preferences let you customize shortcuts, item limit, trimming, and copy feedback.
-**Application paste shortcuts** overrides the paste keys sent to a target app;
-match them to that app's settings. Turning off **Paste on Enter or click** makes
-those actions copy only; number shortcuts still paste.
+Selecting an unpinned history item with Enter or a click moves it to the top
+and updates the clipboard. Pinned pastes, number shortcuts, and pastes from
+sets preserve the history order and current clipboard.
 
-**Plain text only:** formatting, images, and other clipboard formats are not
-preserved by this extension's paste operations.
+Paste Board pastes plain text without formatting or images. Preferences let you
+customize application-specific paste shortcuts or make Enter and clicks copy only.
 
 ## Paste sets
 
-Create a set with the new-tab button at the bottom of the panel. Add history items
-with their add button or drag them onto a tab. Edit their names and content, or
-drag to reorder them. Right-click a tab to edit or delete it, or use the bottom
-toolbar's edit button. Deleting a set requires confirmation; History can only be
-renamed. The trash button empties the active history or manual set after
-confirmation, keeping the clipboard and tab. It is disabled for generated tabs.
-
-## Export and import
-
-Use **Export…** in preferences to save paste sets and settings as a JSON file.
-Clipboard history is excluded. **Import…** previews the tabs and adds them to
-existing sets; preferences and keyboard shortcuts can be applied separately.
-Restoring the saved item limit preserves existing items in the backup, even in
-sets that already exceed that limit. The restored limit applies to new items.
-Imported commands have automatic execution turned off. Review them before
-re-enabling previews, tab-opening execution, or search execution.
+Create a tab with the new-tab button. Add history items using the **+** button
+or drag them onto a tab. Edit their names and content, and drag to reorder them.
+Right-click a tab to rename or delete it. The trash button empties the current
+history or manual set after confirmation.
 
 ## Commands
 
-Use **Bash (one-liner)** for pipes and variable expansion, or **Direct execution**
-for a command and its arguments. Interactive aliases and functions are unavailable.
-**Run and preview** lets you try a command in its editor.
+Choose **Direct execution** for a command and its arguments, or **Bash (one-liner)**
+for pipes and variable expansion. Use **Run and preview** to try a command in its editor.
 
 ### Command items
 
-Edit a set item and select **Command** to paste its output—for example,
-`date '+%Y-%m-%d'`. It runs when selected, or reuses an available preview when
-**Preview output when opening this tab** is enabled. If no preview has been
-loaded—for example, when selecting an unvisited tab's item from search—the command
-runs at that point.
+Edit a paste-set item and select **Command** to paste its output, for example
+`date '+%Y-%m-%d'`. You can also enable output previews when opening its tab.
 
-![The Quick text tab shows today's date and a release tag as command output previews.](screenshots/command-items.png)
+![The Quick text tab shows the output of date and release-tag commands.](screenshots/command-items.png)
 
 ### Generated tabs
 
-Create a set, select **Generate from command**, and enter a command. Each non-empty
-output line becomes a read-only paste candidate. The first opening during a panel
-visit runs the command unless results are already available from search. Revisiting
-the tab reuses those results; selecting a candidate pastes without rerunning it.
-Use **Refresh** to regenerate the list, or stop a running generation. Turn off
-**Run command when opening this tab** to load it only on demand.
+Create a tab and select **Generate from command**. Each non-empty output line
+becomes a paste candidate. Use the refresh button to regenerate the list.
+Enable **Run command during cross-tab search** to include fresh results in
+all-tabs searches.
 
-Enable **Run command during cross-tab search** to load the tab when a non-empty
-all-tabs search begins. Further typing only filters the results; clear and
-re-enter the query to run it again. Otherwise, search uses results already loaded
-during the current panel visit. Generated results are not saved between visits.
-
-For example, create an **SSH connections** tab in **Bash (one-liner)** mode:
+For example, create an **SSH connections** tab in Bash mode:
 
 ```bash
 sed -nE 's/^[[:space:]]*[Hh][Oo][Ss][Tt][[:space:]]+/ssh /p' ~/.ssh/config
 ```
 
-This produces candidates such as `ssh staging`. Enable search execution to find
-connections without opening their tab first. Pasting does not execute the SSH
-command. Wildcards and multiple aliases on one line need adjustment; `Include`
-files are not read.
+The tab lists SSH host definitions as text to paste.
 
-![The SSH connections tab lists four generated paste candidates: ssh staging, ssh production, ssh docs, and ssh backup.](screenshots/generated-tab.png)
+![The SSH connections tab lists four generated SSH commands.](screenshots/generated-tab.png)
 
-### Execution and safety
+**Commands run with your permissions and can modify or delete files, access
+the network, and launch applications. Add only commands you understand and
+trust.** Use the pause icon to disable automatic execution. Interactive
+commands and password prompts are unsupported.
 
-The bottom toolbar's **pause** button stops automatic previews and generation
-until you turn it off. Explicit execution, including selecting a command item,
-still works while paused. Private mode blocks command execution.
+## Export and import
 
-**Commands run with your permissions and can modify or delete files, access the
-network, or launch applications—even without output. Add only commands you
-understand and trust. Stopping a command does not undo its actions.**
-
-The item limit in preferences applies to history and each paste set (default: 1000).
-Old history is discarded at the limit; manual sets refuse additions, and generated
-tabs report an error if output exceeds it. Lowering the limit keeps existing manual
-set items.
-
-Commands are limited to 3 seconds and 64 KiB of output. Interactive commands and password prompts are unsupported.
-Failed commands are not pasted.
+Export paste sets and settings as JSON from preferences. Clipboard history is
+excluded. Import adds sets to your existing ones and optionally restores
+preferences and shortcuts. Automatic execution is disabled for imported commands.
 
 ## Privacy
 
-Private mode pauses history collection. **Clear history on logout** clears history
-between login sessions while keeping paste sets. Recovery backups are retained;
-their location is shown in recovery notifications. Clearing history does not
-securely erase data from disk.
+Private mode pauses history collection and command execution. Preferences can
+clear history on logout while keeping paste sets. Recovery backups may remain;
+clearing history does not securely erase data from disk.
 
 ## Origins and license
 
