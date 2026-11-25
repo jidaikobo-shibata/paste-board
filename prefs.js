@@ -320,7 +320,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     const fallback = new Adw.SwitchRow({
       title: _('Paste even if the original formatting cannot be preserved'),
       subtitle: _(
-        'In that case, only the original text remains on the clipboard after pasting.',
+        'Turn this on if you cannot paste an item from the panel after copying formatted text.',
       ),
     });
     settings.bind(

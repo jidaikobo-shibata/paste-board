@@ -1174,8 +1174,8 @@ msgstr "クリップボードのテキスト以外の内容を保持するため
 msgid "Paste even if the original formatting cannot be preserved"
 msgstr "元の書式を保持できない場合でも貼り付ける"
 
-msgid "In that case, only the original text remains on the clipboard after pasting."
-msgstr "その場合、貼り付け後のクリップボードには元のテキストだけが残ります。"
+msgid "Turn this on if you cannot paste an item from the panel after copying formatted text."
+msgstr "書式付きテキストをコピーした後、パネルで選んだ項目を貼り付けられないときにオンにしてください。"
 
 msgid "About clipboard formats"
 msgstr "クリップボードの形式について"
