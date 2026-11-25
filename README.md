@@ -42,7 +42,8 @@ successive form fields.
 
 Selecting an unpinned history item with Enter or a click moves it to the top
 and updates the clipboard. Pinned pastes, number shortcuts, and pastes from
-sets preserve the history order and current clipboard.
+sets preserve the history order and clipboard text. If the clipboard contains
+only an image or another unsupported format, these pastes are skipped to keep it intact.
 
 Preferences let you customize application-specific paste shortcuts or make Enter
 and clicks copy only.

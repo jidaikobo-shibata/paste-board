@@ -60,6 +60,23 @@ async function main() {
       .promise,
     null,
   );
+  const protectedRead = { ...options, requireRestorableText: true };
+  equal(
+    await readClipboardText({ get_mimetypes: () => [] }, 1, protectedRead)
+      .promise,
+    null,
+  );
+  await reject(
+    readClipboardText({ get_mimetypes: () => ['image/png'] }, 1, protectedRead),
+  );
+  for (const mime of [
+    'text/plain; charset=UTF-8',
+    'TEXT/PLAIN; charset = "utf-8"',
+  ]) {
+    const source = selection(new TextEncoder().encode('日本'), mime);
+    source.get_mimetypes = () => ['STRING', 'text/plain', mime];
+    equal(await readClipboardText(source, 1, protectedRead).promise, '日本');
+  }
   const stalled = { get_mimetypes: () => ['text/plain'], transfer_async() {} };
   await reject(readClipboardText(stalled, 1, { limit: 8, timeoutMs: 10 }));
   const cancelled = readClipboardText(stalled, 1, options);

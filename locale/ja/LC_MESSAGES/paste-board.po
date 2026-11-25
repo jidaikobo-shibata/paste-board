@@ -1166,3 +1166,7 @@ msgstr "表示しない"
 
 #~ msgid "This operation cannot be undone."
 #~ msgstr "削除した履歴は復元できません"
+
+#: clipboardRead.js
+msgid "Paste skipped to preserve non-text clipboard content."
+msgstr "クリップボードのテキスト以外の内容を保持するため、貼り付けを中止しました。"

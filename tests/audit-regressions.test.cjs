@@ -2146,7 +2146,8 @@ for (const failsDuringSetup of [false, true]) {
     });
     owner._quickPasteKeysHeld = new Set([10]);
     owner.menu = { isOpen: true };
-    owner._readClipboard = (_type, callback) => {
+    owner._readClipboard = (_type, callback, options) => {
+      assert.equal(options.requireRestorableText, true);
       const error = new Error('read failed');
       if (failsDuringSetup) throw error;
       callback(null, null, error);

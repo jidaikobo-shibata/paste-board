@@ -7,7 +7,11 @@ import { MAX_TEXT_BYTES } from './inputLimits.js';
 export function readClipboardText(
   selection,
   type,
-  { limit = MAX_TEXT_BYTES, timeoutMs = 3000 } = {},
+  {
+    limit = MAX_TEXT_BYTES,
+    timeoutMs = 3000,
+    requireRestorableText = false,
+  } = {},
 ) {
   const cancellable = new Gio.Cancellable();
   let cancel;
@@ -28,18 +32,22 @@ export function readClipboardText(
     try {
       const types = selection.get_mimetypes(type) || [];
       const mime =
-        [
-          'text/plain;charset=utf-8',
-          'UTF8_STRING',
-          'text/plain',
-          'STRING',
-          'TEXT',
-        ].find((candidate) => types.includes(candidate)) ||
-        types.find((candidate) =>
-          /^text\/plain;.*charset=utf-8/i.test(candidate),
+        types.find(
+          (candidate) =>
+            /^text\/plain\s*;/i.test(candidate) &&
+            /;\s*charset\s*=\s*(?:utf-8|"utf-8")\s*(?:;|$)/i.test(candidate),
+        ) ||
+        ['UTF8_STRING', 'text/plain', 'STRING', 'TEXT'].find((candidate) =>
+          types.includes(candidate),
         );
       if (!mime) {
-        finish(null);
+        if (requireRestorableText && types.length)
+          finish(
+            new Error(
+              _('Paste skipped to preserve non-text clipboard content.'),
+            ),
+          );
+        else finish(null);
         return;
       }
       timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {

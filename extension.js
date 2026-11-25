@@ -2558,7 +2558,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       if (readError) {
         this._endQuickPasteTracking();
-        this._showNotification(_('Could not read clipboard text.'), '');
+        this._showNotification(readError.message, '');
         return;
       }
       // A new login can have saved history but no current text selection.
@@ -2649,7 +2649,9 @@ class ClipboardIndicator extends PanelMenu.Button {
       );
     };
     try {
-      this._readClipboard(St.ClipboardType.CLIPBOARD, onRead);
+      this._readClipboard(St.ClipboardType.CLIPBOARD, onRead, {
+        requireRestorableText: !commitSelection,
+      });
     } catch (error) {
       this._endQuickPasteTracking();
       this._showNotification(
@@ -3597,7 +3599,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     }
   }
 
-  _readClipboard(type, callback) {
+  _readClipboard(type, callback, options) {
     this._clipboardReadByType ??= new Map();
     this._clipboardReadByType.get(type)?.cancel();
     const reading = readClipboardText(
@@ -3605,6 +3607,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       type === St.ClipboardType.CLIPBOARD
         ? Meta.SelectionType.SELECTION_CLIPBOARD
         : Meta.SelectionType.SELECTION_PRIMARY,
+      options,
     );
     this._clipboardReads ??= new Set();
     this._clipboardReads.add(reading);
