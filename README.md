@@ -1,8 +1,10 @@
 # Paste Board for GNOME
 
 A plain-text clipboard and paste-set manager for GNOME Shell on Wayland.
-Organize reusable text in tabs, search across them, and fill forms with
-repeated pastes. Commands can supply individual items or entire tabs.
+Organize reusable text in tabs and search across them. Commands can supply
+individual items or entire tabs.
+
+**Paste Board pastes plain text without formatting or images.**
 
 ![Paste Board with its top-bar icon, search field, and reusable form fields.](screenshot.png)
 
@@ -11,7 +13,8 @@ repeated pastes. Commands can supply individual items or entire tabs.
 Supports GNOME Shell 50 on Wayland.
 
 Download or clone this repository and run `make install` from its directory.
-Requires GNU Make, gettext, GLib's `glib-compile-schemas`, and Python 3 for commands.
+Building from source requires GNU Make, gettext, and GLib's
+`glib-compile-schemas`. Command features require Python 3 at `/usr/bin/python3`.
 
 Keep the downloaded directory in place. Log out and back in, then enable
 **Paste Board for GNOME** in the Extensions app.
@@ -41,8 +44,8 @@ Selecting an unpinned history item with Enter or a click moves it to the top
 and updates the clipboard. Pinned pastes, number shortcuts, and pastes from
 sets preserve the history order and current clipboard.
 
-Paste Board pastes plain text without formatting or images. Preferences let you
-customize application-specific paste shortcuts or make Enter and clicks copy only.
+Preferences let you customize application-specific paste shortcuts or make Enter
+and clicks copy only.
 
 ## Paste sets
 
@@ -102,6 +105,9 @@ clearing history does not securely erase data from disk.
 Derived from [Gnome Clipboard History](https://github.com/SUPERCILEX/gnome-clipboard-history)
 by SUPERCILEX, itself derived from
 [Clipboard Indicator](https://github.com/Tudmotu/gnome-shell-extension-clipboard-indicator).
+
+Many thanks to the original authors and contributors for their work, which made
+Paste Board possible.
 
 Released under the [MIT License](LICENSE). Original copyright notices and
 translator credits are preserved.
