@@ -1102,10 +1102,10 @@ msgstr ""
 msgid "Paste skipped to preserve non-text clipboard content."
 msgstr ""
 
-msgid "Keep only text if clipboard formats cannot be preserved"
+msgid "Paste even if the original formatting cannot be preserved"
 msgstr ""
 
-msgid "Off: skip the paste and keep the original formats."
+msgid "In that case, only the original text remains on the clipboard after pasting."
 msgstr ""
 
 msgid "About clipboard formats"

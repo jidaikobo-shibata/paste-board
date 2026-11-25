@@ -318,8 +318,10 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
 
     addApplicationPastePreferences(window, settings, page);
     const fallback = new Adw.SwitchRow({
-      title: _('Keep only text if clipboard formats cannot be preserved'),
-      subtitle: _('Off: skip the paste and keep the original formats.'),
+      title: _('Paste even if the original formatting cannot be preserved'),
+      subtitle: _(
+        'In that case, only the original text remains on the clipboard after pasting.',
+      ),
     });
     settings.bind(
       Fields.ALLOW_TEXT_ONLY_FALLBACK,
