@@ -233,7 +233,7 @@ export default class extends Extension {
       name: 'Test command',
       kind: 'command',
       text: '',
-      command: 'python3 -c \'print("preview\\n" * 80)\'',
+      command: `awk 'BEGIN { for (i = 0; i < 80; i++) print "preview"; print "" }'`,
       executionMode: 'direct',
       trimTrailingNewlines: false,
       previewOnOpen: false,
