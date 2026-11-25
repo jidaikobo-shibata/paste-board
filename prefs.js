@@ -154,7 +154,7 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
 
     const addRow = ((main) => {
       let row = 0;
-      return (label, input) => {
+      return (label, input, help = null) => {
         let inputWidget = input;
 
         if (input instanceof Gtk.Switch) {
@@ -165,6 +165,10 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
             valign: Gtk.Align.CENTER,
           });
           inputWidget.append(input);
+          if (help) {
+            inputWidget.spacing = 6;
+            inputWidget.append(help);
+          }
         }
 
         if (label) {
@@ -220,6 +224,42 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     }
     addRow(stripTextLabel, field_strip_text);
     addRow(pasteOnSelectionLabel, field_paste_on_selection);
+    const fallback = new Gtk.Switch();
+    const fallbackLabel = new Gtk.Label({
+      label: _('Paste even if the original formatting cannot be preserved'),
+      hexpand: true,
+      halign: Gtk.Align.START,
+    });
+    const popover = new Gtk.Popover();
+    popover.set_child(
+      new Gtk.Label({
+        label: [
+          _(
+            'Turn this on if you cannot paste an item from the panel after copying formatted text.',
+          ),
+          _(
+            'Pinned, number-key, and paste-set pastes temporarily use the clipboard. A Writer heading can include text and formatting. Enabling this option lets the paste proceed, but only the original text will be available for your next paste. Image-only copies are always protected.',
+          ),
+        ].join('\n\n'),
+        wrap: true,
+        max_width_chars: 38,
+        margin_top: 8,
+        margin_bottom: 8,
+        margin_start: 8,
+        margin_end: 8,
+      }),
+    );
+    const help = new Gtk.MenuButton({
+      label: '?',
+      valign: Gtk.Align.CENTER,
+      popover,
+      tooltip_text: _('About clipboard formats'),
+    });
+    help.update_property(
+      [Gtk.AccessibleProperty.LABEL],
+      [_('About clipboard formats')],
+    );
+    addRow(fallbackLabel, fallback, help);
     addRow(processPrimarySelection, field_process_primary_selection);
     addRow(displayModeLabel, field_display_mode);
     addRow(disableDownArrowLabel, field_disable_down_arrow);
@@ -298,6 +338,12 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
       Gio.SettingsBindFlags.DEFAULT,
     );
     settings.bind(
+      Fields.ALLOW_TEXT_ONLY_FALLBACK,
+      fallback,
+      'active',
+      Gio.SettingsBindFlags.DEFAULT,
+    );
+    settings.bind(
       Fields.PROCESS_PRIMARY_SELECTION,
       field_process_primary_selection,
       'active',
@@ -317,44 +363,6 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     page.add(group);
 
     addApplicationPastePreferences(window, settings, page);
-    const fallback = new Adw.SwitchRow({
-      title: _('Paste even if the original formatting cannot be preserved'),
-      subtitle: _(
-        'Turn this on if you cannot paste an item from the panel after copying formatted text.',
-      ),
-    });
-    settings.bind(
-      Fields.ALLOW_TEXT_ONLY_FALLBACK,
-      fallback,
-      'active',
-      Gio.SettingsBindFlags.DEFAULT,
-    );
-    const popover = new Gtk.Popover();
-    popover.set_child(
-      new Gtk.Label({
-        label: _(
-          'Pinned, number-key, and paste-set pastes temporarily use the clipboard. A Writer heading can include text and formatting. Enabling this option lets the paste proceed, but only the original text will be available for your next paste. Image-only copies are always protected.',
-        ),
-        wrap: true,
-        max_width_chars: 38,
-        margin_top: 8,
-        margin_bottom: 8,
-        margin_start: 8,
-        margin_end: 8,
-      }),
-    );
-    const help = new Gtk.MenuButton({
-      label: '?',
-      valign: Gtk.Align.CENTER,
-      popover,
-      tooltip_text: _('About clipboard formats'),
-    });
-    help.update_property(
-      [Gtk.AccessibleProperty.LABEL],
-      [_('About clipboard formats')],
-    );
-    fallback.add_suffix(help);
-    group.add(fallback);
     addBackupPreferences(window, settings, page);
     addDiagnosticPreferences(window, settings, page);
     window.add(page);
