@@ -36,11 +36,16 @@ export function readClipboardText(
       if (error) reject(error);
       else resolve(text);
     };
-    cancel = () => finish(new Error(_('Could not read clipboard text.')));
+    let readFailure = _('Could not read clipboard text.');
+    cancel = () => finish(new Error(readFailure));
     try {
       const types = selection.get_mimetypes(type) || [];
       const mixed =
         requireRestorableText && types.some((type) => !isPlainTextTarget(type));
+      if (mixed)
+        readFailure = _(
+          'Paste skipped because the previous clipboard contents could not be saved as text.',
+        );
       const mime =
         types.find(
           (type) =>
@@ -58,14 +63,6 @@ export function readClipboardText(
             ),
           );
         else finish(null);
-        return;
-      }
-      if (mixed && !allowTextOnlyFallback) {
-        finish(
-          new Error(
-            _('Paste skipped to preserve the original clipboard formats.'),
-          ),
-        );
         return;
       }
       timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, timeoutMs, () => {
@@ -96,17 +93,18 @@ export function readClipboardText(
                 ? GLib.convert(bytes, 'UTF-8', 'ISO-8859-1')[0]
                 : bytes;
             const text = new TextDecoder('utf-8', { fatal: true }).decode(utf8);
-            if (mixed && !text.length)
-              finish(
-                new Error(
-                  _(
-                    'Paste skipped to preserve the original clipboard formats.',
-                  ),
+            if (mixed && !text.length) finish(new Error(readFailure));
+            else if (mixed && !allowTextOnlyFallback) {
+              const error = new Error(
+                _(
+                  'Paste skipped to preserve the formatting of your previous copy.',
                 ),
               );
-            else finish(null, text);
+              error.code = 'text-only-fallback-disabled';
+              finish(error);
+            } else finish(null, text);
           } catch {
-            finish(new Error(_('Could not read clipboard text.')));
+            finish(new Error(readFailure));
           }
         },
       );

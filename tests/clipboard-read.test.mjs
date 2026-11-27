@@ -21,11 +21,13 @@ function selection(bytes, mime = 'text/plain;charset=utf-8') {
     },
   };
 }
-async function reject(read) {
+async function reject(read, code, message) {
   let failed = false;
   try {
     await read.promise;
-  } catch {
+  } catch (error) {
+    if (arguments.length > 1) equal(error.code, code);
+    if (message) equal(error.message, message);
     failed = true;
   }
   equal(failed, true);
@@ -82,7 +84,10 @@ async function main() {
     const plain = source.get_mimetypes()[0];
     source.get_mimetypes = () => [plain, extra];
     equal(await readClipboardText(source, 1, options).promise, 'body');
-    await reject(readClipboardText(source, 1, protectedRead));
+    await reject(
+      readClipboardText(source, 1, protectedRead),
+      'text-only-fallback-disabled',
+    );
     equal(
       await readClipboardText(source, 1, {
         ...protectedRead,
@@ -99,12 +104,15 @@ async function main() {
   );
   const empty = selection(new Uint8Array());
   empty.get_mimetypes = () => ['text/plain;charset=utf-8', 'text/html'];
-  await reject(
-    readClipboardText(empty, 1, {
-      ...protectedRead,
-      allowTextOnlyFallback: true,
-    }),
-  );
+  for (const allowTextOnlyFallback of [false, true])
+    await reject(
+      readClipboardText(empty, 1, {
+        ...protectedRead,
+        allowTextOnlyFallback,
+      }),
+      undefined,
+      'Paste skipped because the previous clipboard contents could not be saved as text.',
+    );
   const stalled = { get_mimetypes: () => ['text/plain'], transfer_async() {} };
   await reject(readClipboardText(stalled, 1, { limit: 8, timeoutMs: 10 }));
   const cancelled = readClipboardText(stalled, 1, options);

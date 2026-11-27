@@ -1114,7 +1114,16 @@ msgstr ""
 msgid "Pinned, number-key, and paste-set pastes temporarily use the clipboard. A Writer heading can include text and formatting. Enabling this option lets the paste proceed, but only the original text will be available for your next paste. Image-only copies are always protected."
 msgstr ""
 
-msgid "Paste skipped to preserve the original clipboard formats."
+msgid "Paste skipped to preserve the formatting of your previous copy."
+msgstr ""
+
+msgid "Paste skipped because the previous clipboard contents could not be saved as text."
+msgstr ""
+
+msgid "To keep only the text of your previous copy, enable “Paste even if the original formatting cannot be preserved” in Settings."
+msgstr ""
+
+msgid "Open Settings"
 msgstr ""
 
 msgid "Complete paths with Tab in the panel"

@@ -2652,7 +2652,21 @@ class ClipboardIndicator extends PanelMenu.Button {
       }
       if (readError) {
         this._endQuickPasteTracking();
-        this._showNotification(readError.message, '');
+        if (readError.code === 'text-only-fallback-disabled')
+          this._showNotification(
+            readError.message,
+            _(
+              'To keep only the text of your previous copy, enable “Paste even if the original formatting cannot be preserved” in Settings.',
+            ),
+            (notification) =>
+              notification.addAction(_('Open Settings'), () => {
+                this.extension
+                  .getSettings(SettingsFields.NAVIGATION_SCHEMA)
+                  .set_int64('focus-fallback', GLib.get_real_time());
+                this._openSettings();
+              }),
+          );
+        else this._showNotification(readError.message, '');
         return;
       }
       // A new login can have saved history but no current text selection.

@@ -1,4 +1,5 @@
 const SettingsFields = {
+  NAVIGATION_SCHEMA: 'org.gnome.shell.extensions.paste-board.navigation',
   SEARCH_ALL_TABS: 'search-all-tabs',
   PAUSE_COMMAND_PREVIEWS: 'pause-command-previews',
   KEEP_MENU_OPEN: 'keep-menu-open',

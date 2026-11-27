@@ -2,6 +2,7 @@ import { _, format } from './i18n.js';
 import GObject from 'gi://GObject';
 import Gtk from 'gi://Gtk';
 import Gio from 'gi://Gio';
+import GLib from 'gi://GLib';
 import Adw from 'gi://Adw';
 import Pango from 'gi://Pango';
 
@@ -381,6 +382,26 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
     addBackupPreferences(window, settings, page);
     addDiagnosticPreferences(window, settings, page);
     window.add(page);
+
+    // The Shell and the preferences window run in separate processes.
+    const navigation = this.getSettings(Fields.NAVIGATION_SCHEMA);
+    const focusFallback = () => {
+      const requested = navigation.get_int64('focus-fallback');
+      if (!requested || !window.get_mapped()) return;
+      navigation.reset('focus-fallback');
+      const age = GLib.get_real_time() - requested;
+      if (age < 0 || age > 30 * GLib.USEC_PER_SEC) return;
+      window.present();
+      window.set_visible_page(page);
+      fallback.grab_focus();
+    };
+    const signal = navigation.connect('changed::focus-fallback', focusFallback);
+    window.connect('map', focusFallback);
+    window.connect('close-request', () => {
+      navigation.disconnect(signal);
+      return false;
+    });
+    focusFallback();
   }
 
   _create_display_mode_options() {
