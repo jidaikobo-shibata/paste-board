@@ -70,7 +70,7 @@ export class PathExplorer {
     return original;
   }
 
-  async update() {
+  async update({ retry = false } = {}) {
     const query = this.entry.get_text();
     if (this.pendingCompletion !== query) this.pendingCompletion = null;
     const split = query.lastIndexOf('/') + 1;
@@ -79,7 +79,7 @@ export class PathExplorer {
     const directory = isPathQuery(query)
       ? this.base.replace(/^~(?=\/)/, () => GLib.get_home_dir())
       : null;
-    if (directory && this.directory === directory) {
+    if (!retry && directory && this.directory === directory) {
       if (this.files) this.render();
       return;
     }
@@ -268,9 +268,10 @@ export class PathExplorer {
       return true;
     }
     if (symbol === Clutter.KEY_Tab) {
-      if (inEntry && !this.files && this.cancel && this.directory)
+      if (inEntry && !this.files && this.directory) {
         this.pendingCompletion = this.entry.get_text();
-      else this.complete(chosen);
+        if (!this.cancel) this.update({ retry: true });
+      } else this.complete(chosen);
       return true;
     }
     if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_KP_Enter) {

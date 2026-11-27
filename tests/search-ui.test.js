@@ -768,6 +768,19 @@ export default class extends Extension {
       'Ambiguous prefix was not completed',
     );
     await key(Clutter.KEY_Down);
+    const selectedPathRow = global.stage.get_key_focus();
+    assert(explorer.rows.includes(selectedPathRow), 'Expected a focused path');
+    St.Clipboard.get_default().set_text(
+      St.ClipboardType.CLIPBOARD,
+      'copy during path exploration',
+    );
+    await wait(
+      () => owner.entries.last()?.text === 'copy during path exploration',
+    );
+    assert(
+      global.stage.get_key_focus() === selectedPathRow,
+      'Clipboard update lost the selected path',
+    );
     await key(Clutter.KEY_Return);
     await wait(() =>
       read(root + '/generated-pasted').endsWith(directory + '/folder one/'),
@@ -857,8 +870,19 @@ export default class extends Extension {
     await wait(
       () =>
         explorer.list.get_first_child()?.text &&
+        !explorer.cancel &&
         !explorer.files &&
         !explorer.matches.length,
+    );
+    const recoveredFolder = GLib.get_home_dir() + '/folder-that-does-not-exist';
+    GLib.mkdir_with_parents(recoveredFolder, 0o700);
+    GLib.file_set_contents(recoveredFolder + '/document', '');
+    await query('~/folder-that-does-not-exist/doc');
+    await key(Clutter.KEY_Tab);
+    await wait(
+      () =>
+        owner.searchEntry.get_text() ===
+        '~/folder-that-does-not-exist/document',
     );
     owner.settings.set_boolean('path-completion', false);
     await key(Clutter.KEY_Tab);

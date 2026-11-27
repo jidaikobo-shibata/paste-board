@@ -3884,7 +3884,11 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._highlightCopy();
     }
 
-    if (this.menu?.isOpen && this.searchEntry?.get_text().trim()) {
+    if (
+      this.menu?.isOpen &&
+      !this._pathExplorer?.actor.visible &&
+      this.searchEntry?.get_text().trim()
+    ) {
       if (this._isCrossTabSearch?.()) this._renderAllTabSearch();
       else if (this._activePasteTab === 'history') this._onSearchTextChanged();
     }
