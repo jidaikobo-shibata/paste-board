@@ -747,6 +747,16 @@ export default class extends Extension {
     );
     await query(directory + '/fo');
     await wait(() => explorer.matches.length === 2);
+    for (const row of explorer.rows) {
+      const text = row.get_child().clutter_text;
+      const [rowX] = row.get_transformed_position();
+      const [labelX] = text.get_transformed_position();
+      assert(
+        labelX - rowX < row.width / 4 &&
+          text.position_to_coords(0)[1] < row.width / 4,
+        'Path text is centered',
+      );
+    }
     await key(Clutter.KEY_Tab);
     assert(
       owner.searchEntry.get_text() === directory + '/fold',
@@ -783,8 +793,31 @@ export default class extends Extension {
     await query('');
     rows()[0].grab_key_focus();
     GLib.mkdir_with_parents(GLib.get_home_dir() + '/path test', 0o700);
-    await key(Clutter.KEY_asciitilde);
-    await key(Clutter.KEY_slash);
+    const sources = new Gio.Settings({
+      schema_id: 'org.gnome.desktop.input-sources',
+    });
+    sources.set_value('sources', new GLib.Variant('a(ss)', [['xkb', 'jp']]));
+    await delay(300);
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Shift_L,
+      Clutter.KeyState.PRESSED,
+    );
+    // JIS Shift+^ (AE12) on the virtual Wayland keyboard.
+    for (const state of [Clutter.KeyState.PRESSED, Clutter.KeyState.RELEASED])
+      keyboard.notify_key(GLib.get_monotonic_time(), 13, state);
+    keyboard.notify_keyval(
+      GLib.get_monotonic_time(),
+      Clutter.KEY_Shift_L,
+      Clutter.KeyState.RELEASED,
+    );
+    await delay(150);
+    assert(
+      owner._isSearchActor(global.stage.get_key_focus()) &&
+        owner.searchEntry.get_text() === '~',
+      'Physical JIS tilde did not start text input',
+    );
+
     await key(Clutter.KEY_Tab);
     await wait(() =>
       explorer.matches.some((file) => file.name === 'path test'),

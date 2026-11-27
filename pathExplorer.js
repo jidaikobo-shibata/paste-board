@@ -46,7 +46,10 @@ export class PathExplorer {
     this.original = this.entry.get_text();
     this.actor.show();
     this.entry.clutter_text.grab_key_focus();
-    this.update();
+    if (this.original === '~') {
+      this.entry.set_text('~/');
+      this.entry.clutter_text.set_cursor_position(-1);
+    } else this.update();
   }
 
   stop() {
@@ -168,12 +171,13 @@ export class PathExplorer {
       this.rows.length + batchSize,
     )) {
       const row = new St.Button({
-        style_class: 'popup-menu-item',
+        style_class: 'popup-menu-item ci-path-row',
         can_focus: true,
         x_expand: true,
         child: new St.Label({
           text: file.suffix,
-          x_align: Clutter.ActorAlign.START,
+          x_expand: true,
+          x_align: Clutter.ActorAlign.FILL,
         }),
       });
       row.accessible_name = file.suffix;

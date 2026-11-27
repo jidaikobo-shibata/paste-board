@@ -2301,7 +2301,8 @@ class ClipboardIndicator extends PanelMenu.Button {
         !bits &&
         symbol === Clutter.KEY_Tab &&
         !this.searchEntry.clutter_text.has_preedit() &&
-        isPathQuery(this.searchEntry.get_text())
+        (this.searchEntry.get_text() === '~' ||
+          isPathQuery(this.searchEntry.get_text()))
       ) {
         this._generatedTabs?.endSearch();
         this._generatedTabs?.suspend();
@@ -2313,16 +2314,21 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._applyPasteSetVisibility();
         return Clutter.EVENT_STOP;
       }
-      const ch = event.get_key_unicode();
+      const ch =
+        symbol === Clutter.KEY_asciitilde ? '~' : event.get_key_unicode();
       if (
         !inEntry &&
-        !this.searchEntry.get_text() &&
         (bits === 0 || bits === 4) &&
-        (ch === '/' || ch === '~')
+        (ch === '~' || (ch === '/' && !this.searchEntry.get_text()))
       ) {
-        this.searchEntry.clutter_text.grab_key_focus();
-        this.searchEntry.set_text(ch);
-        this.searchEntry.clutter_text.set_cursor_position(-1);
+        if (this._initialFocusCallbackId) {
+          GLib.Source.remove(this._initialFocusCallbackId);
+          this._initialFocusCallbackId = undefined;
+        }
+        const text = this.searchEntry.clutter_text;
+        text.grab_key_focus();
+        text.delete_selection();
+        text.insert_text(ch, text.get_cursor_position());
         return Clutter.EVENT_STOP;
       }
     }

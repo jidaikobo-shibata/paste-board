@@ -303,3 +303,7 @@
 .ci-editor-error-banner StIcon {
   color: #ffffff;
 }
+
+.ci-path-row {
+  text-align: left;
+}
