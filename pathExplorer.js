@@ -49,13 +49,17 @@ export class PathExplorer {
     if (this.original === '~') {
       this.entry.set_text('~/');
       this.entry.clutter_text.set_cursor_position(-1);
-    } else this.update();
+    } else {
+      if (!this.original.endsWith('/')) this.pendingCompletion = this.original;
+      this.update();
+    }
   }
 
   stop() {
     this.actor.hide();
     this.cancel?.cancel();
     this.cancel = null;
+    this.pendingCompletion = null;
     this.directory = null;
     this.files = null;
     this.rows = [];
@@ -68,6 +72,7 @@ export class PathExplorer {
 
   async update() {
     const query = this.entry.get_text();
+    if (this.pendingCompletion !== query) this.pendingCompletion = null;
     const split = query.lastIndexOf('/') + 1;
     this.base = query.slice(0, split);
     this.prefix = query.slice(split);
@@ -125,6 +130,14 @@ export class PathExplorer {
           Number(b.folder) - Number(a.folder) || a.name.localeCompare(b.name),
       );
       this.render();
+      if (this.pendingCompletion === query) {
+        this.pendingCompletion = null;
+        if (
+          this.entry.clutter_text.has_key_focus() &&
+          !this.entry.clutter_text.has_preedit()
+        )
+          this.complete();
+      }
     } catch (error) {
       if (!cancel.is_cancelled()) this.message(error.message);
     } finally {
@@ -212,6 +225,21 @@ export class PathExplorer {
     this.paste(path + (file.folder ? '/' : ''));
   }
 
+  complete(chosen) {
+    if (!this.matches.length) return;
+    let suffix = (chosen || this.matches[0]).suffix;
+    if (!chosen) {
+      for (const file of this.matches) {
+        while (!file.suffix.startsWith(suffix))
+          suffix = Array.from(suffix).slice(0, -1).join('');
+        if (suffix === this.prefix) break;
+      }
+    }
+    this.entry.clutter_text.grab_key_focus();
+    this.entry.set_text(this.base + suffix);
+    this.entry.clutter_text.set_cursor_position(-1);
+  }
+
   handleKey(event, inEntry) {
     const symbol = event.get_key_symbol();
     const index = this.rows?.indexOf(global.stage.get_key_focus()) ?? -1;
@@ -230,18 +258,7 @@ export class PathExplorer {
       return true;
     }
     if (symbol === Clutter.KEY_Tab) {
-      if (!this.matches.length) return true;
-      let suffix = (chosen || this.matches[0]).suffix;
-      if (!chosen) {
-        for (const file of this.matches) {
-          while (!file.suffix.startsWith(suffix))
-            suffix = Array.from(suffix).slice(0, -1).join('');
-          if (suffix === this.prefix) break;
-        }
-      }
-      this.entry.clutter_text.grab_key_focus();
-      this.entry.set_text(this.base + suffix);
-      this.entry.clutter_text.set_cursor_position(-1);
+      this.complete(chosen);
       return true;
     }
     if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_KP_Enter) {

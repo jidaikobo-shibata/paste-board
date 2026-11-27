@@ -745,7 +745,13 @@ export default class extends Extension {
       explorer.actor.visible && owner.searchEntry.get_text() === '/',
       'Root path shortcut did not enter exploration',
     );
+    await key(Clutter.KEY_Escape);
+    await query('/ho');
+    await key(Clutter.KEY_Tab);
+    await wait(() => owner.searchEntry.get_text() === '/home/');
+    await key(Clutter.KEY_Escape);
     await query(directory + '/fo');
+    await key(Clutter.KEY_Tab);
     await wait(() => explorer.matches.length === 2);
     for (const row of explorer.rows) {
       const text = row.get_child().clutter_text;
@@ -757,7 +763,6 @@ export default class extends Extension {
         'Path text is centered',
       );
     }
-    await key(Clutter.KEY_Tab);
     assert(
       owner.searchEntry.get_text() === directory + '/fold',
       'Ambiguous prefix was not completed',
@@ -787,7 +792,7 @@ export default class extends Extension {
     assert(
       owner.menu.isOpen &&
         !explorer.actor.visible &&
-        owner.searchEntry.get_text() === '/',
+        owner.searchEntry.get_text() === directory + '/fo',
       'Escape did not restore the original search',
     );
     await query('');
