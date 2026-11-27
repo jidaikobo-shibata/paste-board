@@ -95,6 +95,11 @@
       <summary>Allow temporary pastes to restore only the original plain text</summary>
     </key>
 
+    <key name="path-completion" type="b">
+      <default>true</default>
+      <summary>Complete paths in the paste panel with Tab</summary>
+    </key>
+
     <key name="strip-text" type="b">
       <default>false</default>
       <summary>Remove whitespace around copied plaintext items</summary>

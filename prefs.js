@@ -222,6 +222,21 @@ export default class ClipboardHistoryPrefs extends ExtensionPreferences {
         settings.set_int(key, value);
       });
     }
+    const pathCompletion = new Gtk.Switch();
+    addRow(
+      new Gtk.Label({
+        label: _('Complete paths with Tab in the panel'),
+        hexpand: true,
+        halign: Gtk.Align.START,
+      }),
+      pathCompletion,
+    );
+    settings.bind(
+      Fields.PATH_COMPLETION,
+      pathCompletion,
+      'active',
+      Gio.SettingsBindFlags.DEFAULT,
+    );
     addRow(stripTextLabel, field_strip_text);
     addRow(pasteOnSelectionLabel, field_paste_on_selection);
     const fallback = new Gtk.Switch();

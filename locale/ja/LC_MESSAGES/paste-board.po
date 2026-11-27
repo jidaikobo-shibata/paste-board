@@ -1185,3 +1185,21 @@ msgstr "パネル固定中・数字キー・ペーストセットからの貼り
 
 msgid "Paste skipped to preserve the original clipboard formats."
 msgstr "元のクリップボードの形式を保持するため、貼り付けを見送りました。"
+
+msgid "Complete paths with Tab in the panel"
+msgstr "パネルでパスをTab補完する"
+
+msgid "Path exploration · Tab to complete, Enter to paste"
+msgstr "パス探索　Tabで補完・Enterで貼り付け"
+
+msgid "Reading folder…"
+msgstr "フォルダを読み込み中…"
+
+msgid "Enter a path starting with / or ~/"
+msgstr "/ または ~/ で始まるパスを入力してください"
+
+msgid "No matching paths"
+msgstr "一致するパスはありません"
+
+msgid "Show more paths"
+msgstr "さらに表示"

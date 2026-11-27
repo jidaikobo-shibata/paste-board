@@ -28,6 +28,12 @@ Copy text as usual and open the panel from the top-bar icon.
 - Type to search, or use **Ctrl+F** to toggle search focus.
 - **Esc** to close the panel.
 
+To paste a path, type `/`, `~/`, or a partial absolute or home-relative path
+and press **Tab**. Type to narrow the current folder and use **Up/Down** to
+select. **Tab** completes a name or enters a folder. **Enter** uses the absolute
+path, including for folders. **Esc** returns to search. Path completion can be
+turned off in preferences.
+
 Search covers all tabs by default. Space-separated words must all match,
 in any order. Search results also support editing and deletion where applicable.
 

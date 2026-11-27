@@ -45,6 +45,7 @@ import {
 import { HistorySession } from './historySession.js';
 import { MAX_TEXT_BYTES, MAX_LOG_BYTES, textFitsLimit } from './inputLimits.js';
 import { isPlainTextTarget, readClipboardText } from './clipboardRead.js';
+import { PathExplorer, isPathQuery } from './pathExplorer.js';
 import SettingsFields from './settingsFields.js';
 import { modifierBits, modifierLabel } from './shortcutModifiers.js';
 
@@ -120,6 +121,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   destroy() {
     this._destroyed = true;
+    this._pathExplorer?.stop();
     this._cancelPreviewPriorityUpdate();
     this._diagnosticService?.destroy();
     this._diagnosticService = undefined;
@@ -236,6 +238,15 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._makePasteTabSpaceDropTarget(tabsScroll);
     this._makePasteTabSpaceDropTarget(this._tabsBox);
     this.menu.box.add_child(tabsScroll);
+    this._pathExplorer = new PathExplorer(this.searchEntry, (text) => {
+      this.searchEntry.clutter_text.grab_key_focus();
+      this._activatePasteEntry({
+        type: DS.TYPE_TEXT,
+        pasteSetItem: true,
+        text,
+      });
+    });
+    this.menu.box.add_child(this._pathExplorer.actor);
     this.menu.connect('open-state-changed', (self, open) => {
       // PopupMenuManager must receive grab changes, but they are not menu opens.
       if (this._changingPasteGrab || this._destroyed) return;
@@ -246,6 +257,7 @@ class ClipboardIndicator extends PanelMenu.Button {
         this._initialFocusCallbackId = undefined;
       }
       if (!open && !this.menu.isOpen) {
+        if (this._pathExplorer?.actor.visible) this._leavePathMode(false);
         this._tabContextMenu?.close();
         this._cancelPreviewPriorityUpdate();
         this._commandPreviews?.clear();
@@ -326,6 +338,7 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
 
     actionsSection.actor.add_child(actionsBox);
+    this._footerSection = actionsSection;
     this._footerActions = actionsBox;
     this.menu.addMenuItem(actionsSection);
     actionsBox.add_child(new St.BoxLayout({ x_expand: true }));
@@ -619,7 +632,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _visiblePasteCandidates() {
-    if (PRIVATE_MODE) return [];
+    if (PRIVATE_MODE || this._pathExplorer?.actor.visible) return [];
     if (this._isCrossTabSearch?.())
       return this._searchResultsSection
         ._getMenuItems()
@@ -635,6 +648,7 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _isCrossTabSearch() {
     return Boolean(
+      !this._pathExplorer?.actor.visible &&
       this._pasteSets &&
       this._searchAllTabs &&
       searchTerms(this.searchEntry?.get_text() || '').length,
@@ -643,6 +657,12 @@ class ClipboardIndicator extends PanelMenu.Button {
 
   _applyPasteSetVisibility() {
     this._updateClearAction?.();
+    if (this._pathExplorer?.actor.visible) {
+      this.scrollViewMenuSection.actor.hide();
+      this._pasteSetContainer.actor.hide();
+      this._searchResultsContainer.actor.hide();
+      return;
+    }
     const cross = this._isCrossTabSearch();
     const history = !this._pasteSets || this._activePasteTab === 'history';
     this.scrollViewMenuSection.actor.visible =
@@ -1351,6 +1371,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _renderPasteSets() {
+    if (this._pathExplorer?.actor.visible) return;
     if (!this._pasteSets) return;
     this._clearPasteDropHighlight();
     const sets = this._pasteSets.data.sets;
@@ -2057,6 +2078,7 @@ class ClipboardIndicator extends PanelMenu.Button {
   }
 
   _handleGlobalKeyEvent(event) {
+    if (this._pathExplorer?.actor.visible) return Clutter.EVENT_PROPAGATE;
     return (
       this._handleCtrlSelectKeyEvent(event) ||
       this._handleSettingsKeyEvent(event) ||
@@ -2250,6 +2272,59 @@ class ClipboardIndicator extends PanelMenu.Button {
       )
         this.menu.close();
       return Clutter.EVENT_STOP;
+    }
+    if (this._pathEnabled && !PRIVATE_MODE && this.entries) {
+      const symbol = event.get_key_symbol();
+      const bits = modifierBits(event.get_state(), Clutter.ModifierType);
+      const inEntry = this._isSearchActor(global.stage.get_key_focus());
+      if (this._pathExplorer.actor.visible) {
+        if (symbol === Clutter.KEY_Escape) {
+          this._leavePathMode(true);
+          return Clutter.EVENT_STOP;
+        }
+        if (!bits && this._pathExplorer.handleKey(event, inEntry))
+          return Clutter.EVENT_STOP;
+        if (
+          !inEntry &&
+          (bits === 0 || bits === 4) &&
+          (event.get_key_unicode() || symbol === Clutter.KEY_BackSpace)
+        ) {
+          const text = this.searchEntry.clutter_text;
+          text.grab_key_focus();
+          text.event(event, false);
+          return Clutter.EVENT_STOP;
+        }
+        return Clutter.EVENT_PROPAGATE;
+      }
+      if (
+        inEntry &&
+        !bits &&
+        symbol === Clutter.KEY_Tab &&
+        !this.searchEntry.clutter_text.has_preedit() &&
+        isPathQuery(this.searchEntry.get_text())
+      ) {
+        this._generatedTabs?.endSearch();
+        this._generatedTabs?.suspend();
+        this._commandPreviews?.clear();
+        this._pathExplorer.start();
+        this._allTabsCheck.hide();
+        this._tabsScroll.hide();
+        this._footerSection.actor.hide();
+        this._applyPasteSetVisibility();
+        return Clutter.EVENT_STOP;
+      }
+      const ch = event.get_key_unicode();
+      if (
+        !inEntry &&
+        !this.searchEntry.get_text() &&
+        (bits === 0 || bits === 4) &&
+        (ch === '/' || ch === '~')
+      ) {
+        this.searchEntry.clutter_text.grab_key_focus();
+        this.searchEntry.set_text(ch);
+        this.searchEntry.clutter_text.set_cursor_position(-1);
+        return Clutter.EVENT_STOP;
+      }
     }
     if (this._handleSearchToggleKeyEvent?.(event)) return Clutter.EVENT_STOP;
     if (this._handleSearchLastKeyEvent?.(event)) return Clutter.EVENT_STOP;
@@ -3547,7 +3622,25 @@ class ClipboardIndicator extends PanelMenu.Button {
     this._setEntryLabel(item);
   }
 
+  _leavePathMode(restoreSearch) {
+    const original = this._pathExplorer.stop();
+    this._allTabsCheck.show();
+    this._tabsScroll.show();
+    this._footerSection.actor.show();
+    this._applyPasteSetVisibility();
+    if (restoreSearch) {
+      this.searchEntry.clutter_text.grab_key_focus();
+      if (original !== this.searchEntry.get_text())
+        this.searchEntry.set_text(original);
+      else this._onSearchTextChanged();
+    }
+  }
+
   _onSearchTextChanged() {
+    if (this._pathExplorer?.actor.visible) {
+      this._pathExplorer.update();
+      return;
+    }
     if (!this._isCrossTabSearch()) this._generatedTabs?.endSearch();
     this._historyRenderLimit = HISTORY_BATCH_SIZE;
     this._searchRenderLimit = HISTORY_BATCH_SIZE;
@@ -3937,6 +4030,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     // Invalidate reads started before a privacy transition.
     this._clipboardQueryEpoch = (this._clipboardQueryEpoch || 0) + 1;
     this._pendingClipboardCopy = false;
+    if (PRIVATE_MODE && this._pathExplorer?.actor.visible)
+      this._leavePathMode(true);
     // We hide the history in private mode because it will be out of sync
     // (selected item will not reflect clipboard)
     this.scrollViewMenuSection.actor.visible = !PRIVATE_MODE;
@@ -4024,6 +4119,9 @@ class ClipboardIndicator extends PanelMenu.Button {
     DISABLE_DOWN_ARROW = this.settings.get_boolean(
       SettingsFields.DISABLE_DOWN_ARROW,
     );
+    this._pathEnabled = this.settings.get_boolean(
+      SettingsFields.PATH_COMPLETION,
+    );
     this._allowTextOnlyFallback = this.settings.get_boolean(
       SettingsFields.ALLOW_TEXT_ONLY_FALLBACK,
     );
@@ -4044,6 +4142,8 @@ class ClipboardIndicator extends PanelMenu.Button {
     const prevSearchAllTabs = this._searchAllTabs;
 
     this._fetchSettings();
+    if (!this._pathEnabled && this._pathExplorer?.actor.visible)
+      this._leavePathMode(true);
     if (prevItemLimit !== MAX_REGISTRY_LENGTH)
       this._generatedTabs?.refreshItemLimit();
     if (prevSearchAllTabs !== this._searchAllTabs) this._onSearchTextChanged();

@@ -13,6 +13,7 @@ const SettingsFields = {
   TOPBAR_DISPLAY_MODE_ID: 'display-mode',
   DISABLE_DOWN_ARROW: 'disable-down-arrow',
   ALLOW_TEXT_ONLY_FALLBACK: 'allow-text-only-fallback',
+  PATH_COMPLETION: 'path-completion',
   STRIP_TEXT: 'strip-text',
   PRIVATE_MODE: 'private-mode',
   PASTE_ON_SELECTION: 'paste-on-selection',

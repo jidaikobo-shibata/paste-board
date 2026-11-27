@@ -207,6 +207,7 @@ export default class extends Extension {
       );
       await query('');
       rows()[0].grab_key_focus();
+      owner.settings.set_boolean('path-completion', false);
       await key(Clutter.KEY_slash);
       assert(
         owner.searchEntry.get_text() === '' &&
@@ -728,6 +729,80 @@ export default class extends Extension {
     owner.searchEntry.clutter_text.set_preedit_string('', null, 0);
     await key(Clutter.KEY_Escape);
     assert(!owner.menu.isOpen, 'Escape did not close the panel from search');
+    // Exercise path keys through the panel and paste into the real GTK target.
+    owner.settings.set_boolean('path-completion', true);
+    owner.settings.set_boolean('keep-menu-open', true);
+    const directory = root + '/path-fixture';
+    GLib.mkdir_with_parents(directory + '/folder one', 0o700);
+    GLib.file_set_contents(directory + '/folder one/日本 file.txt', '');
+    GLib.file_set_contents(directory + '/folding.txt', '');
+    owner.menu.open();
+    await delay(100);
+    await key(Clutter.KEY_slash);
+    await key(Clutter.KEY_Tab);
+    const explorer = owner._pathExplorer;
+    assert(
+      explorer.actor.visible && owner.searchEntry.get_text() === '/',
+      'Root path shortcut did not enter exploration',
+    );
+    await query(directory + '/fo');
+    await wait(() => explorer.matches.length === 2);
+    await key(Clutter.KEY_Tab);
+    assert(
+      owner.searchEntry.get_text() === directory + '/fold',
+      'Ambiguous prefix was not completed',
+    );
+    await key(Clutter.KEY_Down);
+    await key(Clutter.KEY_Return);
+    await wait(() =>
+      read(root + '/generated-pasted').endsWith(directory + '/folder one/'),
+    );
+    await wait(() => !owner._quickPasteBusy);
+    await key(Clutter.KEY_Down);
+    await key(Clutter.KEY_Tab);
+    await wait(
+      () =>
+        explorer.matches.length === 1 &&
+        explorer.matches[0].name === '日本 file.txt',
+    );
+    await key(Clutter.KEY_Down);
+    await key(Clutter.KEY_Return);
+    await wait(() =>
+      read(root + '/generated-pasted').endsWith(
+        directory + '/folder one/日本 file.txt',
+      ),
+    );
+    await wait(() => !owner._quickPasteBusy);
+    await key(Clutter.KEY_Escape);
+    assert(
+      owner.menu.isOpen &&
+        !explorer.actor.visible &&
+        owner.searchEntry.get_text() === '/',
+      'Escape did not restore the original search',
+    );
+    await query('');
+    rows()[0].grab_key_focus();
+    GLib.mkdir_with_parents(GLib.get_home_dir() + '/path test', 0o700);
+    await key(Clutter.KEY_asciitilde);
+    await key(Clutter.KEY_slash);
+    await key(Clutter.KEY_Tab);
+    await wait(() =>
+      explorer.matches.some((file) => file.name === 'path test'),
+    );
+    assert(
+      explorer.actor.visible && owner.searchEntry.get_text() === '~/',
+      'Home shortcut did not enter exploration',
+    );
+    await query('~/folder-that-does-not-exist/');
+    await wait(
+      () =>
+        explorer.list.get_first_child()?.text &&
+        !explorer.files &&
+        !explorer.matches.length,
+    );
+    owner.settings.set_boolean('path-completion', false);
+    await key(Clutter.KEY_Tab);
+    assert(!explorer.actor.visible, 'Disabled path completion captured Tab');
     owner.menu.close();
   }
 }

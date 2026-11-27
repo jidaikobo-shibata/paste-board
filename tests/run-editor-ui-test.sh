@@ -23,6 +23,11 @@ if [[ ${1:-} != --session ]]; then
     preview-priority-ui.test.js|search-render-ui.test.js|diagnostic-ui.test.js|search-management-ui.test.js|scroll-ui.test.js|editor-ui.test.js|generated-tabs-ui.test.js|search-ui.test.js|history-only-ui.test.js|tab-context-ui.test.js) ;;
     *) echo 'Unknown UI test fixture' >&2; exit 2 ;;
   esac
+  if [[ $editor_test_file == search-ui.test.js ]]; then
+    # Test ~/ completion against a disposable home rather than the user's files.
+    export HOME="$editor_test_root/home"
+    mkdir -p "$HOME"
+  fi
   if [[ $editor_test_file == history-only-ui.test.js ]]; then
     mkdir -p "$XDG_CONFIG_HOME/paste-board@jidaikobo.shibata"
     printf '%s' '{invalid' > \

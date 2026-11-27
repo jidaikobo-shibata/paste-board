@@ -1116,3 +1116,21 @@ msgstr ""
 
 msgid "Paste skipped to preserve the original clipboard formats."
 msgstr ""
+
+msgid "Complete paths with Tab in the panel"
+msgstr ""
+
+msgid "Path exploration · Tab to complete, Enter to paste"
+msgstr ""
+
+msgid "Reading folder…"
+msgstr ""
+
+msgid "Enter a path starting with / or ~/"
+msgstr ""
+
+msgid "No matching paths"
+msgstr ""
+
+msgid "Show more paths"
+msgstr ""
