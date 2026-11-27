@@ -831,6 +831,28 @@ export default class extends Extension {
       explorer.actor.visible && owner.searchEntry.get_text() === '~/',
       'Home shortcut did not enter exploration',
     );
+    const edgeFolder = directory + '/edge/';
+    GLib.mkdir_with_parents(edgeFolder, 0o700);
+    const spacedPath = edgeFolder + 'ends with space ';
+    GLib.file_set_contents(spacedPath, '');
+    Gio.Subprocess.new(
+      ['bash', '-c', `touch -- "$1"bad$'\\xff'`, 'test', edgeFolder],
+      Gio.SubprocessFlags.NONE,
+    ).wait_check(null);
+    owner.searchEntry.set_text(edgeFolder);
+    owner.searchEntry.set_text(edgeFolder + 'end');
+    explorer.handleKey({ get_key_symbol: () => Clutter.KEY_Tab }, true);
+    await wait(() => owner.searchEntry.get_text() === spacedPath);
+    assert(explorer.matches.length === 1, 'Valid sibling missing');
+    owner.settings.set_boolean('strip-text', true);
+    owner.settings.set_boolean('paste-on-selection', false);
+    await delay(100);
+    await key(Clutter.KEY_Return);
+    assert(
+      (await clipboard()) === spacedPath &&
+        owner.entries.last().text === spacedPath,
+      'Copy-only path lost trailing whitespace',
+    );
     await query('~/folder-that-does-not-exist/');
     await wait(
       () =>

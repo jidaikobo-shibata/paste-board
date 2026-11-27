@@ -119,7 +119,13 @@ export class PathExplorer {
         );
         if (!batch.length) break;
         for (const info of batch) {
-          const name = info.get_name();
+          let name;
+          try {
+            name = info.get_name();
+          } catch {
+            // Unix filenames that GJS cannot decode cannot be pasted as text.
+            continue;
+          }
           const folder = info.get_file_type() === Gio.FileType.DIRECTORY;
           files.push({ name, suffix: name + (folder ? '/' : ''), folder });
         }
@@ -130,7 +136,7 @@ export class PathExplorer {
           Number(b.folder) - Number(a.folder) || a.name.localeCompare(b.name),
       );
       this.render();
-      if (this.pendingCompletion === query) {
+      if (this.pendingCompletion === this.entry.get_text()) {
         this.pendingCompletion = null;
         if (
           this.entry.clutter_text.has_key_focus() &&
@@ -139,8 +145,12 @@ export class PathExplorer {
           this.complete();
       }
     } catch (error) {
-      if (!cancel.is_cancelled()) this.message(error.message);
+      if (!cancel.is_cancelled()) {
+        this.pendingCompletion = null;
+        this.message(error.message);
+      }
     } finally {
+      if (this.cancel === cancel) this.cancel = null;
       if (enumerator) {
         try {
           await readAsync(
@@ -258,7 +268,9 @@ export class PathExplorer {
       return true;
     }
     if (symbol === Clutter.KEY_Tab) {
-      this.complete(chosen);
+      if (inEntry && !this.files && this.cancel && this.directory)
+        this.pendingCompletion = this.entry.get_text();
+      else this.complete(chosen);
       return true;
     }
     if (symbol === Clutter.KEY_Return || symbol === Clutter.KEY_KP_Enter) {

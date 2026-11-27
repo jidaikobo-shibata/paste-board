@@ -243,6 +243,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._activatePasteEntry({
         type: DS.TYPE_TEXT,
         pasteSetItem: true,
+        preserveWhitespace: true,
         text,
       });
     });
@@ -3515,14 +3516,17 @@ class ClipboardIndicator extends PanelMenu.Button {
   _copyPasteEntry(entry) {
     if (PRIVATE_MODE || this._destroyed) return;
     // Copy-only is an explicit clipboard change, including sets and command output.
-    const text = STRIP_TEXT ? entry.text.trim() : entry.text;
+    const stripText = STRIP_TEXT && !entry.preserveWhitespace;
+    const text = stripText ? entry.text.trim() : entry.text;
     this._quickPasteRestoring = true;
     try {
       Clipboard.set_text(St.ClipboardType.CLIPBOARD, text);
     } finally {
       this._quickPasteRestoring = false;
     }
-    this._processClipboardContent(text, true, true);
+    this._processClipboardContent(text, true, true, {
+      preserveWhitespace: true,
+    });
     if (!this._keepMenuOpen) this.menu.close();
   }
 
@@ -3821,7 +3825,12 @@ class ClipboardIndicator extends PanelMenu.Button {
     });
   }
 
-  _processClipboardContent(text, selectEntry, externalCopy = false) {
+  _processClipboardContent(
+    text,
+    selectEntry,
+    externalCopy = false,
+    { preserveWhitespace = false } = {},
+  ) {
     if (this._loggingOut || this._destroyed) return;
     if (this._quickPasteBusy || this._quickPasteRestoring) {
       if (externalCopy) this._pendingClipboardCopy = true;
@@ -3832,7 +3841,7 @@ class ClipboardIndicator extends PanelMenu.Button {
       this._showNotification(_('Copied text exceeds the size limit.'), '');
       return;
     }
-    if (STRIP_TEXT && text) text = text.trim();
+    if (STRIP_TEXT && !preserveWhitespace && text) text = text.trim();
     if (!text) {
       if (selectEntry) this._clearCurrentClipboardEntry(false);
       return;
